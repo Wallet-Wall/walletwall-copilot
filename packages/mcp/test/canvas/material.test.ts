@@ -110,7 +110,7 @@ describe("the WalletWall wordmark and type roles", () => {
 describe("no white UI", () => {
   test("no visible surface token is white or reads as white; the near-white canonical tokens paint no surface", () => {
     assert.ok(!/#fff\b|#ffffff\b|rgb\(255, ?255, ?255\)|:white\b/i.test(css), "no pure white anywhere");
-    for (const t of ["ww-page", "ww-stage", "ww-rail", "ww-row", "ww-node", "ww-node-quiet", "ww-label", "ww-shell", "ww-charcoal", "ww-deep-slate", "ww-accent-dark"]) {
+    for (const t of ["ww-page", "ww-stage", "ww-rail", "ww-node", "ww-node-quiet", "ww-label", "ww-shell", "ww-charcoal", "ww-deep-slate", "ww-accent-dark"]) {
       const v = token(t);
       assert.match(v, /^#[0-9A-Fa-f]{6}$/, t);
       assert.ok(!readsWhite(v), `${t} ${v} reads as cream, parchment, sand or stone, not white`);
@@ -118,10 +118,13 @@ describe("no white UI", () => {
     assert.ok(!/(background|background-color|fill):var\(--ww-(cream|bg|surface|mortar)\)/.test(css), "cream, paper and mortar paint no surface, node, chip or button");
   });
 
-  test("major surfaces separate by flat fill: workspace, stage, rail and the rail's folded rows", () => {
-    const [page, stage, rail, row] = ["ww-page", "ww-stage", "ww-rail", "ww-row"].map(token) as [string, string, string, string];
+  test("major surfaces separate by flat fill: workspace, stage and rail; the rail is one sheet, its folded rows divided by hairlines", () => {
+    const [page, stage, rail] = ["ww-page", "ww-stage", "ww-rail"].map(token) as [string, string, string];
     assert.ok(ratio(page, stage) >= 1.15 && ratio(stage, rail) >= 1.15 && ratio(page, rail) >= 1.15);
-    assert.ok(ratio(rail, row) >= 1.08, `rail / rows ${ratio(rail, row).toFixed(3)}`);
+    // The folded sections' headers are rows of the rail itself, not tabs on a second fill.
+    for (const sel of [".ww-more>summary", ".ww-detail .ww-more>summary", ".ww-more"]) assert.ok(!/background/.test(rules(sel).join(";")), `${sel} paints no fill of its own`);
+    assert.ok(rules(".ww-more")[0]?.includes("border-top:1px solid var(--ww-cut)"), "one hairline between folded sections");
+    assert.ok(!/--ww-row:/.test(css), "no second rail tone");
   });
 });
 

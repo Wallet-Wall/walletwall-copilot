@@ -162,8 +162,8 @@ The tables above are the v0.2.0 release record and stay as published; the v0.2.0
 
 | Artifact | SHA-256 |
 | --- | --- |
-| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `7777210564e906b8303953d8b783b6bd128ff12f12ec53874c5acc4ba1cc13e9` |
-| Development plugin artifact (`scripts/pack-plugin.ts`; 18 files) | `7dd68cd27f63ae651205f688c6aed2abe08dd3678b0b333f928e9d74050f5eaf` |
+| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `278cab88bea9d3d73355ce7695b6260876d5c8a40fe4ba115121681670ff0031` |
+| Development plugin artifact (`scripts/pack-plugin.ts`; 18 files) | `9b8fdf5af1ba55503127810c89e7a128fcb461fcca5acac040e0d09419bc7f27` |
 
 The tool manifest, the MCP server bundle and the MCP artifact are unchanged from v0.2.0. A later release records its own values in its own release notes; these development values are not release checksums.
 

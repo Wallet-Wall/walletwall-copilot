@@ -25,13 +25,13 @@ The page makes no font, image, stylesheet or script request. Its CSP is `default
 
 ## Colour tokens
 
-Surfaces separate by flat fill and value, not by hue alone and never by a shadow: each pair of neighbouring large surfaces is at least 1.2:1 in relative luminance (tested), and the rail's folded rows step 1.1:1 from the rail.
+Surfaces separate by flat fill and value, not by hue alone and never by a shadow: each pair of neighbouring large surfaces is at least 1.2:1 in relative luminance (tested). The rail is one flat sheet: its folded sections are rows on the same surface, divided by hairlines, with no second fill.
 
 | Token | Value | Role on the canvas |
 | --- | --- | --- |
 | `--ww-page` | `#DDD3C0` (warm stone with 30 % stone) | The workspace |
 | `--ww-stage` | `#B8AD9C` (warm stone deepened with stone-low and deep slate) | The Coinstellation stage; the list (another lens on the same pieces) |
-| `--ww-rail` / `--ww-row` | `#D4BD98` / `#CDB38C` (tan parchment; the rail with 25 % stone-low) | The detail rail and sheet, the readiness and About panels / the rail's folded-section headers |
+| `--ww-rail` | `#D4BD98` (tan parchment) | The detail rail and sheet, the readiness and About panels |
 | `--ww-shell` | `#221F1C` (charcoal deepened toward the ink) | The summary header, so the terracotta wordmark reaches 3.4:1 |
 | `--ww-charcoal` | `#2B2B2E` | The control bar, menus, tooltips, the readiness keystone |
 | `--ww-deep-slate` | `#3A3D41` | The Wallprint band |
@@ -62,7 +62,7 @@ Eyebrows: 10.5 px, 700, 0.16 em tracking, uppercase, `--ww-brick-low` on light s
 
 ## Geometry
 
-Radii: 2 px for panels, controls and chips (`--ww-radius-panel`, `--ww-radius-badge`); no pills. Lines are hairlines: 1 px seams and dividers, borders at most 2 px (the header's terracotta rule, the readiness criteria's attention mark, the Why? ladder). Full-perimeter borders are rare: surfaces separate by value and rows by dividers, so the first view at 1280 px has six boxes (header, control bar, detail rail and its head, the rail's folded rows, Wallprint), down from fourteen, and nests at most two deep. Under The Wall only, a sparse drafting sheet grid: 1 px lines every 64 px at 1.07:1 against the stage, and no minor grid. The plate's own construction carries the structure: faint dash-dot centrelines on the axes the composition is built on and four crop marks at the frame's corners (none on a phone).
+Radii: 2 px for panels, controls and chips (`--ww-radius-panel`, `--ww-radius-badge`); no pills. Lines are hairlines: 1 px seams and dividers, borders at most 2 px (the header's terracotta rule, the readiness criteria's attention mark, the Why? ladder). Full-perimeter borders are rare: surfaces separate by value and rows by dividers, so the first view at 1280 px has five boxes (header, control bar, detail rail and its head, Wallprint), down from fourteen, and nests at most two deep. Under The Wall only, a sparse drafting sheet grid: 1 px lines every 64 px at 1.07:1 against the stage, and no minor grid. The plate's own construction carries the structure: faint dash-dot centrelines on the axes the composition is built on and four crop marks at the frame's corners (none on a phone).
 
 ## Material
 

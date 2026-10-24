@@ -93,8 +93,8 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/styles.mjs",
-      "sha256": "65e9863d74ffe2f4d8516b0c0204bc7c8e256364a638230106c2c5162dddcc7b",
-      "bytes": 48901
+      "sha256": "298e9b9a304e30e20947acd0ddfec7f47f6e78bfa2188d24f164d7091d8f848a",
+      "bytes": 49177
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wall.mjs",

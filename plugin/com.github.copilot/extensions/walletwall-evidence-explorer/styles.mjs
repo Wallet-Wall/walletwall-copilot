@@ -19,7 +19,7 @@ export const CSS = `
 --ww-charcoal:#2B2B2E;--ww-deep-slate:#3A3D41;--ww-warm-stone:#D8D3C8;--ww-cream:#F5F1E8;--ww-charcoal-border:rgba(43,43,46,0.3);--ww-charcoal-rail:rgba(43,43,46,0.72);
 --ww-stone:#e9d3ad;--ww-stone-low:#b99568;--ww-mortar:#f5ead4;--ww-brick:#b94a31;--ww-radius-panel:2px;--ww-radius-badge:2px;
 --ww-umber:#674739;--ww-umber-deep:#4F3C35;
---ww-page:#DDD3C0;--ww-stage:#B8AD9C;--ww-rail:#D4BD98;--ww-row:#CDB38C;--ww-shell:#221F1C;--ww-node:#DDCBA8;--ww-node-quiet:#CBBCA2;--ww-label:#E2D2B2;--ww-on-dark:var(--ww-cream);--ww-on-dark-muted:rgba(245,241,232,0.8);
+--ww-page:#DDD3C0;--ww-stage:#B8AD9C;--ww-rail:#D4BD98;--ww-shell:#221F1C;--ww-node:#DDCBA8;--ww-node-quiet:#CBBCA2;--ww-label:#E2D2B2;--ww-on-dark:var(--ww-cream);--ww-on-dark-muted:rgba(245,241,232,0.8);
 --ww-seam:rgba(79,60,53,0.35);--ww-cut:rgba(79,60,53,0.3);--ww-cut-strong:rgba(79,60,53,0.55);--ww-cut-dark:rgba(12,10,8,0.5);--ww-etch:rgba(245,241,232,0.12);
 --font-display:"Sora Variable","Sora",system-ui,sans-serif;--font-ui:"Manrope Variable","Manrope",system-ui,sans-serif;--font-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
 --ww-fast:140ms;--ww-base:180ms;--ww-settle:280ms;--ww-ease:cubic-bezier(0.22,1,0.36,1);--ww-peek:84px}
@@ -293,9 +293,12 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);border-style:dashe
 .ww-why[open]{display:block;margin:4px 0 0}
 .ww-why p{margin:4px 0 0}
 .ww-more{border-top:1px solid var(--ww-cut)}
-.ww-more>summary{display:flex;align-items:center;min-height:40px;cursor:pointer;font-weight:700;font-size:12.5px;color:var(--ww-charcoal)}
-/* The folded sections' headers sit on a slightly deeper row fill (1.1:1 against the rail), edge to edge. */
-.ww-detail .ww-more>summary{margin:0 -14px;padding:0 14px;background:var(--ww-row)}
+.ww-more>summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;cursor:pointer;font-weight:700;font-size:12.5px;color:var(--ww-charcoal);list-style:none}
+.ww-more>summary::-webkit-details-marker{display:none}
+.ww-more>summary::after{content:"+";flex:0 0 auto;font-weight:500;font-size:15px;line-height:1;color:var(--ww-umber)}
+.ww-more[open]>summary::after{content:"−"}
+/* The folded sections' headers are rows of the rail itself: the same flat surface, one hairline between them, a quiet
+   plus or minus; no second fill, so the rail reads as one printed sheet, not stacked tabs. */
 .ww-more[open]>summary{color:var(--ww-brick-low)}
 .kv{margin:0;display:grid;gap:2px}.kv>div{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px}.kv dt{color:var(--ww-muted-text)}.kv dd{margin:0;min-width:0}
 .addr{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;max-width:100%}
