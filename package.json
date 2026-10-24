@@ -2,7 +2,7 @@
   "name": "walletwallrus-copilot",
   "version": "0.1.0",
   "private": true,
-  "description": "WalletWall Copilot plugin, local MCP engine and WWEP 0.1 draft (private, pre-release).",
+  "description": "WalletWall Copilot plugin, local MCP engine and WWEP 0.1 draft.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {

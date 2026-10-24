@@ -1,5 +1,7 @@
 # Public visibility flip checklist
 
+> **Historical record.** Runbook used for the private-to-public flip. Step 15 names the former marketplace `walletwall-private`; the marketplace is now `walletwall`.
+
 Runbook for changing the **canonical** repository `Wallet-Wall/walletwallrus-copilot` from private to public. **Nothing here has been executed.** The audit lane stops before step 6 and does not change visibility, publish to npm or submit to a marketplace. Record the result of every step in the flip pull request or issue.
 
 **Which repository this applies to.** Only a repository whose Git history is a clean root commit of the reviewed tree. The development repository that preceded it (see `docs/PUBLIC_RELEASE_AUDIT.md`, `EXISTING_REPOSITORY_PUBLIC_FLIP = BLOCKED`) must never be flipped: its history, pull request refs, Actions history and an unreachable historical commit would become public. Deleting files from a tree does not change that.

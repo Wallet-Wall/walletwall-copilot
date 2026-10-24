@@ -1,5 +1,7 @@
 # Public release readiness audit
 
+> **Historical record.** Written before the repository became public. It names the former marketplace `walletwall-private` (finding PR-016) because that was the real identity when the audit ran. PR-016 was resolved by renaming the marketplace to `walletwall` in the public discovery readiness change; the active name is in `.github/plugin/marketplace.json`.
+
 Audit of `Wallet-Wall/walletwallrus-copilot` for a change from private to public visibility. Audited baseline: `main` at `c0ab03f2a2a5ce2184ee7eaacd1f7cbd9d5e57f1` (pull request #3 merged). Audit date: 2026-10-24 (UTC). This document records what was actually checked and measured; it is not a certification, and passing tests does not make the software secure, private or accurate.
 
 > **Provenance.** This audit was written in the private development repository. Commit SHAs and pull request numbers cited in it refer to that repository and do not resolve in a repository that starts from a clean root commit. The reviewed object is the source tree, not the history.

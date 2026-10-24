@@ -1,0 +1,12 @@
+{
+  "identifier": "urn:ai:github.com:Wallet-Wall:walletwallrus-copilot:walletwall",
+  "displayName": "WalletWall",
+  "mediaType": "application/vnd.github.copilot-plugin",
+  "url": "https://github.com/Wallet-Wall/walletwallrus-copilot/blob/main/plugin/plugin.json",
+  "description": "Stablecoin intelligence and vault readiness for GitHub Copilot.",
+  "tags": ["stablecoin", "evidence", "provenance", "vault-readiness", "mcp-server", "skill", "canvas", "github-copilot"],
+  "metadata": {
+    "sourceSet": "Wallet-Wall/walletwallrus-copilot",
+    "repoPath": "plugin/plugin.json"
+  }
+}

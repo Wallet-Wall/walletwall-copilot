@@ -50,8 +50,10 @@ Wallet addresses you put in a prompt are processed by Copilot and the model prov
 
 ```text
 copilot plugin marketplace add <path to this checkout>
-copilot plugin install walletwall@walletwall-private
+copilot plugin install walletwall@walletwall
 ```
+
+The marketplace and the plugin are both named `walletwall`. Verified with GitHub Copilot CLI 1.0.103: `copilot plugin list --json` reports `walletwall` from marketplace `walletwall`, version 0.2.0. This repository is the plugin source only; it is not an accepted listing in any GitHub or Copilot marketplace, registry or catalog.
 
 In the GitHub Copilot app: **Customize → Plugins → marketplace settings → add this repository → Install**. A new session then has the six WalletWall MCP tools, the skill and the WalletWall canvas. What was verified on Windows and what was not: `docs/DESKTOP_INSTALL_PROOF.md`. Requires `node` on `PATH`.
 
@@ -68,7 +70,7 @@ Generated files are committed and verified in CI on Linux and Windows. See `CONT
 
 ## Documents
 
-`CONTRIBUTING.md` · `SECURITY.md` · `PRIVACY.md` · `BOUNDARIES.md` · `THREAT_MODEL.md` · `DATA_SOURCES.md` · `docs/REGISTRY_SOURCES.md` · `docs/DEPENDENCY_POLICY.md` · `docs/PUBLIC_RELEASE_AUDIT.md` · `TRADEMARKS.md` · `LICENSE`
+`CONTRIBUTING.md` · `SECURITY.md` · `PRIVACY.md` · `BOUNDARIES.md` · `THREAT_MODEL.md` · `DATA_SOURCES.md` · `docs/REGISTRY_SOURCES.md` · `docs/DEPENDENCY_POLICY.md` · `docs/PUBLIC_RELEASE_AUDIT.md` · `docs/PUBLIC_DISCOVERY_READINESS.md` · `TRADEMARKS.md` · `LICENSE`
 
 Layout: `plugin/` (the plugin), `packages/mcp/` (engine, registry, authority policies, tests), `spec/` (WWEP 0.1 draft), `conformance/` (conformance and adversarial corpus), `security/` (manifests and hashes), `evals/` (Copilot agent evals, separate from conformance), `docs/`.
 

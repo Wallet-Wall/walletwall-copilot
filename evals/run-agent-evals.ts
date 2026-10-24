@@ -155,7 +155,8 @@ async function main(): Promise<void> {
   const cwd = run.mkdir("cwd");
   try {
     const version = (await copilot(home, cwd, ["--version"], 60_000)).stdout.trim().split(/\r?\n/)[0] ?? "";
-    for (const setup of [["plugin", "marketplace", "add", root], ["plugin", "install", "walletwall@walletwall-private"]]) {
+    const marketplace = (JSON.parse(readFileSync(`${root}.github/plugin/marketplace.json`, "utf8")) as { name: string }).name;
+    for (const setup of [["plugin", "marketplace", "add", root], ["plugin", "install", `walletwall@${marketplace}`]]) {
       const r = await copilot(home, cwd, setup, 120_000);
       if (r.code !== 0) throw new Error(`setup failed: copilot ${setup.join(" ")}: ${r.stdout}${r.stderr}`);
     }
