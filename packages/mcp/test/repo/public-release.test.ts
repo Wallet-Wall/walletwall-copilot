@@ -31,7 +31,7 @@ describe("public repository hygiene: what is in the tree", () => {
   test("only the expected top-level entries exist (a new one must be a conscious decision)", () => {
     const expected = [
       ".gitattributes", ".github", ".gitignore", "BOUNDARIES.md", "CONTRIBUTING.md", "DATA_SOURCES.md", "LICENSE", "PRIVACY.md", "README.md", "SECURITY.md", "THREAT_MODEL.md", "TRADEMARKS.md",
-      "canvas", "conformance", "docs", "eslint.config.js", "evals", "package-lock.json", "package.json", "packages", "plugin", "scripts", "security", "skills", "spec", "tsconfig.json",
+      "canvas", "conformance", "docs", "eslint.config.js", "evals", "mcpb", "package-lock.json", "package.json", "packages", "plugin", "scripts", "security", "server.json", "skills", "spec", "tsconfig.json",
     ];
     const actual = readdirSync(ROOT.replace(/[\\/]$/, "")).filter((n) => !SKIP_DIRS.has(n));
     assert.deepEqual(actual.sort(), [...expected].sort());
