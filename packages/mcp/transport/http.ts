@@ -90,7 +90,7 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
     throw new RequestRejected(413);
   }
 
-  const chunks: Buffer[] = [];
+  const chunks: Uint8Array[] = [];
   let total = 0;
   for await (const chunk of req) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
