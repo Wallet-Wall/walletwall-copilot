@@ -9,7 +9,7 @@ function startBridge(): Promise<{ child: ChildProcessWithoutNullStreams; url: UR
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, ["packages/mcp/transport/http.ts", "--port", "0"], {
       cwd: process.cwd(),
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     let stderr = "";
