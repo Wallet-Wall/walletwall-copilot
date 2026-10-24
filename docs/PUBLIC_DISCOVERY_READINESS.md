@@ -143,9 +143,9 @@ Rebuilt twice from the same commit; both builds are byte-identical and equal the
 | Artifact | SHA-256 |
 | --- | --- |
 | Tool manifest (`security/tool-manifest.json`, RFC 8785) | `2d2f857c2b0c8ef824a3bc59d52baef6895db0209f16830d4a5025800ca815ec` |
-| Plugin manifest (`security/plugin-manifest.json`, RFC 8785) | `6554bf9696a8d95031fabcb3440dcc02fe24c042143af55611414d06146b121e` |
+| Plugin manifest (`security/plugin-manifest.json`, RFC 8785) | `04a134798ef59b829b1bd090335bb9760b57a399ef7b0f4cd8d8ac6411e1bd71` |
 | MCP bundle (`plugin/server/walletwall-mcp.mjs`) | `3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1` |
-| Plugin artifact (`walletwall-plugin.tar`, 17 files) | `b3d4921ae45013940b1feca2e5c4645c5b638873001dc232b2ba4644f4c18290` |
+| Plugin artifact (`walletwall-plugin.tar`, 17 files) | `681c26e235ddea608c3db4536b093277368906633e81b3e77eda0d09396f61fc` |
 | MCP artifact (`walletwall-mcp-0.1.0.tgz`) | `1f9a76626da1c68c69d88e1ffeeb9ac56d9fade49540f2322760598b91160b16` |
 
 ## Boundaries kept

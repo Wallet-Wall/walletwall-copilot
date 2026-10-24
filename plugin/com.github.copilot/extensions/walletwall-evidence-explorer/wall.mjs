@@ -398,7 +398,119 @@ export function layoutWall(model) {
     n.y = Math.round(n.y * 10) / 10;
   }
   model.springs = springs;
+  model.portrait = portraitLayout(model);
   return model;
+}
+
+/**
+ * The portrait layout, for phones and portrait tablets: the same pieces and connections, read top to bottom in bands
+ * (authorities and sources, observations, claims, Wallmark, readiness, foundation) instead of left to right. Positions are
+ * computed once, without simulation: each band packs its pieces into centred rows, ordered by where the force layout put
+ * them so related pieces stay near each other. Pieces are a little smaller and carry shorter words; nothing is dropped.
+ */
+export const PORTRAIT_WIDTH = 352;
+const PORTRAIT_SIZE = {
+  authority: [88, 36], source: [80, 34], observation: [80, 34], wallmark: [144, 48], assertion: [108, 46], derivation: [92, 34], readiness: [136, 50],
+  conflict: [56, 34], gap: [92, 34], snapshot: [92, 34], stablecoin: [80, 36], contract: [96, 34], wallet: [96, 34], chain: [56, 34],
+};
+/** Bands top to bottom. Each band's groups are laid in order in one flow of rows; the chamber band gets a frame. */
+const PORTRAIT_BANDS = [
+  { title: "AUTHORITIES · SOURCES", groups: [(n) => n.type === "authority", (n) => n.type === "source" || (n.type === "gap" && n.gapFor === "source")] },
+  { title: "OBSERVATIONS", groups: [(n) => n.type === "observation" || (n.type === "gap" && n.gapFor === "observation")] },
+  { title: "CLAIMS · DERIVATION", groups: [(n) => n.type === "assertion" || n.type === "conflict" || (n.type === "gap" && n.gapFor === "assertion"), (n) => n.type === "derivation"] },
+  { title: "WALLMARK", groups: [(n) => n.type === "wallmark"] },
+  { title: "VAULT READINESS", groups: [inChamberPiece], chamber: true },
+  { title: "FOUNDATION · SUBJECTS", groups: [(n) => n.type === "stablecoin" || n.type === "contract" || n.type === "wallet" || n.type === "chain"], byX: true },
+];
+function inChamberPiece(n) {
+  return n.type === "readiness" || n.type === "snapshot" || (n.type === "gap" && n.gapFor === "readiness");
+}
+
+export function portraitLayout(model) {
+  const { nodes } = model;
+  const GAP_X = 8;
+  const GAP_Y = 6;
+  const titles = [];
+  const placed = new Set();
+  let y = 0;
+  const pack = (flow) => {
+    let row = [];
+    const flush = () => {
+      const rowH = Math.max(...row.map((n) => n.ph));
+      const total = row.reduce((s, n) => s + n.pw, 0) + GAP_X * (row.length - 1);
+      let x = (PORTRAIT_WIDTH - total) / 2;
+      for (const n of row) {
+        n.px = Math.round((x + n.pw / 2) * 10) / 10;
+        n.py = Math.round((y + rowH / 2) * 10) / 10;
+        x += n.pw + GAP_X;
+      }
+      y += rowH + GAP_Y;
+      row = [];
+    };
+    for (const n of flow) {
+      [n.pw, n.ph] = PORTRAIT_SIZE[n.type] ?? [n.w, n.h];
+      placed.add(n);
+      if (row.length > 0 && row.reduce((s, m) => s + m.pw + GAP_X, 0) + n.pw > PORTRAIT_WIDTH) flush();
+      row.push(n);
+    }
+    if (row.length) flush();
+  };
+  for (const band of PORTRAIT_BANDS) {
+    const flow = band.groups.flatMap((g) => nodes.filter((n) => !placed.has(n) && g(n)).sort((a, b) => (band.byX ? a.x - b.x : a.y - b.y) || (a.id < b.id ? -1 : 1)));
+    if (flow.length === 0) continue;
+    titles.push({ text: band.title, y: y + 9 });
+    y += band.chamber ? 18 : 13;
+    pack(flow);
+    y += band.chamber ? 10 : 4;
+  }
+  // Anything no band claims (a future piece type) still gets a place in a last band: never dropped.
+  const rest = nodes.filter((n) => !placed.has(n));
+  if (rest.length) {
+    titles.push({ text: "OTHER", y: y + 9 });
+    y += 14;
+    pack(rest);
+    y += 6;
+  }
+  const pad = 8;
+  return { titles, box: { x: -pad, y: -pad, w: PORTRAIT_WIDTH + pad * 2, h: Math.ceil(y + pad) } };
+}
+
+const SOURCE_SHORT = { CHAIN_STATE: "Chain state", ISSUER_PUBLICATION: "Issuer pub.", PROVIDER_ENDPOINT: "Provider", USER_INPUT: "User input", WALLETWALL_RULES: "Rules" };
+const CLAIM_SHORT = { ASSET_IDENTITY: "Identity", TOKEN_BALANCE_AT_BLOCK: "Balance", TOKEN_USD_PRICE: "Price", TOKEN_USD_VALUE: "USD value", VAULT_TECHNICAL_READINESS: "Readiness" };
+const RESULT_SHORT = { VALUE: "Observed", NO_RESULT: "No result", ERROR: "Error" };
+const FINALITY_COMPACT = { FINALIZED: "finalized", UNFINALIZED: "unfinalized", UNKNOWN_FINALITY: "finality ?" };
+const GAP_SHORT = { source: "source", observation: "observation", assertion: "input claim", readiness: "required input" };
+
+/** The words on a portrait piece: a short name and qualifier. Never an assertion ID, never a full address. */
+function compactWords(n, model) {
+  switch (n.type) {
+    case "authority":
+      return [model.edges.some((e) => e.from === n.id && e.kind === "issuer") ? "Issuer" : "Authority", n.unattested ? "no source" : "authority"];
+    case "source":
+      return [SOURCE_SHORT[n.data?.kind] ?? "Source", "source"];
+    case "observation":
+      return [RESULT_SHORT[n.data?.result] ?? "Result ?", FINALITY_COMPACT[n.data?.finality] ?? "finality ?"];
+    case "assertion":
+      return [CLAIM_SHORT[n.data?.claimType] ?? "Claim", ""];
+    case "derivation":
+      return ["Derived", "by WalletWall"];
+    case "readiness":
+      return ["Readiness", ""];
+    case "gap":
+      return ["Missing", GAP_SHORT[n.gapFor] ?? "piece"];
+    case "snapshot":
+      return ["Snapshot", "reserved"];
+    case "stablecoin":
+      return [short(n.label, 10), "as presented"];
+    case "contract":
+      return ["Contract", shortAddress(n.address)];
+    case "wallet":
+      return ["Wallet", shortAddress(n.address)];
+    case "chain":
+      return [short(n.data?.chainId ?? n.label, 8), "chain ID"];
+    default:
+      return [short(n.label, 12), ""];
+  }
 }
 
 function bounds(nodes, pad) {
@@ -419,6 +531,30 @@ function bounds(nodes, pad) {
 export const inChamber = (n) => n.type === "readiness" || n.type === "snapshot" || (n.type === "gap" && n.gapFor === "readiness");
 
 const t2 = (x, y, cls, text) => `<text x="${x}" y="${y}" text-anchor="middle" class="${cls}">${esc(text)}</text>`;
+
+/**
+ * A portrait piece: the same architectural shape at its portrait size, with the short words of compactWords. The state
+ * (or readiness classification) stays on the face in words, exactly as returned.
+ */
+function compactShape(n, words) {
+  const [name, qualifier] = words;
+  const geometry = shape({ ...n, w: n.pw, h: n.ph }).replace(/<text[\s\S]*$/, "");
+  const hh = n.ph / 2;
+  const mono = n.type === "contract" || n.type === "wallet";
+  const onDark = n.type === "chain" || n.type === "stablecoin" || n.type === "conflict" ? " on-dark" : "";
+  const dx = n.type === "wallmark" ? 16 : 0;
+  const lines = [];
+  if (n.type === "conflict") lines.push(["c1 on-dark", "split"]);
+  else {
+    lines.push([`c1${onDark}`, n.type === "wallmark" ? `Wallmark${n.symbol ? ` · ${short(n.symbol, 8)}` : ""}` : name]);
+    if (n.type === "readiness") lines.push(["c3 classification", classText(n.classification)]);
+    else if (qualifier) lines.push([`c2${mono ? " mono" : ""}${onDark}`, qualifier]);
+    if (n.state !== undefined) lines.push(["c3 state", stateText(n.state)]);
+  }
+  const step = 11;
+  const top = -((lines.length - 1) * step) / 2 + 4;
+  return `${geometry}${lines.map(([cls, text], i) => t2(dx, Math.min(top + i * step, hh - 3), cls, text)).join("")}`;
+}
 
 /** The architectural shape of each kind of piece, centred on 0,0. */
 function shape(n) {
@@ -510,9 +646,11 @@ export function renderWall(model, { selectedNodeId, digest }) {
     .map((n) => {
       const state = n.state === undefined ? "" : ` data-state="${n.state === null ? "NONE" : KNOWN_STATES.includes(n.state) ? esc(n.state) : "UNRECOGNISED"}"`;
       const flags = [n.superseded ? "superseded" : "", n.missing ? "missing" : "", n.unattested ? "unattested" : ""].filter(Boolean).join(" ");
-      const anchors = `data-x0="${n.x0}" data-y0="${n.y0}" data-ax="${n.ax ?? ""}" data-ay="${n.ay ?? ""}" data-kx="${n.kx}" data-ky="${n.ky}" data-w="${n.w}" data-h="${n.h}"`;
-      const ghost = n.superseded ? `<rect class="ghost" x="${-n.w / 2 + 5}" y="${-n.h / 2 - 5}" width="${n.w}" height="${n.h}" rx="2"/>` : "";
-      return `<g class="ww-node${n.id === selectedNodeId ? " is-selected" : ""}" tabindex="0" role="button" aria-pressed="${n.id === selectedNodeId}" aria-label="${esc(nodeName(n))}" data-node-id="${esc(n.id)}" data-type="${esc(n.type)}"${state}${flags ? ` data-flags="${flags}"` : ""}${n.assertionId ? ` data-assertion-id="${esc(n.assertionId)}"` : ""}${n.classification ? ` data-classification="${KNOWN_CLASSES.includes(n.classification) ? esc(n.classification) : "UNRECOGNISED"}"` : ""} ${anchors} transform="translate(${n.x} ${n.y})">${ghost}${shape(n)}</g>`;
+      const portrait = n.px === undefined ? "" : ` data-px="${n.px}" data-py="${n.py}" data-pw="${n.pw}" data-ph="${n.ph}"`;
+      const anchors = `data-x0="${n.x0}" data-y0="${n.y0}" data-ax="${n.ax ?? ""}" data-ay="${n.ay ?? ""}" data-kx="${n.kx}" data-ky="${n.ky}" data-w="${n.w}" data-h="${n.h}"${portrait}`;
+      const ghost = (w, h) => (n.superseded ? `<rect class="ghost" x="${-w / 2 + 5}" y="${-h / 2 - 5}" width="${w}" height="${h}" rx="2"/>` : "");
+      const faces = n.px === undefined ? `${ghost(n.w, n.h)}${shape(n)}` : `<g data-face="wide">${ghost(n.w, n.h)}${shape(n)}</g><g data-face="compact">${ghost(n.pw, n.ph)}${compactShape(n, compactWords(n, model))}</g>`;
+      return `<g class="ww-node${n.id === selectedNodeId ? " is-selected" : ""}" tabindex="0" role="button" aria-pressed="${n.id === selectedNodeId}" aria-label="${esc(nodeName(n))}" data-node-id="${esc(n.id)}" data-type="${esc(n.type)}"${state}${flags ? ` data-flags="${flags}"` : ""}${n.assertionId ? ` data-assertion-id="${esc(n.assertionId)}"` : ""}${n.classification ? ` data-classification="${KNOWN_CLASSES.includes(n.classification) ? esc(n.classification) : "UNRECOGNISED"}"` : ""} ${anchors} transform="translate(${n.x} ${n.y})">${faces}</g>`;
     })
     .join("");
   const chamberMarkup = chamber
@@ -530,7 +668,10 @@ export function renderWall(model, { selectedNodeId, digest }) {
     .join("");
   const foundation = nodes.some((n) => n.ax === null) ? `<text x="${vb.x + 8}" y="${Math.max(...nodes.filter((n) => n.ax === null).map((n) => n.y + n.h / 2)) + 18}" class="layer">FOUNDATION · SUBJECTS OF THE CLAIMS</text>` : "";
   const foundationH = foundation ? 20 : 0;
-  return `<svg class="ww-wall-svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h + foundationH}" width="${vb.w}" height="${vb.h + foundationH}" data-digest="${esc(digest)}" data-ticks="${LAYOUT_TICKS}" role="group" aria-label="The Wall: ${nodes.length} pieces and ${edges.length} connections. The same information is listed in the text version below.">
+  const p = model.portrait;
+  const portraitAttr = p ? ` data-portrait-viewbox="${p.box.x} ${p.box.y} ${p.box.w} ${p.box.h}"` : "";
+  const portraitTitles = p ? `<g data-face="compact" class="ww-bands">${p.titles.map((t) => `<text x="0" y="${t.y}" class="layer">${esc(t.text)}</text>`).join("")}</g>` : "";
+  return `<svg class="ww-wall-svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h + foundationH}" width="${vb.w}" height="${vb.h + foundationH}" data-digest="${esc(digest)}" data-ticks="${LAYOUT_TICKS}"${portraitAttr} role="group" aria-label="The Wall: ${nodes.length} pieces and ${edges.length} connections. The same information is listed in the text version below.">
 <defs><marker id="ww-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><pattern id="ww-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6"/></pattern><pattern id="ww-half" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="4" height="8"/></pattern></defs>
-${columnTitles}${chamberMarkup}<g class="ww-edges">${edgeMarkup}</g><g class="ww-nodes">${nodeMarkup}</g>${foundation}</svg>`;
+<g data-face="wide">${columnTitles}${foundation}</g>${portraitTitles}${chamberMarkup}<g class="ww-edges">${edgeMarkup}</g><g class="ww-nodes">${nodeMarkup}</g></svg>`;
 }

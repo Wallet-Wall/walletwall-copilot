@@ -147,9 +147,9 @@ For the final pre-public tree these give:
 | Artifact | SHA-256 |
 | --- | --- |
 | Tool manifest (`security/tool-manifest.json`, RFC 8785 canonical form) | `2d2f857c2b0c8ef824a3bc59d52baef6895db0209f16830d4a5025800ca815ec` |
-| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `6554bf9696a8d95031fabcb3440dcc02fe24c042143af55611414d06146b121e` |
+| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `04a134798ef59b829b1bd090335bb9760b57a399ef7b0f4cd8d8ac6411e1bd71` |
 | MCP server bundle (`plugin/server/walletwall-mcp.mjs`) | `3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1` |
-| Candidate plugin artifact (`scripts/pack-plugin.ts`; 17 files, contains `LICENSE`; identical on Windows and Linux) | `b3d4921ae45013940b1feca2e5c4645c5b638873001dc232b2ba4644f4c18290` |
+| Candidate plugin artifact (`scripts/pack-plugin.ts`; 17 files, contains `LICENSE`; identical on Windows and Linux) | `681c26e235ddea608c3db4536b093277368906633e81b3e77eda0d09396f61fc` |
 | Candidate MCP artifact (`npm pack` of `packages/mcp`; 22 files: source, registry, policies, `LICENSE`; identical on Windows and Linux) | `1f9a76626da1c68c69d88e1ffeeb9ac56d9fade49540f2322760598b91160b16` |
 
 Historical values, kept for the record only and **not** to be compared against: at the Apache-2.0 audit tree the plugin manifest was `86089b7a…` and a `git archive` plugin artifact built on a `core.autocrlf=true` host was `2081506c…`. The plugin manifest and artifact changed since then for the canvas design (The Wall, brand pack, fit-to-frame layout, favicon, guide wording) and the new packaging; the tool manifest, the bundle and the MCP artifact did not change.

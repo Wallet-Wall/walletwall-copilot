@@ -53,8 +53,8 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/client.mjs",
-      "sha256": "ca7c6ca3da86d7f3d1f73f5e19c9b3e41fdd43bcdcf6e298c9742fdc1096b68f",
-      "bytes": 25995
+      "sha256": "5e223dbdfc0d85ddde5baa0029d4633884e1980c62a9786af2d24ec9d4afcded",
+      "bytes": 42216
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/copilot-extension.json",
@@ -83,18 +83,18 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/render.mjs",
-      "sha256": "5cea292722384fe3110c8cb8007cf1e57a3e6ddac9adeffa3fa3c307d4d23098",
-      "bytes": 47709
+      "sha256": "0e229695343bfb6a9063d21f5b7a74ca53a5d3353d66bd62a8b42779b1373eb1",
+      "bytes": 58699
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/styles.mjs",
-      "sha256": "648b00d6595f7d8b36eda453e8f424eb616cdd24be18280f58b97aa2bfe048e4",
-      "bytes": 21001
+      "sha256": "16de1acb983b7171f0f5a89ef13335c53f402d673bb088338087685b36e1c0ba",
+      "bytes": 36380
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wall.mjs",
-      "sha256": "5c9868e45d65ec19f4479c76ebcc46b4a8e4a2342d1ae1e1b546e9e199779df6",
-      "bytes": 29134
+      "sha256": "7edd07d951f251959663c2aff966b827a9ac082efa4854974e210766962da7e0",
+      "bytes": 36641
     },
     {
       "path": "plugin/mcp.json",

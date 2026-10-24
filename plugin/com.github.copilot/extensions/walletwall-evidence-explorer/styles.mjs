@@ -10,7 +10,7 @@ export const CSS = `
 --ww-stone:#e9d3ad;--ww-stone-low:#b99568;--ww-mortar:#f5ead4;--ww-brick:#b94a31;--ww-radius-panel:2px;--ww-radius-badge:1px;
 --ww-focus:0 0 0 3px rgba(191,78,50,0.18);
 --font-display:"Sora Variable","Sora",system-ui,sans-serif;--font-ui:"Manrope Variable","Manrope",system-ui,sans-serif;--font-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
---ww-fast:140ms;--ww-base:180ms;--ww-settle:280ms;--ww-ease:cubic-bezier(0.22,1,0.36,1)}
+--ww-fast:140ms;--ww-base:180ms;--ww-settle:280ms;--ww-ease:cubic-bezier(0.22,1,0.36,1);--ww-peek:84px}
 *{box-sizing:border-box;scrollbar-width:thin}
 /* Scrollbars: narrow and quiet. Cream track, deep-slate thumb, terracotta while engaged. Scrolling itself is unchanged. */
 html{scrollbar-color:var(--ww-deep-slate) var(--ww-cream)}
@@ -33,7 +33,7 @@ code{font-family:var(--font-mono);font-size:12px;font-weight:400;word-break:brea
 .note[data-attention="true"]{border-left-style:dashed}
 .meta{font-size:12px;color:var(--ww-muted-text);margin:6px 0}
 button{font:inherit}
-button:focus-visible,.ww-node:focus-visible,summary:focus-visible{outline:2px solid var(--ww-accent);outline-offset:2px;box-shadow:var(--ww-focus)}
+button:focus-visible,.ww-node:focus-visible,summary:focus-visible,input:focus-visible{outline:2px solid var(--ww-accent);outline-offset:2px;box-shadow:var(--ww-focus)}
 
 /* Identity rail: compact, so The Wall stays dominant. */
 .ww-rail{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:8px 10px;border:1px solid var(--ww-card-border);border-top:2px solid var(--ww-charcoal);border-radius:var(--ww-radius-panel);background:var(--ww-surface)}
@@ -63,7 +63,6 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);background:transpa
 #app[data-mode="trace"] .ww-flow>.ww-lineage{order:1}
 #app[data-mode="trace"] .ww-flow>.ww-stage{order:0}
 .ww-stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:16px;margin-top:8px;align-items:start}
-@media (max-width:1180px){.ww-stage{grid-template-columns:minmax(0,1fr)}}
 .ww-section,.ww-wall,.ww-detail{border:1px solid var(--ww-card-border);border-radius:var(--ww-radius-panel);background:var(--ww-card-bg);padding:10px 12px;margin-top:12px;min-width:0}
 .ww-stage>.ww-wall,.ww-stage>.ww-detail{margin-top:0}
 .ww-section>h2:first-child,.ww-detail h2:first-of-type{margin-top:4px}
@@ -71,7 +70,6 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);background:transpa
 .ww-section-head h2{margin:2px 0}
 .ww-section-head p{margin:0;flex:1 1 220px}
 .ww-detail{position:sticky;top:8px;max-height:calc(100vh - 16px);overflow:auto}
-@media (max-width:1180px){.ww-detail{position:static;max-height:none}}
 #app[data-mode="trace"] .ww-lineage{border-top:2px solid var(--ww-charcoal)}
 
 /* The Wall. */
@@ -83,6 +81,15 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);background:transpa
 .ww-zoom-level{display:inline-block;min-width:82px;padding:0 6px;text-align:center;font-size:12px;font-weight:600;color:var(--ww-muted-text)}
 .ww-wall-view{margin-top:6px;min-width:0}
 .ww-wall-svg{display:block;width:100%;max-width:1400px;margin:0 auto;height:auto;user-select:none;-webkit-user-select:none;touch-action:pan-y}
+/* Two faces per piece: wide (left to right) and compact (portrait, top to bottom). The page shows the one whose
+   positions it applied, so a piece's face, place and size always agree. */
+.ww-wall-svg [data-face="compact"],.ww-wall-svg[data-layout="portrait"] [data-face="wide"],.ww-wall-svg[data-layout="portrait"] .ww-chamber text{display:none}
+.ww-wall-svg[data-layout="portrait"] [data-face="compact"]{display:inline}
+.ww-wall-svg[data-layout="portrait"]{height:clamp(360px,70vh,620px);max-width:none}
+.ww-node .c1{font-size:11.5px;font-weight:700}
+.ww-node .c2{font-size:9.5px;fill:var(--ww-muted-text);font-weight:600}
+.ww-node .c2.mono{font-family:var(--font-mono);font-weight:500;fill:var(--ww-ink)}
+.ww-node .c3{font-size:8.5px;font-weight:700;letter-spacing:0.08em}
 .ww-wall-svg:not([data-zoom="1"]){cursor:grab;touch-action:none}
 .ww-wall-svg.is-panning{cursor:grabbing}
 .ww-wall-svg .ww-node{touch-action:none}
@@ -149,6 +156,7 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);background:transpa
 .ww-node.is-selected .body,.ww-node[aria-pressed="true"] .body{stroke:var(--ww-accent);stroke-width:2.4}
 .ww-node.is-pointed .body{stroke:var(--ww-accent);stroke-width:2.4;stroke-dasharray:none}
 .ww-edge.on-path{stroke:var(--ww-accent);stroke-width:1.8;opacity:1}
+.ww-wall-svg[data-trace="true"] .ww-edge.on-path{stroke-width:2.4}
 .ww-wall-svg[data-trace="true"] .ww-node:not(.on-path){opacity:0.22}
 .ww-wall-svg[data-trace="true"] .ww-edge:not(.on-path){opacity:0.15}
 .ww-wall-svg[data-trace="true"] .ww-chamber{opacity:0.5}
@@ -207,6 +215,9 @@ table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border-bottom:1
 .ww-brick{display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:var(--ww-surface);border:1px solid var(--ww-stone-low);border-radius:var(--ww-radius-panel);min-width:0}
 .ww-brick[data-attention="true"]{border-style:dashed;border-color:var(--ww-accent-dark)}
 .ww-mini{list-style:none;margin:0;padding:0;font-size:12px}.ww-mini li{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.ww-brick[data-focus-node],.ww-course[data-focus-node]{cursor:pointer}
+.ww-brick-key{background:none;border:0;padding:0;text-align:left;cursor:pointer;font-family:var(--font-ui)}
+.ww-assembly-show{margin:4px 0 0}
 
 /* Receipt: reserved, disabled. */
 .ww-receipt-body{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
@@ -223,8 +234,173 @@ table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border-bottom:1
 .ww-wallaby-bubble p{margin:0 0 6px}
 @media (max-width:520px){.ww-wallaby-art{width:56px;height:56px}}
 
+/* Elements of the phone composition. Hidden on wide panels, where the rail, toolbar and detail column carry the same
+   controls and facts. */
+.ww-rail-asset,.ww-icon-button,.ww-wall-menu,.ww-back,.ww-sheet-bar,.ww-sheet-actions,.ww-sheet-summary,.ww-strip,.ww-why-more,.ww-receipt-row,.ww-list{display:none}
+.ww-icon-button{align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 10px;border:1px solid var(--ww-charcoal-border);border-radius:var(--ww-radius-badge);background:var(--ww-surface);color:var(--ww-ink);cursor:pointer;font-weight:700;letter-spacing:0.08em}
+.ww-icon-button[aria-expanded="true"]{background:var(--ww-charcoal);color:var(--ww-cream);border-color:var(--ww-charcoal)}
+
+/* Tablet (768 to 1023 px): The Wall about two thirds, the detail rail beside it, Wallprint and readiness beneath. */
+@media (min-width:768px) and (max-width:1023px){
+.ww-stage{grid-template-columns:minmax(0,2fr) minmax(240px,1fr)}
+.ww-wall-svg[data-layout="portrait"]{height:clamp(420px,64vh,820px)}
+}
+/* A phone or small tablet on its side: the wide layout, and the detail rail takes about 40 % on the right. */
+@media (min-width:768px) and (max-width:1023px) and (orientation:landscape) and (max-height:600px){
+.ww-stage{grid-template-columns:minmax(0,3fr) minmax(220px,2fr)}
+}
+
+/* Below 1024 px (phones, tablets, phones on their side): a compact header and the critical state strip; the boundary,
+   versions, lenses and modes fold behind the header menu. */
+@media (max-width:1023px){
+.ww-rail:has(.ww-rail-asset) .ww-rail-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0;padding:0}
+.ww-wall-hint{display:none}
+/* 1. Compact identity header: mark, asset, chain, menu. Not sticky. */
+.ww-rail{flex-wrap:nowrap;gap:10px;padding:6px 6px 6px 8px;min-height:52px;max-height:60px;position:relative}
+.ww-mark{width:32px;height:32px;margin:0}
+.ww-rail-asset{display:flex;align-items:baseline;gap:6px;margin:0;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ww-rail-symbol{font:600 17px/1.2 var(--font-display)}
+.ww-rail-sep{color:var(--ww-muted-text)}
+.ww-rail-chain{font-size:13px;color:var(--ww-muted-text)}
+.ww-panel-toggle{display:inline-flex;flex:0 0 auto}
+.ww-rail-facts{display:none}
+/* Boundary, versions and lenses fold behind the header menu. */
+.ww-panel-info{display:none}
+#app[data-panel-open="true"] .ww-panel-info{display:block;margin-top:8px;padding:10px;border:1px solid var(--ww-charcoal);background:var(--ww-surface)}
+.ww-panel-info .ww-boundary{margin-top:0}
+/* 2. Critical state strip. */
+.ww-strip{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:8px 0 0;padding:0}
+.ww-strip-item{display:inline-flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:0;min-height:44px;padding:3px 9px;border:1px solid var(--ww-charcoal-border);border-radius:var(--ww-radius-badge);background:var(--ww-surface);color:inherit;font:inherit;line-height:1.25;text-align:left}
+button.ww-strip-item{cursor:pointer}
+.ww-strip-item:has(.chip[data-attention="true"]){border-style:dashed;border-color:var(--ww-accent-dark)}
+.ww-strip-key{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--ww-muted-text)}
+.ww-strip .chip{border:0;padding:0;background:transparent;font-size:12px}
+}
+/* Very short screens (a phone on its side): The Wall gets the height; the state strip is left to the sheet and Wallprint. */
+@media (max-width:1023px) and (orientation:landscape) and (max-height:500px){
+.ww-strip{display:none}
+}
+
+/* Phone (up to 767 px): a focused instrument. Header, state strip, The Wall, then a detail sheet; the rest below. */
+@media (max-width:767px){
+body{padding:8px 12px calc(var(--ww-peek) + 24px);-webkit-tap-highlight-color:transparent}
+button:not(:disabled):active,.ww-strip-item:active{filter:brightness(0.94)}
+h2{font-size:14px;margin:4px 0 6px}
+.ww-section,.ww-wall{padding:10px;margin-top:12px}
+.ww-sr-phone,.ww-section-head h2,.ww-zoom-level,.ww-receipt>h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0;padding:0}
+.ww-panel-info .ww-modes,.ww-panel-info .ww-tools{display:none}
+/* 3. The Wall is the stage. */
+.ww-flow>.ww-stage{order:1}.ww-flow>.ww-wallprint{order:2}.ww-flow>.ww-assembly{order:3}.ww-flow>.ww-list{order:4}.ww-flow>.ww-lineage{order:5}.ww-flow>.ww-criteria{order:6}.ww-flow>.ww-receipt{order:9}
+#app[data-mode="trace"] .ww-flow>.ww-stage{order:1}#app[data-mode="trace"] .ww-flow>.ww-lineage{order:5}
+.ww-flow>.ww-claims,.ww-flow>.ww-text-version{display:none}
+.ww-stage{display:block;margin-top:10px}
+.ww-wall{position:relative;padding:0;margin-top:0}
+.ww-section-head{display:flex;align-items:center;justify-content:flex-end;min-height:52px;padding:4px 6px;border-bottom:1px solid var(--ww-inner-border)}
+.ww-wall-hint{display:none}
+.ww-wall-view{margin:0}
+.ww-legend{margin:0;padding:0 10px;border-top:1px solid var(--ww-inner-border)}
+.ww-legend summary{display:flex;align-items:center;min-height:44px}
+/* 6. One compact control group on the stage's top edge, so it never sits on a piece. */
+.ww-wall-tools{position:relative;z-index:8;flex-wrap:nowrap;gap:4px}
+.ww-wall-tools>[data-reset-layout]{display:none}
+.ww-zoom button{min-width:44px;min-height:44px;padding:0 10px;margin-right:-1px;background:var(--ww-cream)}
+.ww-wall-menu-toggle{display:inline-flex;background:var(--ww-cream)}
+.ww-wall-menu:not([hidden]){display:flex;flex-direction:column;position:absolute;top:50px;right:0;min-width:210px;background:var(--ww-cream);border:1px solid var(--ww-charcoal);box-shadow:0 8px 20px rgba(30,26,20,0.16)}
+.ww-wall-menu button{min-height:44px;padding:0 14px;text-align:left;border:0;border-bottom:1px solid var(--ww-inner-border);background:transparent;color:var(--ww-ink);font:600 14px var(--font-ui);cursor:pointer}
+.ww-wall-menu button[aria-pressed="true"]{box-shadow:inset 3px 0 0 var(--ww-charcoal)}
+#app[data-mode="trace"] .ww-back{display:inline-flex;align-items:center;margin-right:auto;order:-1;min-height:44px;padding:0 12px;border:1px solid var(--ww-charcoal);background:var(--ww-charcoal);color:var(--ww-cream);font:600 13px var(--font-ui);cursor:pointer}
+/* 8. The detail rail becomes a bottom sheet: peek, half, full. Only the sheet stays on screen while scrolling. */
+.ww-detail{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:7;margin:0;height:var(--ww-peek);max-height:none;overflow:hidden;border:0;border-top:2px solid var(--ww-charcoal);border-radius:0;background:var(--ww-cream);padding:0 14px calc(env(safe-area-inset-bottom,0px) + 10px);box-shadow:0 -6px 18px rgba(30,26,20,0.12);transition:height var(--ww-settle) var(--ww-ease)}
+.ww-detail[data-sheet="half"]{height:54vh;overflow-y:auto;overscroll-behavior:contain}
+.ww-detail[data-sheet="full"]{height:calc(100vh - 16px);height:calc(100dvh - 16px);overflow-y:auto;overscroll-behavior:contain}
+.ww-sheet-bar{display:block;position:sticky;top:0;z-index:1;background:var(--ww-cream);touch-action:none}
+.ww-detail[data-sheet="peek"]{touch-action:none}
+.ww-sheet-grip{display:flex;align-items:center;justify-content:center;width:100%;min-height:28px;padding:8px 0 6px;border:0;background:transparent;cursor:pointer}
+.ww-sheet-grip span{display:block;width:40px;height:4px;border-radius:2px;background:var(--ww-charcoal-rail)}
+.ww-sheet-actions{display:flex;gap:6px;position:sticky;bottom:calc(-10px - env(safe-area-inset-bottom,0px));margin:8px -14px 0;padding:8px 14px 10px;background:var(--ww-cream);border-top:1px solid var(--ww-charcoal-border)}
+.ww-sheet-actions button{flex:1 1 0;min-height:44px;padding:0 8px;border:1px solid var(--ww-charcoal-border);border-radius:var(--ww-radius-badge);background:var(--ww-surface);color:var(--ww-ink);font:600 13px var(--font-ui);cursor:pointer}
+.ww-detail[data-sheet="peek"] .ww-sheet-actions{display:none}
+.ww-sheet-summary{display:block;margin:0 0 8px;cursor:pointer}
+.ww-sheet-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0;font:600 15px/1.3 var(--font-display)}
+.ww-sheet-title>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ww-sheet-meaning{margin:2px 0 0;font-size:12.5px;color:var(--ww-muted-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ww-detail[data-sheet="peek"] [data-assertion-detail]>:not(.ww-sheet-summary),.ww-detail[data-sheet="peek"] .ww-node-detail>:not(.ww-sheet-summary){display:none}
+.ww-detail .ww-eyebrow+h2,.ww-detail h2:first-of-type{margin-top:4px}
+[data-assertion-detail]:not([hidden]){display:flex;flex-direction:column}
+[data-assertion-detail]>section[aria-labelledby="h-states"]{order:1}[data-assertion-detail]>section[aria-labelledby="h-limits"]{order:2}[data-assertion-detail]>section[aria-labelledby="h-deps"]{order:3}[data-assertion-detail]>section[aria-labelledby="h-assertion"]{order:4}
+.ww-detail button.copy{min-height:36px;padding:0 12px}
+.copy-status{left:12px;bottom:calc(var(--ww-peek) + 10px)}
+/* 10. The guide: a small card docked under the stage, so it never covers a piece or the sheet. */
+.ww-wall>.ww-wallaby{position:static;display:flex;align-items:flex-start;gap:6px;max-width:none;margin:0;padding:8px 10px;border-top:1px solid var(--ww-inner-border);transform:none}
+.ww-wall>.ww-wallaby[hidden]{display:none}
+.ww-wall>.ww-wallaby[data-peek="out"]{opacity:0;transform:none}
+.ww-wallaby-art{width:36px;height:36px}
+.ww-wallaby-bubble{flex:1 1 auto;font-size:13px;border-color:var(--ww-charcoal-border)}
+.ww-wallaby .ww-actions{gap:6px}
+.ww-wallaby button{min-height:44px}
+/* 12. Wallprint: a two-column summary; a tile with a list spans both. Each tile leads to its piece. */
+.ww-courses{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px}
+.ww-course-row{display:contents}
+.ww-brick{padding:8px 10px;min-height:44px;gap:2px}
+.ww-brick:has(.ww-mini){grid-column:1/-1}
+/* 13. Readiness: a compact checklist under a small keystone, not six boxes. */
+.ww-arch{align-items:stretch;padding:2px 0;gap:6px}
+.ww-keystone{align-self:center;padding:6px 30px 8px}
+.ww-keystone .small{display:none}
+.ww-arch[data-fit="false"] .ww-keystone{transform:translateY(-4px)}
+.ww-course{display:flex;flex-direction:column;gap:0;padding:0;background:none}
+.ww-piece{flex-direction:row;align-items:center;gap:8px;min-height:44px;padding:8px 4px;border:0;border-bottom:1px solid var(--ww-inner-border);border-radius:0;background:none;transform:none}
+.ww-piece::before{content:"✓";flex:0 0 18px;font-weight:700;text-align:center}
+.ww-piece[data-outcome="NOT_MET"]::before,.ww-piece[data-outcome="INDETERMINATE"]::before{content:"!";color:var(--ww-accent-dark)}
+.ww-piece[data-outcome="UNRECOGNISED"]::before{content:"?"}
+.ww-piece[data-outcome="NOT_MET"],.ww-piece[data-outcome="INDETERMINATE"],.ww-piece[data-outcome="UNRECOGNISED"]{transform:none;background:none;border-left:2px dashed var(--ww-accent-dark);border-bottom-style:solid;border-bottom-color:var(--ww-inner-border)}
+.ww-piece-id,.ww-piece-fit,.ww-piece-reason{display:none}
+.ww-piece-name{flex:1 1 auto;min-width:0}
+.ww-piece .chip,.ww-strip .chip,.ww-sheet-title .chip,.ww-list-meta .chip{white-space:nowrap;overflow-wrap:normal;flex:0 0 auto}
+/* Criteria table: stacked rows, never a squeezed table. */
+.ww-criteria table,.ww-criteria tbody,.ww-criteria tr,.ww-criteria th,.ww-criteria td{display:block}
+.ww-criteria thead{display:none}
+.ww-criteria tr{padding:6px 0;border-bottom:1px solid var(--ww-inner-border)}
+.ww-criteria th,.ww-criteria td{border:0;padding:1px 0}
+.ww-criteria td[data-label]::before{content:attr(data-label) ": ";font-size:11px;font-weight:700;color:var(--ww-muted-text)}
+/* 14. List mode: search, filter chips, rows. */
+.ww-list{display:block}
+.ww-search{display:block;width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--ww-charcoal-border);border-radius:var(--ww-radius-badge);background:var(--ww-cream);color:var(--ww-ink);font:inherit}
+.ww-filters{display:flex;gap:6px;overflow-x:auto;padding:8px 0;scrollbar-width:none}
+.ww-filters button{flex:0 0 auto;min-height:44px;padding:0 12px;border:1px solid var(--ww-charcoal-border);border-radius:var(--ww-radius-badge);background:var(--ww-surface);color:var(--ww-ink);font:600 13px var(--font-ui);cursor:pointer}
+.ww-filters button[aria-pressed="true"]{background:var(--ww-charcoal);color:var(--ww-cream);border-color:var(--ww-charcoal)}
+.ww-list-rows{list-style:none;margin:0;padding:0}
+.ww-list-rows li[hidden]{display:none}
+.ww-list-row{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:52px;padding:8px 2px;border:0;border-bottom:1px solid var(--ww-inner-border);background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ww-list-name{font-weight:700}
+.ww-list-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:12px}
+.ww-list-sub{max-width:100%}
+/* 15. Receipt: one compact row. No QR placeholder, no large disabled panel. */
+.ww-receipt{padding:4px 10px}
+.ww-receipt-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:52px;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ww-receipt-row-text{display:flex;flex-direction:column}
+.ww-receipt-body{display:none}
+.ww-receipt[data-open="true"] .ww-receipt-body{display:block;padding-bottom:8px}
+.ww-qr-slot{display:none}
+/* 16. Text density: explanations fold behind "Why?". */
+.ww-explain{display:none}
+.ww-why-more{display:block;margin:0 0 6px;font-size:12px}
+.ww-why-more summary{display:inline-flex;align-items:center;min-height:44px;min-width:44px;color:var(--ww-accent-dark);font-weight:700;cursor:pointer}
+.ww-why-more p{margin:2px 0 6px}
+.two,.kv>div{grid-template-columns:1fr}
+}
+/* A phone on its side: the wide Wall, and the detail sheet becomes a right-hand panel of about 40 %. */
+@media (max-width:767px) and (orientation:landscape) and (max-height:500px){
+body{padding-right:calc(40vw + 12px);padding-bottom:24px}
+.ww-detail,.ww-detail[data-sheet]{top:0;left:auto;width:40vw;height:100vh;height:100dvh;overflow-y:auto;border-top:0;border-left:2px solid var(--ww-charcoal);box-shadow:-6px 0 18px rgba(30,26,20,0.12)}
+.ww-detail[data-sheet="peek"] [data-assertion-detail]>:not(.ww-sheet-summary),.ww-detail[data-sheet="peek"] .ww-node-detail>:not(.ww-sheet-summary){display:revert}
+.ww-sheet-grip{display:none}
+.ww-detail[data-sheet="peek"] .ww-sheet-actions{display:flex}
+.copy-status,.ww-wallaby{bottom:10px;right:calc(40vw + 12px)}
+}
+
 /* Reduced motion: from the system setting or the panel's own toggle. Nothing animates; meaning is unchanged. */
 #app[data-motion="reduced"] *,#app[data-motion="reduced"]~.ww-wallaby{transition:none!important;animation:none!important}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-@media (max-width:640px){body{padding:10px 10px 40px}.ww-section,.ww-wall,.ww-detail{padding:8px}.ww-mark{width:32px;height:32px}}
+
 `;

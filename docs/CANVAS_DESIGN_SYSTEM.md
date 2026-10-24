@@ -103,6 +103,7 @@ Columns are semantic: authorities, sources, observations, claims, derivation, th
 ### Layout and interaction
 
 - One deterministic simulation (`forceLayout` in `wall.mjs`): link springs, column and band anchors, rectangle collision, fixed tick count, no randomness, no clock. The server runs it to place the pieces; the page replays the identical function so The Wall *assembles* into exactly those positions (tested).
+- A second, portrait layout (`portraitLayout` in `wall.mjs`) for phones and portrait tablets: the same pieces and connections read top to bottom in bands (authorities and sources, observations, claims and derivation, Wallmark, vault readiness, foundation). It is computed once on the server without simulation: each band packs its pieces into centred rows, ordered by where the force layout put them. Each piece carries a compact face for it, slightly smaller and with short words (Issuer, Balance, Price, Wallet, Chain, Readiness); the state or classification stays on the face, and an assertion ID or a full address never does (a contract or wallet face shows a shortened address; the full value is in the piece's accessible name and detail). Nothing is dropped to fit (tested).
 - Pieces never overlap at rest (tested). The Wall fits its frame: the server's view box covers every piece, so the whole graph, readiness keystone included, is visible at load without scrolling (tested for every fixture). **Zoom** (−, +, Fit; 150 %, 200 %, 300 %) narrows the view box inside the same frame, and dragging the background pans; a piece reached by keyboard or by a link is brought into view. A dragged piece stays inside the frame.
 - Click, Enter or Space selects. A claim piece selects that assertion (the agent's `get_view` follows); any other piece opens its own detail. Arrow keys move between pieces spatially; Escape clears. Drag pins a piece where it is dropped while its neighbours relax and stop; **Reset layout** restores every position.
 - **Overview** shows everything, with the selected path in terracotta. **Trace** dims everything off the selected piece's evidence path and brings Source lineage up. **Compare** is disabled.
@@ -141,7 +142,7 @@ Nothing moves unless the bundle changed or the user acted. Durations follow the 
 
 | Event | Motion |
 | --- | --- |
-| First load | The Wall assembles: the force simulation plays from its starting positions and stops (about 40 frames) |
+| First load | The Wall assembles: the force simulation plays from its starting positions and stops (about 40 frames). The portrait layout has no simulation: its pieces settle once into their rows (18 frames) |
 | State change | Each piece moves from where it was to where it now belongs; the keystone resolves last |
 | Conflict, unknown, stale, superseded | Static geometry (split seam, gap, recess, ghost); nothing pulses |
 | Selection | The dependency path changes colour; nothing moves |
@@ -159,7 +160,7 @@ WalletWall's profile of the asset context, laid as three running-bond courses of
 
 ## WalletWallaby
 
-The optional guide, using the WalletWallaby renders. It appears at most once per change, with one short sentence tied to what the bundle shows (a split seam, a missing brick, a keystone that does not seat, a recessed or superseded piece, or a piece that moved and why), and outlines the piece it explains. It peeks in once, then holds still; **Got it** retracts it. The toolbar control and the guide's own button read exactly **Hide Guide** while the guide is on and **Show Guide** while it is off; Show Guide brings WalletWallaby back with its last cue. It is never required to understand the panel. WalletWallrus is the builder identity and does not appear on the canvas; the product mark stays the WalletWall mark.
+The optional guide, using the WalletWallaby renders. It appears at most once per change, with one short sentence tied to what the bundle shows (a split seam, a missing brick, a keystone that does not seat, a recessed or superseded piece, or a piece that moved and why), and outlines the piece it explains. It peeks in once, then holds still; **Got it** retracts it. The toolbar control and the guide's own button read exactly **Hide Guide** while the guide is on and **Show Guide** while it is off; Show Guide brings WalletWallaby back with its last cue. It is never required to understand the panel. On a phone the guide is a small card docked under The Wall, so it never covers a piece or the detail sheet. WalletWallrus is the builder identity and does not appear on the canvas; the product mark stays the WalletWall mark.
 
 ## Observed, Replay, Scenario
 
@@ -171,7 +172,7 @@ The optional guide, using the WalletWallaby renders. It appears at most once per
 
 ## Receipt and QR (reserved)
 
-The Receipt area has **Copy receipt**, **Verify** and **QR**, all disabled with "Requires immutable snapshot." visible on screen, and an empty 96 px QR slot. When immutable snapshots exist, the QR code will locate a verifiable snapshot receipt; it will never encode a wallet address, a local URL, a Copilot session, a key or the query. No receipt, snapshot identifier or QR code is generated today.
+The Receipt area has **Copy receipt**, **Verify** and **QR**, all disabled with "Requires immutable snapshot." visible on screen, and an empty 96 px QR slot. On a phone it folds to one row ("Receipt · Requires immutable snapshot.") without the QR slot. When immutable snapshots exist, the QR code will locate a verifiable snapshot receipt; it will never encode a wallet address, a local URL, a Copilot session, a key or the query. No receipt, snapshot identifier or QR code is generated today.
 
 ## Accessibility
 
@@ -183,7 +184,25 @@ The Receipt area has **Copy receipt**, **Verify** and **QR**, all disabled with 
 
 ## Responsive behaviour
 
-Above 1180 px The Wall and the detail rail (280 to 340 px) sit side by side; below, the detail rail moves under The Wall and is scrolled into view only after an explicit selection. The Wall's column shrinks with the panel and The Wall scales to fit it, so the page never scrolls horizontally and nothing is hidden to prevent it (no `overflow-x: hidden`); long values such as addresses wrap, and so do their copy controls.
+The page never scrolls horizontally and nothing is hidden to prevent it (no `overflow-x: hidden`); long values such as addresses wrap, and so do their copy controls. Three compositions:
+
+| Width | Composition |
+| --- | --- |
+| 1024 px and wider | The identity rail, toolbar and boundary note on top; The Wall and the detail rail (280 to 340 px) side by side, the rail sticky; Readiness assembly, Source lineage, Wallprint and the rest beneath. The Wall uses the wide layout and scales to its column. |
+| 768 to 1023 px | A compact header (mark, asset as presented, chain ID, a menu that folds the boundary note, toolbar and versions) and the critical state strip; The Wall about two thirds of the width (portrait layout when the panel is upright) with the detail rail beside it; Wallprint and readiness beneath. |
+| Below 768 px | A focused instrument: the compact header, the state strip, then The Wall as the stage (portrait layout, between 360 and 620 px tall and never taller than the wall needs), then Wallprint, readiness, the list, Source lineage and the Receipt row. No long explanation stands before The Wall; explanations fold behind "Why?". |
+
+**State strip.** Wallmark, freshness and readiness exactly as returned, plus a conflict chip only when there is a split seam and an invariant chip only when there are violations. Each chip leads to its piece.
+
+**Controls on a phone.** One compact group on the stage's top edge: −, +, Fit and a menu (Trace, Show/Hide Guide, Reset layout, Reduce motion, List view). Observed stays implicit; Replay, Scenario and Compare stay in the header menu with their reasons. In Trace, a "Back to Overview" control appears on the stage.
+
+**Detail sheet.** On a phone the detail rail is a bottom sheet with three states: peek (about 84 px: the selected piece, its state and one line of meaning), half (about 54 % of the screen: support, freshness, finality, authority, conflicts, limitations, sources) and full (the exact subject and value, the lineage, every limitation and the copy controls). A grip, a short swipe, the summary or More change state; Escape folds it one step; a half-open sheet folds to its peek when the reader scrolls the page on. The Wall stays behind it with its selection. Only the sheet stays on screen while scrolling: the header, strip and controls are not sticky.
+
+**Touch.** Tap a piece to select it, emphasise its path and open the sheet; tap empty space to clear the emphasis and fold the sheet; pinch to zoom; drag to pan once zoomed in. Nothing depends on a long press. A finger never drags a piece (a mouse still can, to pin it). Touch targets are at least 44 px.
+
+**List view.** A search field, filter chips (All, Claims, Sources, Observations, Conflicts, Readiness, Missing) and one row per piece with its state; a row leads back to its piece on The Wall. It replaces the wide table on a phone.
+
+**Turning the device.** The page recomputes the composition when the panel turns or resizes. A phone on its side gets the wide layout, the strip folds away, and the detail sheet becomes a right-hand panel of about 40 %.
 
 Scrollbars that remain (the page, the detail rail when it is taller than the panel, wide tables) are narrow: a cream track with a deep-slate thumb that turns terracotta while engaged, from the brand tokens only. The Wall itself has no scrollbar.
 

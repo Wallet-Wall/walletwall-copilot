@@ -17,7 +17,7 @@ Requires `node` on `PATH` (Node.js 22.18 or newer).
 
 | Asset | SHA-256 |
 | --- | --- |
-| `walletwall-plugin.tar` | `b3d4921ae45013940b1feca2e5c4645c5b638873001dc232b2ba4644f4c18290` |
+| `walletwall-plugin.tar` | `681c26e235ddea608c3db4536b093277368906633e81b3e77eda0d09396f61fc` |
 | `walletwall-mcp-0.1.0.tgz` | `1f9a76626da1c68c69d88e1ffeeb9ac56d9fade49540f2322760598b91160b16` |
 | `walletwall-mcp.mjs` | `3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1` |
 

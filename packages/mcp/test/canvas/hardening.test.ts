@@ -356,6 +356,14 @@ describe("addresses in the canvas: full value, one-click copy of the exact value
     assert.deepEqual(viaClipboardApi.copied, [MIXED]);
   });
 
+  test("a successful copy selects nothing, so there is no selection flash; the full value is selected only when copying is refused", async () => {
+    const ok = await click({ exec: false, clipboard: true });
+    assert.deepEqual(ok.copied, [MIXED]);
+    assert.equal(ok.selected, undefined, "nothing was selected");
+    const refused = await click({ exec: false, clipboard: false });
+    assert.ok(refused.selected, "the fallback selects the full value");
+  });
+
   test("Copy chain + address copies the stated chain ID and the exact full address, labelled, and nothing else", async () => {
     const r = await click({ exec: true, clipboard: true, withChain: true });
     assert.deepEqual(r.copied, [`chainId:8453 address:${MIXED}`], "the clipboard API is used so the selection cannot shorten it");

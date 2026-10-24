@@ -256,7 +256,7 @@ function stage(html: string, opts: { reduce: boolean }) {
   const svg = { ...element(svgAttrs), querySelectorAll: (s: string) => (s === ".ww-node" ? nodes : s === ".ww-edge" ? edges : []), querySelector: () => null };
   const cues = [...html.matchAll(/<li data-cue="([^"]*)" data-node="([^"]*)" data-pose="([^"]*)">([^<]*)<\/li>/g)].map((m) => ({ ...element({ "data-cue": m[1] as string, "data-node": m[2] as string, "data-pose": m[3] as string }), textContent: m[4] as string }));
   const handlers: Record<string, (e: unknown) => void> = {};
-  const app = { ...element({}), innerHTML: "", addEventListener: (t: string, h: (e: unknown) => void) => (handlers[t] = h), querySelector: (s: string) => (s === ".ww-wall-svg" ? svg : s === "[data-guide-toggle]" ? toggle : null), querySelectorAll: (s: string) => (s === ".ww-guide-cues li" ? cues : []) };
+  const app = { ...element({}), innerHTML: "", addEventListener: (t: string, h: (e: unknown) => void) => (handlers[t] = h), querySelector: (s: string) => (s === ".ww-wall-svg" ? svg : s === "[data-guide-toggle]" ? toggle : null), querySelectorAll: (s: string) => (s === ".ww-guide-cues li" ? cues : s === "[data-guide-toggle]" ? [toggle] : []) };
   const toggle = element({ "data-guide-toggle": "" });
   let guideClick: ((e: unknown) => void) | undefined;
   const guide = { ...element({ "data-peek": "out" }), hidden: true, addEventListener: (_t: string, h: (e: unknown) => void) => (guideClick = h) };
@@ -404,7 +404,9 @@ describe("final layout and copy contract", () => {
     assert.ok(!/minWidth/.test(render.CLIENT_JS), "the page script never imposes a minimum width");
     assert.ok(!/overflow-x:\s*hidden/.test(render.CSS), "overflow is prevented by layout, not hidden");
     assert.ok(/\.ww-stage\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(280px,340px\)/.test(render.CSS), "the inspector column is bounded and The Wall's column can shrink");
-    assert.ok(/@media \(max-width:1180px\)\{\.ww-stage\{grid-template-columns:minmax\(0,1fr\)\}\}/.test(render.CSS), "narrow panels stack the inspector below The Wall");
+    assert.ok(/@media \(min-width:768px\) and \(max-width:1023px\)\{\s*\.ww-stage\{grid-template-columns:minmax\(0,2fr\) minmax\(240px,1fr\)\}/.test(render.CSS), "tablet panels keep the inspector beside The Wall, about a third of the width");
+    assert.ok(/@media \(max-width:767px\)\{[\s\S]*?\.ww-detail\{position:fixed;left:0;right:0;bottom:0/.test(render.CSS), "phone panels turn the inspector into a bottom sheet, never a full-width block under The Wall");
+    assert.ok(!/max-width:1180px/.test(render.CSS), "no breakpoint stacks the inspector under The Wall any more");
     for (const z of ['data-zoom="out"', 'data-zoom="in"', 'data-zoom="fit"', "data-zoom-level"]) assert.ok(html.includes(z), z);
     assert.ok(render.CLIENT_JS.includes('wall.svg.setAttribute("viewBox"'), "zoom and pan change the view box, not the page scroll");
   });
