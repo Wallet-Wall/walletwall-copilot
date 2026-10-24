@@ -354,17 +354,31 @@ describe("fixture contracts, end to end: fixture, normalizeInput, WalletWall MCP
 });
 
 describe("one visual language: shared nodes, one graph, surfaces that separate", () => {
-  test("every piece but the readiness keystone draws the same circular node; the keystone is the one other shape", async () => {
+  test("only the semantic anchors are node objects: claims, the Wallmark and a conflict are circles, the keystone the one other shape, and facts and context are drafting marks", async () => {
+    const ANCHORS = ["wallmark", "assertion", "conflict", "readiness"];
+    const FACTS = ["observation", "derivation", "gap"];
     for (const name of Object.keys(FIXTURES)) {
       const { html } = await open(name);
       const svg = /<svg class="ww-wall-svg"[\s\S]*?<\/svg>/.exec(html)?.[0] ?? "";
-      for (const chunk of svg.split(/(?=<g class="ww-node[ "])/).slice(1)) {
-        const type = /data-type="([^"]+)"/.exec(chunk)?.[1];
+      const chunks = svg.split(/(?=<g class="ww-node[ "])/).slice(1);
+      let anchors = 0;
+      for (const chunk of chunks) {
+        const type = /data-type="([^"]+)"/.exec(chunk)?.[1] as string;
+        const tier = /data-tier="([^"]+)"/.exec(chunk)?.[1];
+        assert.equal(tier, ANCHORS.includes(type) ? "anchor" : FACTS.includes(type) ? "fact" : "context", `${name}: ${type} is drawn at its tier`);
         if (type === "readiness") assert.ok(/<path class="body"/.test(chunk), `${name}: the keystone`);
-        else assert.ok(/<circle class="body" r="[\d.]+"\/>/.test(chunk) && !/<(rect|polygon|path) class="body"/.test(chunk), `${name}: ${type} uses the shared node`);
+        else assert.ok(/<circle class="body" r="[\d.]+"( pathLength="100")?\/>/.test(chunk) && !/<(rect|polygon|path) class="body"/.test(chunk), `${name}: ${type} keeps one circular ring for selection and focus`);
+        if (tier === "anchor") anchors++;
+        // A fact or context piece is a light mark (a drafting mark or a small glyph), never an enclosed medallion.
+        else assert.ok(/class="ww-draft[ "]|class="ww-glyph" transform="scale\(0\.55\)"/.test(chunk), `${name}: ${type} is a light mark`);
         assert.ok(/<rect class="ww-hit"/.test(chunk), "a touch target");
       }
+      assert.ok(anchors / chunks.length <= 0.45, `${name}: ${anchors} of ${chunks.length} pieces are node objects`);
     }
+    // The ring of a fact or context piece is not drawn at rest; it appears under hover, focus and selection.
+    const css = render.CSS;
+    assert.ok(/\.ww-node:not\(\[data-tier="anchor"\]\) \.body\{fill:none;stroke:none\}/.test(css));
+    assert.ok(/\.ww-node\.is-selected \.body,\.ww-node\.is-focus \.body\{stroke:var\(--ww-brick-low\);stroke-width:2\}/.test(css));
   });
 
   test("Trace reuses the same pieces: there is one graph, no separate lineage diagram, and Trace only changes emphasis", async () => {

@@ -158,12 +158,12 @@ Both artifacts were extracted and searched for `.env` files, `.git` data, sessio
 
 ### Development after v0.2.0
 
-The tables above are the v0.2.0 release record and stay as published; the v0.2.0 tag, assets and checksums are not rewritten. Canvas work after v0.2.0 (the responsive layout, the Coinstellation evidence graph and its matte material and typography pass) changes files under `plugin/`, so the development tree's plugin manifest and plugin artifact differ from the v0.2.0 values. For the current development tree, which is not a release:
+The tables above are the v0.2.0 release record and stay as published; the v0.2.0 tag, assets and checksums are not rewritten. Canvas work after v0.2.0 (the responsive layout, the Coinstellation evidence graph, its matte material and typography pass, and its technical-drawing grammar) changes files under `plugin/`, so the development tree's plugin manifest and plugin artifact differ from the v0.2.0 values. For the current development tree, which is not a release:
 
 | Artifact | SHA-256 |
 | --- | --- |
-| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `a51946149904a1cc5010a5b279e718638a3bbf01dd014f04069e8f455187e4d9` |
-| Development plugin artifact (`scripts/pack-plugin.ts`; 18 files) | `122444bdcee9286e688dd551a9163d7ef96aee4cef4ccd401cdc62cd99a40647` |
+| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `7777210564e906b8303953d8b783b6bd128ff12f12ec53874c5acc4ba1cc13e9` |
+| Development plugin artifact (`scripts/pack-plugin.ts`; 18 files) | `7dd68cd27f63ae651205f688c6aed2abe08dd3678b0b333f928e9d74050f5eaf` |
 
 The tool manifest, the MCP server bundle and the MCP artifact are unchanged from v0.2.0. A later release records its own values in its own release notes; these development values are not release checksums.
 

@@ -96,11 +96,24 @@ export const classText = (c) => (c === undefined || c === null ? "not assessed" 
 /** The CSS-friendly visual state: formatting of the returned value, nothing more. */
 const visualState = (s) => (s === null ? "unavailable" : s === undefined ? "neutral" : KNOWN_STATES.includes(s) ? s.toLowerCase().replace("_", "-") : "unrecognised");
 
-/** Radii of the shared circular node family, by kind; the readiness keystone is the one other silhouette. */
-export const NODE_R = { wallmark: 26, assertion: 19, observation: 15, authority: 16, source: 13, derivation: 15, conflict: 14, gap: 13, snapshot: 12, chain: 12, contract: 13, wallet: 13, stablecoin: 14 };
+/**
+ * How much geometry each kind of piece carries. Anchors (the Wallmark, claims, a conflict, the readiness keystone) are
+ * the plate's strong objects; facts (observations, WalletWall's rule, a missing piece) are light drafting marks; context
+ * (authorities, sources, subjects, the snapshot slot) is an index mark and its name. Presentation only.
+ */
+export const TIER = { wallmark: "anchor", assertion: "anchor", conflict: "anchor", readiness: "anchor", observation: "fact", derivation: "fact", gap: "fact", authority: "context", source: "context", snapshot: "context", chain: "context", contract: "context", wallet: "context", stablecoin: "context" };
+/** The visual radius of each kind's mark (anchors' discs, light marks' extent); the readiness keystone is a box. */
+export const NODE_R = { wallmark: 26, assertion: 18, conflict: 15, observation: 8.5, derivation: 6.5, gap: 6.5, authority: 5, source: 2.5, snapshot: 4.5, chain: 5, contract: 5, wallet: 5, stablecoin: 3.5 };
 export const KEYSTONE = { w: 96, h: 50 };
-/** The touch target around a piece: never smaller than 44 px at the scale the page draws The Wall. */
-export const HIT = 50;
+/**
+ * The line class of each connection: evidence into claims and WalletWall's rule is primary; leaders from sources and
+ * authorities, missing inputs and supersession are secondary; subjects and names are references; the snapshot
+ * reservation is construction. Trace and focus are emphasis on top of these, never a class of their own.
+ */
+export const LINE_CLASS = { supports: "primary", input: "primary", generates: "primary", conflict: "conflict", observed: "secondary", speaks: "secondary", missing: "secondary", supersedes: "secondary", subject: "reference", anchors: "reference", names: "reference", issuer: "reference", reserved: "construction" };
+/** The touch target around a piece: never smaller than 44 px at the scale the page draws The Wall (a phone draws the
+ * tall plate at about 0.87, so 52 units is about 45 px), however small the piece's visible mark. */
+export const HIT = 52;
 const LABEL_EM = 0.6;
 const LABEL_PX = 11.5;
 
@@ -121,7 +134,7 @@ export function nodeName(n) {
 }
 const KNOWN_FRESHNESS = ["CURRENT", "STALE", "PINNED", "UNKNOWN_FRESHNESS"];
 
-/** Words on the piece's state chip: the returned value, or nothing for a piece that carries no state. */
+/** Words of the piece's state annotation: the returned value, or nothing for a piece that carries no state. */
 function chipOf(n) {
   if (n.type === "readiness") return { text: n.readinessError ? "not assessed" : classText(n.classification), second: stateText(n.wwepState), attention: n.classification !== "CRITERIA_MET" };
   if (n.wwepState !== undefined) return { text: stateText(n.wwepState), attention: !["ESTABLISHED", "SUPPORTED"].includes(n.wwepState) };
@@ -424,10 +437,14 @@ const BASE_RANK = { authority: 0, source: 1, observation: 2, assertion: 3, wallm
 const SUBJECT = new Set(["chain", "contract", "wallet", "stablecoin"]);
 
 const labelWidth = (text, px = LABEL_PX) => String(text).length * px * LABEL_EM;
-/** The width of a state chip as the renderer draws it. */
-export const chipWidth = (text) => Math.max(26, String(text).length * 5.4 + 12);
+/** The width of a state annotation (small capitals, tracked) as the renderer draws it. */
+export const annotWidth = (text) => String(text).length * 6.6;
+/** Where a piece's label sits (its baseline below the centre); the state annotation follows ANNOT_STEP lower. */
+export const ANNOT_STEP = 11.5;
+export const labelY = (n) => (TIER[n.type] === "anchor" ? (NODE_R[n.type] ?? 14) + 17 : (NODE_R[n.type] ?? 14) + 15.5);
 /**
- * A piece's footprint around its centre, as boxes [x0, y0, x1, y1]: the touch target, the label and the chip. Used for
+ * A piece's footprint around its centre, as boxes [x0, y0, x1, y1]: the touch target, the label and the state
+ * annotation. Used for
  * spacing (no two pieces' boxes may meet) and for the frame.
  */
 export function footprint(n) {
@@ -438,12 +455,19 @@ export function footprint(n) {
   const boxes = [[-hw, -hh, hw, hh]];
   if (!keystone) {
     const lw = labelWidth(n.label) / 2 + 2;
-    boxes.push([-lw, r + 4, lw, r + 19]);
-  }
-  if (n.chip) {
-    const cw = (keystone ? chipWidth(n.chip.text) + chipWidth(n.chip.second) + 4 : chipWidth(n.chip.text)) / 2;
-    const cy = keystone ? KEYSTONE.h / 2 + 19 : r + 29;
-    boxes.push([-cw, cy - 7, cw, cy + 7]);
+    const ly = labelY(n);
+    boxes.push([-lw, ly - 11, lw, ly + 4]);
+    if (n.chip) {
+      const aw = annotWidth(n.chip.text) / 2 + 2;
+      boxes.push([-aw, ly + ANNOT_STEP - 9, aw, ly + ANNOT_STEP + 3]);
+    }
+  } else if (n.chip) {
+    // Two lines under the keystone: the classification, centred; then the "support" key ending just left of the centre
+    // and the claim's state starting just right of it (both a size smaller).
+    const aw = annotWidth(n.chip.text) / 2 + 2;
+    const y = KEYSTONE.h / 2 + 19;
+    boxes.push([-aw, y - 9, aw, y + 3]);
+    boxes.push([-(3 + annotWidth("support") * 0.9) - 2, y + ANNOT_STEP - 8, 2 + annotWidth(n.chip.second) * 0.9 + 2, y + ANNOT_STEP + 3]);
   }
   const x0 = Math.min(...boxes.map((b) => b[0]));
   const x1 = Math.max(...boxes.map((b) => b[2]));
@@ -557,7 +581,7 @@ function cost(model, pos) {
       const r = (n.type === "readiness" ? KEYSTONE.w / 2 : n._f.r) + 7;
       if (segDist2(p, a, b) < r * r) through++;
       // A connector across a piece's label.
-      if (n.type !== "readiness" && segDist2({ x: p.x, y: p.y + n._f.r + 11 }, a, b) < 49) through += 0.5;
+      if (n.type !== "readiness" && segDist2({ x: p.x, y: p.y + labelY(n) - 4 }, a, b) < 49) through += 0.5;
     }
   }
   for (let i = 0; i < nodes.length; i++) {
@@ -582,6 +606,43 @@ function arrange(model, columns, opt) {
   }
   for (const n of nodes) n._f = footprint(n);
   const toXY = (main, cross) => (opt.main === "x" ? { x: main, y: cross } : { x: cross, y: main });
+  // The evaluation axis: WalletWall's rule and the readiness keystone it generates stand on the Wallmark's line when the
+  // Wallmark is an input to that rule, so the plate reads Wallmark, rule, readiness along one constructed axis. The
+  // snapshot slot the keystone reserves sits beside it, toward the middle. A piece that would meet a neighbour stays.
+  const W = nodes.find((n) => n.type === "wallmark");
+  const K = nodes.find((n) => n.type === "readiness");
+  const axis = W && K ? { on: edges.filter((e) => e.kind === "generates" && e.to === K.id && edges.some((x) => x.kind === "input" && x.from === W.id && x.to === e.from)).map((e) => e.from), slot: edges.find((e) => e.kind === "reserved" && e.from === K.id)?.to } : null;
+  if (axis && axis.on.length) axis.on.push(K.id);
+  else if (axis) axis.on = [];
+  const rankOf = new Map();
+  columns.forEach((col, ci) => col.forEach((n) => rankOf.set(n.id, ci)));
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const snapAxis = () => {
+    if (!axis || !axis.on.length || !pos.has(W.id)) return;
+    const c = pos.get(W.id).cross;
+    for (const id of axis.on) {
+      const q = pos.get(id);
+      if (!q) continue;
+      const n = byId.get(id);
+      // The tall plate keeps every piece inside the phone's width, reaching into the margin no further than the
+      // Wallmark's own words already do (or a few units); the wide plate's frame grows to fit.
+      const [lo, hi] = reach(n);
+      const [wl, wh] = reach(W);
+      const want = opt.main === "y" ? Math.min(Math.max(c, lo - Math.max(8, wl - c + 1)), opt.span - hi + Math.max(8, c + wh - opt.span + 1)) : c;
+      const was = q.cross;
+      q.cross = want;
+      const mates = columns[rankOf.get(id)].filter((m) => m.id !== id && m.id !== axis.slot && pos.has(m.id));
+      if (mates.some((m) => collide(n, toXY(q.main, q.cross), m, toXY(pos.get(m.id).main, pos.get(m.id).cross)))) q.cross = was;
+    }
+    const s = axis.slot && pos.get(axis.slot);
+    const k = pos.get(K.id);
+    if (s && k && s.main === k.main) {
+      const S = byId.get(axis.slot);
+      const down = k.cross < opt.span / 2;
+      const d = (down ? reach(K)[1] + reach(S)[0] : reach(K)[0] + reach(S)[1]) + 14;
+      s.cross = k.cross + (down ? d : -d);
+    }
+  };
   // How far a piece reaches either side of its centre along the cross axis.
   const reach = (n) => (opt.main === "x" ? [n._f.top, n._f.bottom] : [-n._f.x0, n._f.x1]);
   const pos = new Map();
@@ -598,7 +659,13 @@ function arrange(model, columns, opt) {
         while (sp < 90 && meets()) sp += 2;
         return sp;
       }
-      return k >= opt.staggerFrom ? opt.stagger : 0;
+      if (k < opt.staggerFrom || !opt.stagger) return 0;
+      // A staggered rank: the offset grows from opt.stagger until no two neighbours' words meet.
+      let sp = opt.stagger;
+      const at = (i, d) => toXY(i % 2 === 0 ? -d : d, (i + 0.5) * (opt.span / k));
+      const meets = () => col.some((n, i) => i + 1 < k && collide(n, at(i, sp), col[i + 1], at(i + 1, sp)));
+      while (sp < 44 && meets()) sp += 1;
+      return sp;
     });
     // Ranks follow each other at the step, or further where a rank's pieces (offsets, labels, chips) need the room.
     const along = (n) => (opt.main === "x" ? [-n._f.x0, n._f.x1] : [n._f.top, n._f.bottom]);
@@ -640,6 +707,7 @@ function arrange(model, columns, opt) {
       for (let i = ys.length - 2; i >= 0; i--) if (ys[i] > ys[i + 1] - gap(i + 1)) ys[i] = ys[i + 1] - gap(i + 1);
       col.forEach((n, i) => pos.set(n.id, { main: mains[ci], cross: ys[i] }));
     });
+    snapAxis();
     for (const s of model._subjects) if (s._slot) pos.set(s.id, s._slot);
   };
   const xy = () => {
@@ -655,15 +723,23 @@ function arrange(model, columns, opt) {
     const mainSlots = [];
     for (let i = 0; i < mains.length; i++) {
       mainSlots.push(mains[i]);
-      if (i + 1 < mains.length) mainSlots.push((mains[i] + mains[i + 1]) / 2);
+      // Between two ranks: the midpoint, or in the wide plate one lane a little past it, so a context column clears
+      // the claims' words and stands as one straight axis.
+      if (i + 1 < mains.length) mainSlots.push(mains[i] + (mains[i + 1] - mains[i]) * (opt.main === "x" ? 0.62 : 0.5));
     }
     mainSlots.push(lastMain + opt.step / 2 + 20, -opt.step / 2);
+    // In the wide plate, subjects stand in the context column beside the claims (or on the course below), so the field
+    // past WalletWall's rule stays open.
+    const claimsAt = columns.findIndex((col) => col.some((n) => n.type === "assertion" || n.type === "wallmark"));
+    const until = opt.main === "x" && claimsAt >= 0 && claimsAt + 1 < mains.length ? mains[claimsAt + 1] - 1 : Infinity;
     // Subjects belong with the claims they are the subjects of: the free room from the claims' rank on, and a foundation
     // course below the evidence (wide) or after the last rank (tall). Never among the sources.
+    // In the wide plate subjects stand from the claims' column on, so the evidence rows (source, observation, claim)
+    // stay clear; the tall plate also allows the row just before the claims.
     const claims = columns.findIndex((col) => col.some((n) => n.type === "assertion" || n.type === "wallmark"));
-    const from = claims < 1 ? -Infinity : (mains[claims - 1] + mains[claims]) / 2;
-    for (const m of mainSlots) if (m >= from - 1e-6) for (const c of crosses) slots.push({ main: m, cross: c });
-    if (opt.foundation) for (const m of mainSlots) slots.push({ main: m, cross: opt.span + opt.foundation });
+    const from = claims < 1 ? -Infinity : opt.main === "x" ? mains[claims] : (mains[claims - 1] + mains[claims]) / 2;
+    for (const m of mainSlots) if (m >= from - 1e-6 && m <= until) for (const c of crosses) slots.push({ main: m, cross: c });
+    if (opt.foundation) for (const m of mainSlots) if (m >= from - 1e-6 && m <= until) slots.push({ main: m, cross: opt.span + opt.foundation });
     else for (const m of [lastMain + opt.step / 2 + 20]) for (const c of crosses) slots.push({ main: m, cross: c });
     return slots;
   };
@@ -969,8 +1045,9 @@ function layoutFresh(model) {
   model._subjects = nodes.filter((n) => SUBJECT.has(n.type)).sort((a, b) => SEAT[a.type] - SEAT[b.type] || (a.id < b.id ? -1 : 1));
   const wideCols = ranks(model);
   const widest = Math.max(...wideCols.map((c) => c.length));
-  const step = wideCols.length <= 3 ? 230 : wideCols.length <= 4 ? 190 : 160;
-  const wide = arrange(model, wideCols, { main: "x", step, span: Math.max(widest * 98, ((wideCols.length - 1) * step) / WIDE_ASPECT - 70), stagger: 10, staggerFrom: 3, splitFrom: 99, split: 0, minGap: 70, foundation: 100, insidePenalty: 60, rankGap: 40, tether: 330 });
+  // Ranks stand in straight columns (no staggering): the columns are the plate's alignment axes.
+  const step = wideCols.length <= 3 ? 220 : wideCols.length <= 4 ? 180 : 150;
+  const wide = arrange(model, wideCols, { main: "x", step, span: Math.max(widest * 90, ((wideCols.length - 1) * step) / WIDE_ASPECT - 70), stagger: 0, staggerFrom: 3, splitFrom: 99, split: 0, minGap: 70, foundation: 100, insidePenalty: 60, rankGap: 40, tether: 330 });
   frame(model, wide, "wide", WIDE_ASPECT);
   // Tall: the same ranks as rows, read top to bottom, inside a phone's width.
   for (const s of model._subjects) s._slot = null;

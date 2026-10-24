@@ -86,8 +86,9 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);border-style:dashe
 .ww-section{margin-top:12px;min-width:0}
 .ww-section>h2:first-child{margin-top:2px}
 
-/* The Wall's stage: a deeper warm field with an umber hairline seam and fine drafting marks, felt, not read. */
-.ww-wall{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"head guide" "view view";align-items:center;min-width:0;background-color:var(--ww-stage);background-image:linear-gradient(rgba(79,60,53,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(79,60,53,0.07) 1px,transparent 1px);background-size:28px 28px;border:1px solid var(--ww-seam);border-radius:var(--ww-radius-panel)}
+/* The Wall's stage: a deeper warm field with an umber hairline seam and a sparse drafting sheet grid (64 px, about
+   1.07:1), felt, not read; the plate's own centrelines and crop marks carry the structure. */
+.ww-wall{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"head guide" "view view";align-items:center;min-width:0;background-color:var(--ww-stage);background-image:linear-gradient(rgba(79,60,53,0.055) 1px,transparent 1px),linear-gradient(90deg,rgba(79,60,53,0.055) 1px,transparent 1px);background-size:64px 64px;border:1px solid var(--ww-seam);border-radius:var(--ww-radius-panel)}
 .ww-section-head{grid-area:head;display:flex;align-items:center;gap:10px;padding:8px 12px 0;min-width:0}
 .ww-section-head h2{margin:0;font:600 15px/1.2 var(--font-display);letter-spacing:-0.01em;white-space:nowrap;color:var(--ww-charcoal)}
 .ww-guide-slot{grid-area:guide;display:flex;justify-content:flex-end;min-width:0;padding:10px 14px 2px}
@@ -120,33 +121,49 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);border-style:dashe
 /* "Back to Overview" is for the phone toolbar, where Overview sits in More; wider panels keep Overview in the bar. */
 .ww-back{display:none}
 
-/* Pieces: one circular family (the readiness keystone is the one other shape), sized by role and drawn matte: a flat
-   parchment face and one drafted ring. Kind is the glyph, label and chip; a state adds at most one ring, close outside. */
+/* The stage is a technical plate. Only the semantic anchors carry strong geometry: the Wallmark seal, the claims, the
+   conflict fracture and the readiness keystone. Facts (observations, WalletWall's rule, a missing piece) are light
+   drafting marks and context (authorities, sources, subjects, the snapshot slot) is an index mark with its name; a
+   light mark's ring appears only under focus, hover or selection. States are small capitals beside the piece. */
 .ww-node{cursor:pointer;outline:none}
 .ww-node .ww-hit{fill:transparent;stroke:none}
 .ww-node-art{transition:opacity var(--ww-base) var(--ww-ease)}
 .ww-node .body{fill:var(--ww-node);stroke:var(--ww-umber);stroke-width:1;transition:stroke var(--ww-base) var(--ww-ease),stroke-width var(--ww-base) var(--ww-ease)}
+.ww-node:not([data-tier="anchor"]) .body{fill:none;stroke:none}
+.ww-node:not([data-tier="anchor"]):not(.is-focus):not(.is-selected):hover .body{stroke:var(--ww-umber-deep)}
 .ww-node .ww-glyph{fill:none;stroke:var(--ww-umber-deep);stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.ww-node .ww-draft{fill:none;stroke:var(--ww-umber-deep);stroke-width:1.1;stroke-linecap:round;pointer-events:none}
+.ww-node .ww-draft-ring{fill:var(--ww-stage)}
+.ww-node .ww-draft-dot{fill:var(--ww-umber-deep)}
+.ww-node .ww-draft-solid{fill:var(--ww-umber);stroke:none}
+.ww-node .ww-draft-open{fill:none;stroke-dasharray:2 2}
+.ww-node[data-tier="context"] .ww-glyph,.ww-node[data-tier="context"] .ww-draft{opacity:0.72;transition:opacity var(--ww-base) var(--ww-ease)}
+.ww-node[data-tier="context"]:hover .ww-glyph,.ww-node[data-tier="context"]:hover .ww-draft,.ww-node[data-tier="context"].is-focus .ww-glyph,.ww-node[data-tier="context"].is-focus .ww-draft{opacity:1}
 .ww-node text{font-family:var(--font-ui);pointer-events:none}
+/* Labels: anchors in Manrope 700, facts 600, context 500 in deep slate; every label keeps 4.5:1 on the stage. */
 .ww-node .ww-label{font-size:11.5px;font-weight:700;fill:var(--ww-charcoal);paint-order:stroke;stroke:var(--ww-stage);stroke-width:3.5px;stroke-linejoin:round;transition:fill var(--ww-base) var(--ww-ease)}
-/* State chips: stamped tags, flat, with a 1 px umber edge and a restrained corner; the same component everywhere. */
-.ww-chip rect{fill:var(--ww-label);stroke:var(--ww-umber);stroke-width:0.9}
-.ww-chip .ww-chip-text{font-size:8.5px;font-weight:700;letter-spacing:0.04em;fill:var(--ww-charcoal)}
-.ww-chip[data-attention="true"] rect{stroke:var(--ww-brick-low);stroke-width:1.1;stroke-dasharray:3 2}
-.ww-chip[data-attention="true"] .ww-chip-text{fill:var(--ww-brick-low)}
-.ww-node[data-type="source"] .body,.ww-node[data-type="derivation"] .body,.ww-node[data-type="chain"] .body,.ww-node[data-type="contract"] .body,.ww-node[data-type="wallet"] .body,.ww-node[data-type="stablecoin"] .body{fill:var(--ww-node-quiet);stroke:var(--ww-umber)}
-.ww-node[data-type="source"] .ww-glyph,.ww-node[data-type="derivation"] .ww-glyph,.ww-node[data-type="chain"] .ww-glyph,.ww-node[data-type="contract"] .ww-glyph,.ww-node[data-type="wallet"] .ww-glyph,.ww-node[data-type="stablecoin"] .ww-glyph{stroke:var(--ww-umber)}
+.ww-node[data-tier="fact"] .ww-label{font-size:11px;font-weight:600}
+.ww-node[data-tier="context"] .ww-label{font-size:11px;font-weight:500;fill:var(--ww-deep-slate)}
+.ww-node[data-tier="context"]:hover .ww-label,.ww-node[data-tier="context"].is-focus .ww-label{font-weight:700;fill:var(--ww-charcoal)}
+/* State annotations: drafting notation, small tracked capitals in umber (rust where the state asks for attention). */
+.ww-annot{font-size:9.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;fill:var(--ww-umber-deep);paint-order:stroke;stroke:var(--ww-stage);stroke-width:3px;stroke-linejoin:round;transition:opacity var(--ww-settle) var(--ww-ease)}
+.ww-annot[data-attention="true"]{fill:var(--ww-brick-low)}
+.ww-annot-sub{font-size:8.5px;font-weight:600}
+.ww-annot-key{font-size:8.5px;font-weight:500;fill:var(--ww-deep-slate)}
+.ww-node.is-resolving .ww-annot{opacity:0}
+/* The Wallmark: a terracotta seal. A fine stone line inside the disc stamps it; a state ring takes its place. */
 .ww-node[data-type="wallmark"] .body{fill:var(--ww-accent);stroke:var(--ww-brick-low);stroke-width:1.2}
 .ww-node[data-type="wallmark"] .ww-glyph{stroke:var(--ww-stone)}
-.ww-node[data-type="conflict"] .body{fill:var(--ww-brick-low);stroke:var(--ww-brick-low);stroke-width:1.2}
-.ww-node[data-type="conflict"] .ww-glyph{stroke:var(--ww-stone)}
+.ww-node .ww-seal{fill:none;stroke:var(--ww-stone);stroke-width:0.8;stroke-opacity:0.75}
+.ww-node[data-state="STALE"] .ww-seal,.ww-node[data-state="CONFLICTING"] .ww-seal{display:none}
+/* The conflict: an event, not a token. A rust ring broken at both sides and a terracotta seam split across it. */
+.ww-node[data-type="conflict"] .body{fill:none;stroke:var(--ww-brick-low);stroke-width:1.8;stroke-dasharray:44 6;stroke-dashoffset:-3;animation:ww-breathe 2.4s ease-in-out infinite}
+.ww-node .ww-seam{fill:none;stroke:var(--ww-accent-dark);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
 .ww-node[data-type="readiness"] .body{fill:var(--ww-charcoal);stroke:var(--ww-charcoal);stroke-width:1.5;transition:transform var(--ww-settle) var(--ww-ease);transform-box:fill-box}
 .ww-node[data-type="readiness"] .ww-key-text{font-size:9px;font-weight:700;letter-spacing:0.18em;fill:var(--ww-stone)}
 .ww-node[data-type="readiness"] .seat{stroke:var(--ww-charcoal);stroke-width:2}
 .ww-node[data-type="readiness"]:not([data-classification="CRITERIA_MET"]) .body{transform:translateY(-5px)}
 .ww-node[data-type="readiness"]:not([data-classification="CRITERIA_MET"]) .seat{stroke-dasharray:5 4;stroke:var(--ww-brick-low)}
-.ww-node.is-resolving .ww-chip{opacity:0}
-.ww-node .ww-chip{transition:opacity var(--ww-settle) var(--ww-ease)}
 /* States: ring, line, fill and words together, never colour alone. */
 /* ESTABLISHED: a firmer, deeper ring. SUPPORTED keeps the lighter default ring: a quieter stamp. */
 .ww-node[data-state="ESTABLISHED"]:not([data-type="readiness"]) .body{stroke:var(--ww-umber-deep);stroke-width:1.2}
@@ -158,54 +175,72 @@ button:disabled{cursor:not-allowed;color:var(--ww-muted-text);border-style:dashe
 .ww-node[data-state="CONFLICTING"] .body{stroke:var(--ww-brick-low);stroke-width:1.2}
 /* STALE: a worn, receded piece inside one dotted rust ring. */
 .ww-node .ww-ring-stale{stroke:var(--ww-brick-low);stroke-width:1;stroke-dasharray:0.1 2.6;stroke-linecap:round}
-.ww-node[data-state="STALE"]:not([data-type="readiness"]) .ww-node-art{opacity:0.66;animation:ww-recede 5.5s ease-in-out infinite}
+.ww-node[data-state="STALE"]:not([data-type="readiness"]):not(.is-selected):not(.is-focus) .ww-node-art{opacity:0.66;animation:ww-recede 5.5s ease-in-out infinite}
+/* Selected or focused, a stale piece recedes its face only, so its selection ring keeps full contrast. */
+.ww-node[data-state="STALE"].is-selected:not([data-type="readiness"]) .body,.ww-node[data-state="STALE"].is-focus:not([data-type="readiness"]) .body{fill-opacity:0.6}
+.ww-node[data-state="STALE"].is-selected:not([data-type="readiness"]) .ww-glyph,.ww-node[data-state="STALE"].is-focus:not([data-type="readiness"]) .ww-glyph{opacity:0.6;animation:ww-recede 5.5s ease-in-out infinite}
 .ww-node[data-type="readiness"][data-state="STALE"] .body,.ww-node[data-type="readiness"][data-state="CONFLICTING"] .body{stroke:var(--ww-brick-low);stroke-width:1.8;stroke-dasharray:5 3}
 .ww-node[data-state="SUPERSEDED"] .ww-node-art{opacity:0.5}
 .ww-node .ghost{fill:none;stroke:var(--ww-umber-deep);stroke-width:1;stroke-dasharray:1.5 3}
-.ww-node[data-state="UNKNOWN"] .body,.ww-node[data-state="NOT_ESTABLISHED"] .body,.ww-node[data-state="NONE"] .body,.ww-node[data-state="UNRECOGNISED"] .body,.ww-node[data-flags~="missing"] .body,.ww-node[data-type="gap"] .body{fill:transparent;stroke-dasharray:4 3}
-.ww-node[data-type="snapshot"] .body{fill:transparent;stroke:var(--ww-umber-deep);stroke-dasharray:2 3}
-.ww-node[data-flags~="unattested"] .body{stroke-dasharray:4 3}
-.ww-swatch .ww-ring{animation:none}
-/* Connectors: drafted umber lines with a faint etch (0.12, under 1 px away) so each reads as one mark cut into the
-   stage; structural relationships are dashed and finer; the conflict is a broken rust fracture. */
-.ww-edge{fill:none;stroke:var(--ww-umber);stroke-width:1.2;transition:stroke var(--ww-base) var(--ww-ease),stroke-width var(--ww-base) var(--ww-ease),opacity var(--ww-base) var(--ww-ease)}
+.ww-node[data-state="UNKNOWN"] .body,.ww-node[data-state="NOT_ESTABLISHED"] .body,.ww-node[data-state="NONE"] .body,.ww-node[data-state="UNRECOGNISED"] .body{fill:transparent;stroke-dasharray:4 3}
+.ww-node[data-flags~="missing"] .ww-draft-ring{stroke-dasharray:2 2}
+.ww-swatch .ww-ring,.ww-swatch .body{animation:none}
+/* Connections: the line class says which relationships matter before any label is read. Evidence into claims and the
+   rule is primary (solid umber, 1.2 units, with an arrow); leaders from sources and authorities are secondary (finer,
+   about 60 %); subjects and names are references (hairline charcoal at 30 %); the snapshot reservation is construction
+   (dashed, fainter still). Trace and focus lay terracotta over a line; the conflict is a broken rust seam. */
+.ww-edge{fill:none;stroke:var(--ww-umber);stroke-width:1.2;transition:stroke var(--ww-base) var(--ww-ease),stroke-width var(--ww-base) var(--ww-ease),opacity var(--ww-base) var(--ww-ease),stroke-opacity var(--ww-base) var(--ww-ease)}
+.ww-edge[data-line="primary"]{stroke-opacity:0.92;marker-end:url(#ww-arrow)}
+.ww-edge[data-line="secondary"]{stroke-width:0.8;stroke-opacity:0.58}
+.ww-edge[data-line="reference"]{stroke:var(--ww-charcoal);stroke-width:0.7;stroke-opacity:0.3}
+.ww-edge[data-line="construction"]{stroke:var(--ww-charcoal);stroke-width:0.6;stroke-opacity:0.26;stroke-dasharray:3 3}
+.ww-edge[data-kind="missing"]{stroke-dasharray:3 3}
+.ww-edge[data-kind="supersedes"]{stroke-dasharray:1.5 3}
+.ww-edge[data-kind="conflict"]{stroke:var(--ww-brick-low);stroke-width:1.6;stroke-dasharray:6 3}
 .ww-edge-lip{fill:none;stroke:var(--ww-etch);stroke-width:1.2;transform:translate(0.4px,0.6px);pointer-events:none;transition:stroke-width var(--ww-base) var(--ww-ease),opacity var(--ww-base) var(--ww-ease)}
-.ww-edge[data-kind="subject"],.ww-edge[data-kind="anchors"],.ww-edge[data-kind="names"],.ww-edge[data-kind="issuer"],.ww-edge[data-kind="reserved"],.ww-edge-lip[data-kind="subject"],.ww-edge-lip[data-kind="anchors"],.ww-edge-lip[data-kind="names"],.ww-edge-lip[data-kind="issuer"],.ww-edge-lip[data-kind="reserved"]{stroke-dasharray:4 3;stroke-width:1}
-.ww-edge[data-kind="missing"],.ww-edge-lip[data-kind="missing"]{stroke-dasharray:3 3}
-.ww-edge[data-kind="supersedes"],.ww-edge-lip[data-kind="supersedes"]{stroke-dasharray:1.5 3}
-.ww-edge[data-kind="conflict"]{stroke:var(--ww-brick-low);stroke-width:1.8;stroke-dasharray:6 3}
-.ww-edge-lip[data-kind="conflict"]{stroke-width:1.8;stroke-dasharray:6 3}
+.ww-edge-lip:not([data-line="primary"]){display:none}
 #ww-arrow path{fill:var(--ww-umber)}
-/* The dominant story, drawn from the returned states: a conflict, a stale claim, or the Wallmark-to-readiness path. */
-.ww-wall-svg[data-focus="none"]:not([data-trace="true"]) .ww-edge[data-story="true"]{stroke:var(--ww-brick-low);stroke-width:1.8}
-.ww-wall-svg[data-focus="none"]:not([data-trace="true"]) .ww-edge-lip[data-story="true"]{stroke-width:1.8}
+#ww-emphasis path{fill:var(--ww-accent-dark)}
+/* The dominant story, drawn from the returned states: a conflict, a stale claim, or the Wallmark-to-readiness path along
+   the evaluation axis, in deep umber, the heaviest line at rest. */
+.ww-wall-svg[data-focus="none"]:not([data-trace="true"]) .ww-edge[data-story="true"]:not([data-kind="conflict"]){stroke:var(--ww-umber-deep);stroke-width:1.5}
+.ww-wall-svg[data-focus="none"]:not([data-trace="true"]) .ww-edge-lip[data-story="true"]{stroke-width:1.5}
+/* Construction: the centrelines the plate is built on and four crop marks at its corners; under everything. */
+.ww-construction{pointer-events:none}
+.ww-construction[data-for="tall"],.ww-wall-svg[data-layout="portrait"] .ww-construction[data-for="wide"]{display:none}
+.ww-wall-svg[data-layout="portrait"] .ww-construction[data-for="tall"]{display:inline}
+.ww-axis{fill:none;stroke:var(--ww-umber);stroke-width:0.7;stroke-opacity:0.38;stroke-dasharray:16 3 2 3}
+.ww-reg{fill:none;stroke:var(--ww-umber-deep);stroke-width:0.8;stroke-opacity:0.5}
 /* Material response: under a pointer the ring firms up a little; nothing lifts, moves or casts a shadow. */
-.ww-node:hover:not(.is-selected):not(.is-focus):not([data-type="readiness"]) .body{stroke-width:1.3}
-/* Selection and focus: the piece's own ring, heavier and in rust; a terracotta-dark trace lies on that ring and breathes
-   in opacity, so selection adds no ring. Its direct connections stay; everything else is muted. */
+.ww-node[data-tier="anchor"]:hover:not(.is-selected):not(.is-focus):not([data-type="readiness"]) .body{stroke-width:1.3}
+/* Selection and focus: the piece's own ring, heavier and in rust (a light mark's ring appears for it); a terracotta-dark
+   trace lies on that ring and breathes in opacity, so selection adds no ring. Its direct connections stay, references
+   included; everything else is muted. */
 .ww-node .ww-halo{display:none;fill:none;stroke:var(--ww-accent-dark);stroke-width:2}
 .ww-wall-svg[data-selection="explicit"] .ww-node.is-selected .ww-halo,.ww-node.is-focus .ww-halo{display:inline;animation:ww-halo 3.2s ease-in-out infinite}
 .ww-node.is-selected .body,.ww-node.is-focus .body{stroke:var(--ww-brick-low);stroke-width:2}
-/* The guide's pointer: four short radial ticks across the ring (on the keystone, four ticks round its frame), so it can
-   never be read as the dotted ring that means STALE, and it adds no ring. */
+/* The guide's pointer: four short radial ticks just outside the ring (on the keystone, four ticks round its frame), so
+   it can never be read as the dotted ring that means STALE, and it adds no ring. */
 .ww-node .ww-reticle{display:none;fill:none;stroke:var(--ww-accent-dark);stroke-width:1.5;stroke-linecap:round}
 .ww-node[data-type="readiness"] .ww-reticle{stroke-dasharray:7 18;stroke-dashoffset:3.5}
 .ww-node.is-pointed .ww-reticle{display:inline;animation:ww-halo 2.4s ease-in-out infinite}
 .ww-node:focus-visible .ww-hit{stroke:var(--ww-accent-dark);stroke-width:2;stroke-dasharray:3 3}
-.ww-wall-svg[data-focus="pinned"] .ww-node:not(.on-path) .ww-node-art,.ww-wall-svg[data-focus="pinned"] .ww-node:not(.on-path) .ww-chip{opacity:0.45;animation:none}
+.ww-wall-svg[data-focus="pinned"] .ww-node:not(.on-path) .ww-node-art,.ww-wall-svg[data-focus="pinned"] .ww-node:not(.on-path) .ww-annot{opacity:0.45;animation:none}
 .ww-wall-svg[data-focus="pinned"] .ww-node:not(.on-path) .ww-label{fill:var(--ww-deep-slate)}
 .ww-wall-svg[data-focus="pinned"] .ww-edge:not(.on-path),.ww-wall-svg[data-focus="pinned"] .ww-edge-lip:not(.on-path){opacity:0.28}
 .ww-wall-svg[data-focus="preview"] .ww-node:not(.on-path) .ww-node-art{opacity:0.72}
 .ww-wall-svg[data-focus="preview"] .ww-edge:not(.on-path),.ww-wall-svg[data-focus="preview"] .ww-edge-lip:not(.on-path){opacity:0.55}
 .ww-wall-svg[data-focus] .ww-node.is-related .ww-node-art{opacity:0.92}
-.ww-edge.on-path{stroke:var(--ww-brick-low);stroke-width:1.8;opacity:1}
-.ww-edge-lip.on-path{stroke-width:1.8}
-/* Trace: the same pieces in the same places; the provenance trace_provenance returned is drawn, the rest recedes. */
-.ww-wall-svg[data-trace="true"] .ww-node:not([data-trace="true"]) .ww-node-art,.ww-wall-svg[data-trace="true"] .ww-node:not([data-trace="true"]) .ww-chip{opacity:0.36;animation:none}
+.ww-edge.on-path{stroke:var(--ww-brick-low);stroke-width:1.6;stroke-opacity:1;opacity:1;marker-end:url(#ww-emphasis)}
+.ww-edge.on-path[data-kind="conflict"],.ww-edge.on-path[data-kind="reserved"]{marker-end:none}
+.ww-edge-lip.on-path{stroke-width:1.6}
+/* Trace: the same pieces in the same places; the provenance trace_provenance returned is drawn in terracotta, the
+   heaviest line on the plate, and the rest recedes to a quarter or less. */
+.ww-wall-svg[data-trace="true"] .ww-node:not([data-trace="true"]) .ww-node-art,.ww-wall-svg[data-trace="true"] .ww-node:not([data-trace="true"]) .ww-annot{opacity:0.36;animation:none}
 .ww-wall-svg[data-trace="true"] .ww-node:not([data-trace="true"]) .ww-label{fill:var(--ww-deep-slate)}
 .ww-wall-svg[data-trace="true"] .ww-edge:not([data-trace="true"]),.ww-wall-svg[data-trace="true"] .ww-edge-lip:not([data-trace="true"]){opacity:0.16}
-.ww-wall-svg[data-trace="true"] .ww-edge[data-trace="true"]{stroke:var(--ww-brick-low);stroke-width:2;opacity:1}
-.ww-wall-svg[data-trace="true"] .ww-edge-lip[data-trace="true"]{stroke-width:2}
+.ww-wall-svg[data-trace="true"] .ww-edge[data-trace="true"]{stroke:var(--ww-accent-dark);stroke-width:2.2;stroke-opacity:1;opacity:1;marker-end:url(#ww-emphasis)}
+.ww-wall-svg[data-trace="true"] .ww-edge-lip[data-trace="true"]{display:inline;stroke-width:2.2}
 .ww-glint{fill:none;stroke:var(--ww-cream);stroke-width:1.4;stroke-linecap:round;stroke-dasharray:1 11;opacity:0;pointer-events:none}
 .ww-wall-svg[data-trace="true"] .ww-glint{animation:ww-shimmer 2.4s ease-in-out infinite}
 .ww-glint[data-step="1"]{animation-delay:0.4s}.ww-glint[data-step="2"]{animation-delay:0.8s}.ww-glint[data-step="3"]{animation-delay:1.2s}.ww-glint[data-step="4"]{animation-delay:1.6s}.ww-glint[data-step="5"]{animation-delay:2s}
@@ -398,6 +433,8 @@ button.ww-strip-item{cursor:pointer}
 body{padding:8px 12px calc(var(--ww-peek) + 24px)}
 /* The wordmark stays on a phone; the lens badge waits in About this panel. */
 .ww-lens-badge{display:none}
+/* The plate simplifies on a phone: no crop marks; the centrelines stay. */
+.ww-reg{display:none}
 /* The state strip scrolls sideways when it does not fit; the fade at its edge says there is more. */
 .ww-strip{-webkit-mask-image:linear-gradient(90deg,#000 86%,transparent);mask-image:linear-gradient(90deg,#000 86%,transparent);padding-right:24px}
 button:not(:disabled):active,.ww-strip-item:active{opacity:0.88}

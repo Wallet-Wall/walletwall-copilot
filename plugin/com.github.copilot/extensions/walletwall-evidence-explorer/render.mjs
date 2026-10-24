@@ -65,7 +65,7 @@ export const STATE_GEOMETRY = {
   ESTABLISHED: "solid piece with a firm ring",
   SUPPORTED: "solid piece with a lighter ring",
   PARTIAL: "half-filled piece",
-  CONFLICTING: "rust ring with one fractured ring outside it, a broken connection and a conflict piece between the claims",
+  CONFLICTING: "rust ring with one fractured ring outside it, a broken connection and a conflict mark (a broken ring split by a seam) between the claims",
   STALE: "receded piece inside a dotted ring",
   SUPERSEDED: "faint piece with a historical outline behind it",
   UNKNOWN: "open, dashed piece: an empty slot, not a zero",
@@ -532,7 +532,20 @@ function textVersion(model) {
 
 function legend() {
   const swatch = (state) => `<li><svg class="ww-swatch" viewBox="0 0 40 24" aria-hidden="true"><g class="ww-node" data-type="assertion" data-state="${state}" data-visual="${state.toLowerCase().replace("_", "-")}">${state === "CONFLICTING" ? '<circle class="ww-ring ww-ring-conflict" cx="20" cy="12" r="10.5"/>' : ""}${state === "STALE" ? '<circle class="ww-ring ww-ring-stale" cx="20" cy="12" r="10.5"/>' : ""}<circle class="body" cx="20" cy="12" r="7"/>${state === "PARTIAL" ? '<path class="half" d="M20 5A7 7 0 0 0 20 19Z"/>' : ""}</g></svg><span><strong>${state}</strong> <span class="muted">${esc(STATE_GEOMETRY[state])}</span></span></li>`;
-  return `<details class="ww-section ww-legend"><summary>How to read The Wall</summary><ul class="ww-legend-list">${SUPPORT_STATES.map(swatch).join("")}</ul><p class="muted small">Pieces rest on what supports them: authorities and sources first, then observations, claims, WalletWall's derivation and the readiness keystone; subjects (chain, contract, wallet) sit with the claims they are about. Terracotta marks focus and the selected path; it never means good or bad.</p></details>`;
+  // The drawing's notation: which kinds are node objects and which are drafting marks, and what each line class means.
+  const mark = (tier, type, art, words) => `<li><svg class="ww-swatch" viewBox="0 0 40 24" aria-hidden="true"><g class="ww-node" data-tier="${tier}" data-type="${type}" transform="translate(20 12)">${art}</g></svg><span>${words}</span></li>`;
+  const line = (cls, words) => `<li><svg class="ww-swatch" viewBox="0 0 40 24" aria-hidden="true"><path class="ww-edge ww-edge-key" data-line="${cls}" d="M3 12H31"/></svg><span>${words}</span></li>`;
+  const notation = [
+    mark("anchor", "assertion", '<circle class="body" r="7"/>', "<strong>Claim, Wallmark, conflict, readiness</strong> <span class=\"muted\">the only node objects: a disc (the Wallmark a terracotta seal), a broken ring for a conflict, the keystone</span>"),
+    mark("fact", "observation", '<circle class="ww-draft ww-draft-ring" r="3.6"/><path class="ww-draft" d="M8.5 0H4.8M-8.5 0H-4.8M0 8.5V4.8M0 -8.5V-4.8"/>', "<strong>Observation</strong> <span class=\"muted\">a registration cross</span>"),
+    mark("fact", "derivation", '<circle class="ww-draft ww-draft-ring" r="6.5"/><path class="ww-draft" d="M-3.4 -3.4L3.4 3.4M3.4 -3.4L-3.4 3.4"/>', "<strong>WalletWall rule</strong> <span class=\"muted\">a summing junction</span>"),
+    mark("context", "source", '<rect class="ww-draft ww-draft-solid" x="-2.5" y="-2.5" width="5" height="5"/>', "<strong>Source, authority, subject</strong> <span class=\"muted\">an index mark or small glyph and a name; its ring appears when you focus it</span>"),
+    line("primary", "<strong>Evidence</strong> <span class=\"muted\">solid, with an arrow: what a claim or the rule rests on</span>"),
+    line("secondary", "<strong>Leader</strong> <span class=\"muted\">finer: a source or authority to what it reports</span>"),
+    line("reference", "<strong>Reference</strong> <span class=\"muted\">hairline: the subjects a claim is about</span>"),
+    line("construction", "<strong>Reservation</strong> <span class=\"muted\">dashed: the readiness keystone's snapshot slot</span>"),
+  ].join("");
+  return `<details class="ww-section ww-legend"><summary>How to read The Wall</summary><ul class="ww-legend-list">${SUPPORT_STATES.map(swatch).join("")}</ul><ul class="ww-legend-list">${notation}</ul><p class="muted small">The Wall is drawn as a technical plate. Pieces rest on what supports them: authorities and sources first, then observations, claims, WalletWall's derivation and the readiness keystone, which stands at the end of the evaluation axis from the Wallmark; subjects (chain, contract, wallet) stand in a context column beside the claims they are about. States are written beside each piece. Terracotta marks focus, the selected path and Trace; it never means good or bad.</p></details>`;
 }
 
 /**

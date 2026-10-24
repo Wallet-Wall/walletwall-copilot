@@ -159,7 +159,7 @@ export const CLIENT_JS = `(() => {
     const nodes = Array.from(svg.querySelectorAll(".ww-node")).map((g) => {
       const m = /translate\\(([-0-9.]+) ([-0-9.]+)\\)/.exec(g.getAttribute("transform") || "") || [0, 0, 0];
       const d = g.dataset;
-      const shape = { r: num(d.r), kw: num(d.kw), kh: num(d.kh) };
+      const shape = { r: num(d.r), kw: num(d.kw), kh: num(d.kh), lb: num(d.lb) };
       return { g, hit: g.querySelector(".ww-hit"), id: d.nodeId, x: Number(m[1]), y: Number(m[2]), fx: Number(m[1]), fy: Number(m[2]), ...shape, w: num(d.w), h: num(d.h),
         wide: { fx: Number(m[1]), fy: Number(m[2]), w: num(d.w), h: num(d.h) },
         tall: d.px === undefined ? null : { fx: num(d.px), fy: num(d.py), w: num(d.pw), h: num(d.ph) } };
@@ -309,7 +309,7 @@ export const CLIENT_JS = `(() => {
     for (const e of wall.edges) {
       const a = wall.byId.get(e.from), b = wall.byId.get(e.to);
       if (!a || !b) continue;
-      const d = edgePath(a, b, e.kind, ui.held[e.from] || ui.held[e.to] ? 0 : e.bends[wall.layout] || 0);
+      const d = edgePath(a, b, e.kind, ui.held[e.from] || ui.held[e.to] ? 0 : e.bends[wall.layout] || 0, wall.layout === "tall" ? "y" : "x");
       e.p.setAttribute("d", d);
       if (e.glint) e.glint.setAttribute("d", d);
       if (e.lip) e.lip.setAttribute("d", d);
