@@ -1,0 +1,13 @@
+{
+  "icons": [
+    {
+      "identifier": "urn:air:github.com:Wallet-Wall:walletwallrus-copilot:walletwall",
+      "url": "https://raw.githubusercontent.com/github/agentfinder-catalog/<40-hex-commit>/icons/wallet-wall/walletwall.png",
+      "provenance": {
+        "sourceUrl": "https://github.com/Wallet-Wall/walletwallrus-copilot/blob/main/canvas/brand/walletwall-brick-wallet-96.png",
+        "sha256": "179a4f9a1b74d0287b8199d5b6316f6b84c7840afbb7a1b4d90d1f43a9a54665",
+        "approval": "<TO BE WRITTEN BY THE WALLETWALL OWNER: explicit authorization for GitHub to redistribute this exact file as the WalletWall catalog icon>"
+      }
+    }
+  ]
+}

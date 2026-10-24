@@ -16,7 +16,7 @@ There is no response-time commitment while the project is pre-release; maintaine
 
 Report privately to the WalletWall maintainers: use GitHub's private vulnerability reporting for this repository if it is enabled (Security → Report a vulnerability), or contact an organization owner directly. Do not open a public issue for a vulnerability. Include the commit, the tool or resource involved, a minimal reproduction, and the impact. Do not include real wallet addresses or credentials in reports.
 
-A response-time commitment and a disclosure policy for public releases will be set before the first public release. None is promised in the private phase.
+A response-time commitment and a disclosure policy for public releases will be set before the first public release. None is promised while the project is pre-release.
 
 ## Security properties intended
 

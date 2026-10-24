@@ -1,10 +1,10 @@
 {
-  "name": "walletwall-private",
+  "name": "walletwall",
   "owner": {
     "name": "Wallet-Wall"
   },
   "metadata": {
-    "description": "Pre-release marketplace for the WalletWall Copilot plugin. Not published to any public marketplace or registry.",
+    "description": "Public WalletWall Agent Plugin source and local MCP integration.",
     "version": "0.2.0"
   },
   "plugins": [

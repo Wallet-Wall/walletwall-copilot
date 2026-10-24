@@ -1,5 +1,7 @@
 # Copilot Desktop installability and invocation record
 
+> **Historical record.** Generated while the marketplace was named `walletwall-private`; that name is preserved below because it was the real identity at the time. The active marketplace is now `walletwall`, so the current install command is `copilot plugin install walletwall@walletwall` (see `README.md`). Do not copy the old name from this record.
+
 Status of this record: **TESTED against the real GitHub Copilot Desktop runtime on Windows; the manual GUI click-through is NOT_PROVEN** (see "What is not proven"). Date: 2026-10-24 (UTC).
 
 ## Versions
