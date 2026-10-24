@@ -280,7 +280,7 @@ describe("contract invariants: the Coinstellation is a projection of the authori
     assert.equal(stale["data-state"], "STALE");
     const conflict = pieces((await open("conflicting-balances")).html).filter((p) => p["data-state"] === "CONFLICTING");
     assert.ok(conflict.length >= 2);
-    // Static encodings: a dashed ring and a STALE chip; a double ring, a broken connection and a CONFLICTING chip.
+    // Static encodings: a dotted ring and a STALE chip; a fractured ring, a broken connection and a CONFLICTING chip.
     const css = render.CSS;
     assert.ok(/\.ww-ring-stale\{[^}]*stroke-dasharray/.test(css) && /\.ww-node\[data-state="STALE"\][^{]*\.ww-node-art\{opacity:0\.66/.test(css));
     assert.ok(/\.ww-edge\[data-kind="conflict"\]\{[^}]*stroke-dasharray/.test(css) && /\.ww-node \.ww-ring-conflict\{/.test(css));

@@ -165,8 +165,10 @@ export const CLIENT_JS = `(() => {
         tall: d.px === undefined ? null : { fx: num(d.px), fy: num(d.py), w: num(d.pw), h: num(d.ph) } };
     });
     const byId = new Map(nodes.map((n) => [n.id, n]));
-    const glints = new Map(Array.from(svg.querySelectorAll(".ww-glint")).map((p) => [p.dataset.from + ">" + p.dataset.to + ":" + p.dataset.kind, p]));
-    const edges = Array.from(svg.querySelectorAll(".ww-edge")).map((p) => ({ p, glint: glints.get(p.dataset.from + ">" + p.dataset.to + ":" + p.dataset.kind) || null, from: p.dataset.from, to: p.dataset.to, kind: p.dataset.kind, bends: { wide: Number(p.dataset.bend) || 0, tall: Number(p.dataset.pbend) || 0 } }));
+    const key = (p) => p.dataset.from + ">" + p.dataset.to + ":" + p.dataset.kind;
+    const glints = new Map(Array.from(svg.querySelectorAll(".ww-glint")).map((p) => [key(p), p]));
+    const lips = new Map(Array.from(svg.querySelectorAll(".ww-edge-lip")).map((p) => [key(p), p]));
+    const edges = Array.from(svg.querySelectorAll(".ww-edge")).map((p) => ({ p, glint: glints.get(key(p)) || null, lip: lips.get(key(p)) || null, from: p.dataset.from, to: p.dataset.to, kind: p.dataset.kind, bends: { wide: Number(p.dataset.bend) || 0, tall: Number(p.dataset.pbend) || 0 } }));
     const parse = (s) => { const v = String(s || "").split(/[\\s,]+/).map(Number); return v.length === 4 && v.every((x) => Number.isFinite(x)) && v[2] > 0 && v[3] > 0 ? { x: v[0], y: v[1], w: v[2], h: v[3] } : null; };
     wall = { svg, nodes, edges, byId, boxes: { wide: parse(svg.getAttribute("viewBox")), tall: parse(svg.dataset.portraitViewbox) } };
     svg.dataset.trace = String(ui.mode === "trace");
@@ -310,6 +312,7 @@ export const CLIENT_JS = `(() => {
       const d = edgePath(a, b, e.kind, ui.held[e.from] || ui.held[e.to] ? 0 : e.bends[wall.layout] || 0);
       e.p.setAttribute("d", d);
       if (e.glint) e.glint.setAttribute("d", d);
+      if (e.lip) e.lip.setAttribute("d", d);
     }
   }
 
@@ -367,7 +370,7 @@ export const CLIENT_JS = `(() => {
       const pressed = n.id === ui.focus || (!ui.focus && n.g.classList.contains("is-selected"));
       n.g.setAttribute("aria-pressed", String(pressed));
     }
-    for (const e of wall.edges) e.p.classList.toggle("on-path", relEdges.has(e));
+    for (const e of wall.edges) { e.p.classList.toggle("on-path", relEdges.has(e)); if (e.lip) e.lip.classList.toggle("on-path", relEdges.has(e)); }
     wall.svg.dataset.focus = focus ? "pinned" : preview ? "preview" : "none";
   }
 

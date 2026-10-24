@@ -161,7 +161,7 @@ describe("The Wall: semantic graph of exactly what the MCP server returned", () 
     const html = await fragment("conflicting-balances");
     const seam = pieces(html).find((p) => p["data-type"] === "conflict");
     assert.equal(seam?.["data-node-id"], "conflict:a-balance|a-balance-2");
-    assert.equal((html.match(/data-kind="conflict" data-from="as:a-balance(-2)?" data-to="conflict:a-balance\|a-balance-2"/g) ?? []).length, 2);
+    assert.equal((html.match(/<path class="ww-edge" data-kind="conflict" data-from="as:a-balance(-2)?" data-to="conflict:a-balance\|a-balance-2"/g) ?? []).length, 2);
     assert.ok(html.includes('data-cue="conflict"'));
   });
 
@@ -407,7 +407,8 @@ describe("final layout and copy contract", () => {
 
   test("scrollbars are narrow and use WalletWall tokens only", () => {
     assert.ok(/\*\{box-sizing:border-box;scrollbar-width:thin\}/.test(render.CSS));
-    assert.ok(render.CSS.includes("html{scrollbar-color:var(--ww-deep-slate) var(--ww-cream)}"));
+    assert.ok(render.CSS.includes("html{scrollbar-color:var(--ww-deep-slate) var(--ww-page)}"), "the page's track is the page");
+    assert.ok(render.CSS.includes(".ww-detail{scrollbar-color:var(--ww-deep-slate) var(--ww-rail)}"), "the rail's track is the rail");
     for (const m of render.CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
       if (!/scrollbar/.test(`${m[1]}${m[2]}`)) continue;
       assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(m[2] as string), `${(m[1] as string).trim()} uses WalletWall tokens, not raw colours`);

@@ -112,7 +112,7 @@ function bendFor(a, b, others) {
 const t = (x, y, cls, text) => `<text x="${r1(x)}" y="${r1(y)}" text-anchor="middle" class="${cls}">${esc(text)}</text>`;
 function chip(text, attention, y, x = 0, cls = "") {
   const w = chipWidth(text);
-  return `<g class="ww-chip${cls}" transform="translate(${r1(x)} ${r1(y)})"${attention ? ' data-attention="true"' : ""}><rect x="${r1(-w / 2)}" y="-6.5" width="${r1(w)}" height="13" rx="6.5"/>${t(0, 3, "ww-chip-text", text)}</g>`;
+  return `<g class="ww-chip${cls}" transform="translate(${r1(x)} ${r1(y)})"${attention ? ' data-attention="true"' : ""}><rect x="${r1(-w / 2)}" y="-6.5" width="${r1(w)}" height="13" rx="2"/>${t(0, 3, "ww-chip-text", text)}</g>`;
 }
 
 /** The minimum touch target of a piece, in drawing units. */
@@ -153,14 +153,20 @@ function piece(n, selectedId, wideHit, tallHit) {
   const hitH = wideHit.h;
   const rings = [];
   if (n.superseded) rings.push(keystone ? "" : `<circle class="ghost" cx="5" cy="-5" r="${r}"/>`);
-  if (!keystone && (n.type === "conflict" || n.wwepState === "CONFLICTING")) rings.push(`<circle class="ww-ring ww-ring-conflict" r="${r + 5}"/><circle class="ww-ring ww-ring-conflict ww-ring-outer" r="${r + 9}"/>`);
-  if (!keystone && (n.wwepState === "STALE" || (n.freshness === "STALE" && n.wwepState !== "CONFLICTING"))) rings.push(`<circle class="ww-ring ww-ring-stale" r="${r + 5}"/>`);
+  // Matte and drafted: a flat fill and one ring. A state adds at most one more ring (conflict, staleness), close to the
+  // first, so no piece becomes a layered token.
+  if (!keystone && (n.type === "conflict" || n.wwepState === "CONFLICTING")) rings.push(`<circle class="ww-ring ww-ring-conflict" r="${r + 3.5}"/>`);
+  if (!keystone && (n.wwepState === "STALE" || (n.freshness === "STALE" && n.wwepState !== "CONFLICTING"))) rings.push(`<circle class="ww-ring ww-ring-stale" r="${r + 3.5}"/>`);
   const body = keystone ? `<path class="body" d="${keystonePath(KEYSTONE.w, KEYSTONE.h)}"/><line class="seat" x1="${-KEYSTONE.w / 2 + 12}" y1="${KEYSTONE.h / 2 + 5}" x2="${KEYSTONE.w / 2 - 12}" y2="${KEYSTONE.h / 2 + 5}"/>` : `<circle class="body" r="${r}"/>`;
   const half = !keystone && n.wwepState === "PARTIAL" ? `<path class="half" d="M0 ${-r}A${r} ${r} 0 0 0 0 ${r}Z"/>` : "";
-  const scale = keystone ? 1 : Math.max(0.9, r / 14);
-  const glyph = keystone ? t(0, 4, "ww-key-text", "READINESS") : `<path class="ww-glyph" transform="scale(${r1(scale)})" d="${GLYPH[n.type] ?? GLYPH.assertion}"/>`;
-  // pathLength makes the guide's pointer (four ticks, see styles) the same on every size of piece.
-  const halo = keystone ? `<rect class="ww-halo" x="${-KEYSTONE.w / 2 - 8}" y="${-KEYSTONE.h / 2 - 8}" width="${KEYSTONE.w + 16}" height="${KEYSTONE.h + 16}" rx="10" pathLength="100"/>` : `<circle class="ww-halo" r="${r + 10}" pathLength="100"/>`;
+  // The glyph is a small engraved hint, about a third of the piece's diameter, drawn with a constant 1.25-unit line.
+  const scale = r / 22;
+  const glyph = keystone ? t(0, 4, "ww-key-text", "READINESS") : `<path class="ww-glyph" transform="scale(${r1(scale * 100) / 100})" stroke-width="${Math.round((1.25 / scale) * 100) / 100}" d="${GLYPH[n.type] ?? GLYPH.assertion}"/>`;
+  // Selection is the piece's own ring, heavier and in terracotta (the halo lies on the ring, it does not add one). The
+  // guide's pointer is four short radial ticks across the ring, nothing like the dotted ring that means STALE.
+  const tick = (a) => { const c = Math.cos(a), si = Math.sin(a); return `M${r1(c * (r - 2))} ${r1(si * (r - 2))}L${r1(c * (r + 2.2))} ${r1(si * (r + 2.2))}`; };
+  const halo = keystone ? `<rect class="ww-halo" x="${-KEYSTONE.w / 2 - 5}" y="${-KEYSTONE.h / 2 - 5}" width="${KEYSTONE.w + 10}" height="${KEYSTONE.h + 10}" rx="4"/>` : `<circle class="ww-halo" r="${r}"/>`;
+  const reticle = keystone ? `<rect class="ww-reticle" x="${-KEYSTONE.w / 2 - 5}" y="${-KEYSTONE.h / 2 - 5}" width="${KEYSTONE.w + 10}" height="${KEYSTONE.h + 10}" rx="4" pathLength="100"/>` : `<path class="ww-reticle" d="${[1, 3, 5, 7].map((k) => tick((k * Math.PI) / 4)).join("")}"/>`;
   let words;
   if (keystone) {
     // Two chips side by side under the keystone: the readiness classification, then the support of the claim.
@@ -178,7 +184,7 @@ function piece(n, selectedId, wideHit, tallHit) {
   const shape = keystone ? ` data-kw="${KEYSTONE.w}" data-kh="${KEYSTONE.h}"` : ` data-r="${r}"`;
   const selected = n.assertionId !== undefined && n.assertionId === selectedId;
   const where = `data-w="${hitW}" data-h="${hitH}" data-px="${n.tall.x}" data-py="${n.tall.y}" data-pw="${tallHit.w}" data-ph="${tallHit.h}"${shape}`;
-  return `<g class="ww-node${selected ? " is-selected" : ""}" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${esc(n.accessibleLabel)}" data-node-id="${esc(n.id)}" data-type="${esc(n.type)}" data-entity="${esc(n.entityType)}"${state} data-visual="${esc(n.state)}"${flags ? ` data-flags="${flags}"` : ""}${n.assertionId !== undefined ? ` data-assertion-id="${esc(n.assertionId)}"` : ""}${cls}${n.primary ? ' data-primary="true"' : ""}${n.onTrace ? ' data-trace="true"' : ""} ${where} transform="translate(${n.wide.x} ${n.wide.y})"><rect class="ww-hit" x="${-hitW / 2}" y="${-hitH / 2}" width="${hitW}" height="${hitH}"/><g class="ww-node-art">${halo}${rings.join("")}${body}${half}${glyph}</g>${words}</g>`;
+  return `<g class="ww-node${selected ? " is-selected" : ""}" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${esc(n.accessibleLabel)}" data-node-id="${esc(n.id)}" data-type="${esc(n.type)}" data-entity="${esc(n.entityType)}"${state} data-visual="${esc(n.state)}"${flags ? ` data-flags="${flags}"` : ""}${n.assertionId !== undefined ? ` data-assertion-id="${esc(n.assertionId)}"` : ""}${cls}${n.primary ? ' data-primary="true"' : ""}${n.onTrace ? ' data-trace="true"' : ""} ${where} transform="translate(${n.wide.x} ${n.wide.y})"><rect class="ww-hit" x="${-hitW / 2}" y="${-hitH / 2}" width="${hitW}" height="${hitH}"/><g class="ww-node-art">${rings.join("")}${body}${half}${halo}${glyph}${reticle}</g>${words}</g>`;
 }
 
 /** The Wall as SVG: connectors under pieces. Positions come from the model; the page animates and pins from the same data. */
@@ -192,15 +198,18 @@ export function renderWall(model, { digest }) {
   const wideBend = bends("wide");
   const tallBend = bends("tall");
   const story = new Set(model.storyPath ?? []);
+  const inStory = (e) => (model.dominantStory === "conflict" ? e.kind === "conflict" : story.has(e.from) && story.has(e.to));
   const edgeMarkup = edges
     .map((e, i) => {
       const a = byId.get(e.from);
       const b = byId.get(e.to);
       const kind = EDGE_KINDS[e.kind];
-      const inStory = model.dominantStory === "conflict" ? e.kind === "conflict" : story.has(e.from) && story.has(e.to);
-      return `<path class="ww-edge" data-kind="${esc(e.kind)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" data-rel="${esc(e.relationship)}"${kind.why ? ' data-evidence="true"' : ""}${e.activeTrace ? ' data-trace="true"' : ""}${inStory ? ' data-story="true"' : ""} data-bend="${wideBend[i]}" data-pbend="${tallBend[i]}" d="${edgePath(geom(a), geom(b), e.kind, wideBend[i])}"${e.kind === "conflict" || e.kind === "reserved" ? "" : ' marker-end="url(#ww-arrow)"'}><title>${esc(`${a.label} ${kind.name} ${b.label}`)}</title></path>`;
+      return `<path class="ww-edge" data-kind="${esc(e.kind)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" data-rel="${esc(e.relationship)}"${kind.why ? ' data-evidence="true"' : ""}${e.activeTrace ? ' data-trace="true"' : ""}${inStory(e) ? ' data-story="true"' : ""} data-bend="${wideBend[i]}" data-pbend="${tallBend[i]}" d="${edgePath(geom(a), geom(b), e.kind, wideBend[i])}"${e.kind === "conflict" || e.kind === "reserved" ? "" : ' marker-end="url(#ww-arrow)"'}><title>${esc(`${a.label} ${kind.name} ${b.label}`)}</title></path>`;
     })
     .join("");
+  // The lit lip of each connector: the same path, offset by the stylesheet, under every connector, so a line reads as cut
+  // into the stage. Decorative; it carries the connector's kind and emphasis only so it can follow its strength.
+  const lips = edges.map((e, i) => `<path class="ww-edge-lip" data-kind="${esc(e.kind)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}"${e.activeTrace ? ' data-trace="true"' : ""}${inStory(e) ? ' data-story="true"' : ""} d="${edgePath(geom(byId.get(e.from)), geom(byId.get(e.to)), e.kind, wideBend[i])}"/>`).join("");
   // Trace glints: a light overlay on each connector of the provenance trace whose opacity pulses from the sources toward
   // the claim (step = how many trace connectors lead into it). Only opacity animates; the connector itself stays solid.
   const traced = edges.filter((e) => e.activeTrace);
@@ -214,7 +223,7 @@ export function renderWall(model, { digest }) {
   const nodeMarkup = nodes.map((n) => piece(n, model.authoritativeSelectedAssertionId, wideHits.get(n.id), tallHits.get(n.id))).join("");
   return `<svg class="ww-wall-svg" viewBox="${w.x} ${w.y} ${w.w} ${w.h}" width="${w.w}" height="${w.h}" data-digest="${esc(digest)}" data-portrait-viewbox="${p.x} ${p.y} ${p.w} ${p.h}" data-story="${esc(model.dominantStory ?? "none")}"${model.storyTarget ? ` data-story-target="${esc(model.storyTarget)}"` : ""} data-view-version="${esc(model.coinstellationViewVersion)}" role="group" aria-label="The Wall: ${nodes.length} pieces and ${edges.length} connections. The same information is listed in the text version and the list below.">
 <defs><marker id="ww-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
-<g class="ww-edges">${edgeMarkup}</g>${glints ? `<g class="ww-glints" aria-hidden="true">${glints}</g>` : ""}<g class="ww-nodes">${nodeMarkup}</g></svg>`;
+<g class="ww-edge-lips" aria-hidden="true">${lips}</g><g class="ww-edges">${edgeMarkup}</g>${glints ? `<g class="ww-glints" aria-hidden="true">${glints}</g>` : ""}<g class="ww-nodes">${nodeMarkup}</g></svg>`;
 }
 
 export { stateText, classText };

@@ -198,7 +198,7 @@ describe("the stylesheet's compositions", () => {
       assert.ok(block.includes(sel) && /min-height:(4[4-9]|5\d)px/.test(rule), `${sel} has a 44 px target`);
     }
     assert.ok(/\.ww-icon-button\{[^}]*min-width:44px;min-height:44px/.test(css));
-    assert.ok(phone.includes("-webkit-tap-highlight-color:transparent"));
+    assert.ok(css.includes("html{-webkit-tap-highlight-color:transparent}"), "no tap flash at any width");
   });
 
   test("on a phone: explanations fold behind Why?, no QR placeholder, no wide table", () => {
