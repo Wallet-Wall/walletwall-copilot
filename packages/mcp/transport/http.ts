@@ -7,8 +7,11 @@ const DEFAULT_PORT = 8787;
 const MAX_BODY_BYTES = 1024 * 1024;
 
 class RequestRejected extends Error {
-  constructor(readonly statusCode: number) {
+  readonly statusCode: number;
+
+  constructor(statusCode: number) {
     super("request rejected");
+    this.statusCode = statusCode;
   }
 }
 
@@ -129,10 +132,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, port: nu
   res.setHeader("x-content-type-options", "nosniff");
 
   const mcp = createMcpServer();
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
+  const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
 
   try {
     await mcp.connect(transport);
