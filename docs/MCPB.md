@@ -32,6 +32,10 @@ node scripts/pack-mcpb.ts --out walletwall.mcpb --ref <commit>
 
 Entries are stored (not compressed), sorted by path, with a fixed timestamp and mode, so the bytes do not depend on the machine, operating system, zlib version or checkout settings. `server.json` carries the same SHA-256 as `fileSha256`; the repository tests fail if they disagree.
 
+## Registry listing
+
+Published to the official MCP Registry on 2026-10-24 (UTC) from the `v0.2.0` tag with `mcp-publisher publish server.json`, authenticated for the `Wallet-Wall` organization namespace (a fine-grained token with organization Members read-only; the token was not stored). Query: `https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Wallet-Wall/walletwall`. The registry did not validate `fileSha256`; MCP clients do.
+
 ## What this is not
 
 Publishing server metadata to a registry is discovery, not endorsement or certification. The registry hosts metadata only; the artifact is the GitHub Release asset named in `server.json`. The MCPB is not signed.
