@@ -2,15 +2,19 @@
   "name": "@walletwall/mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "WalletWall local, offline, read-only MCP engine (stdio). Not published.",
+  "description": "WalletWall local, read-only MCP engine with stdio runtime and optional loopback HTTP bridge. Not published.",
   "type": "module",
   "license": "Apache-2.0",
   "main": "src/server.ts",
   "files": [
     "src",
+    "transport",
     "registry",
     "authority-policies"
   ],
+  "scripts": {
+    "http": "node transport/http.ts"
+  },
   "engines": {
     "node": ">=22.18.0"
   },
