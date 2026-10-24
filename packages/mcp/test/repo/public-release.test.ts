@@ -284,14 +284,15 @@ describe("contribution and security governance", () => {
     assert.ok(existsSync(`${ROOT}docs/PUBLIC_RELEASE_AUDIT.md`));
   });
 
-  test("the plugin release artifact is built by the deterministic packer and checked on Linux and Windows; git archive is not a release instruction", () => {
+  test("the plugin release artifact is built by the deterministic packer, recorded by the current release record, and checked on Linux and Windows", () => {
     const audit = read("docs/PUBLIC_RELEASE_AUDIT.md");
     const commands = [...audit.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1] as string).join("\n");
     assert.ok(commands.includes("node scripts/pack-plugin.ts --check") && commands.includes("npm run pack:plugin"), "the reproduction commands use scripts/pack-plugin.ts");
     assert.ok(!/git archive/.test(commands), "no release command uses git archive (it is not host-independent for a subtree)");
     const recorded = read("security/plugin-artifact.sha256").split(/\s+/)[0] ?? "";
     assert.match(recorded, /^[0-9a-f]{64}$/);
-    assert.ok(audit.includes(`\`${recorded}\``), "the audit's current plugin artifact hash is the recorded one");
+    const release = read("docs/RELEASE_V0.3.0.md");
+    assert.ok(release.includes(`\`${recorded}\``), "the current v0.3.0 release record carries the recorded plugin artifact hash");
     const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
     assert.ok(pkg.scripts["verify"]?.includes("npm run verify:plugin-artifact"));
     const ci = read(".github/workflows/ci.yml");

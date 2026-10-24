@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "Public WalletWall Agent Plugin source and local MCP integration.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "walletwall",
       "description": "Stablecoin intelligence and vault readiness for GitHub Copilot.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "source": "./plugin",
       "homepage": "https://github.com/Wallet-Wall/walletwallrus-copilot",
       "repository": "https://github.com/Wallet-Wall/walletwallrus-copilot",
