@@ -6,7 +6,7 @@ This optional adapter exposes the same `createServer()` tool/resource contract o
 
 ## Boundary
 
-The bridge is deliberately separate from `packages/mcp/src/main.ts` and from `plugin/server/walletwall-mcp.mjs`.
+The bridge lives outside the `packages/mcp` publish surface at `scripts/claude-mcp-http.ts`. It reuses `packages/mcp/src/server.ts` but is not part of the MCP package file list and is not bundled into `plugin/server/walletwall-mcp.mjs`.
 
 The existing Copilot runtime therefore keeps its current security properties: no listening socket, no outbound network access, no credentials, no persistence, and stdio transport only.
 
@@ -29,7 +29,7 @@ The optional bridge:
 Requires Node.js 22.18 or newer.
 
 ```text
-node packages/mcp/transport/http.ts --port 8787
+node scripts/claude-mcp-http.ts --port 8787
 ```
 
 The endpoint is:
