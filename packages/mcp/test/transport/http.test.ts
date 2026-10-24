@@ -7,7 +7,7 @@ import { USDC } from "../support/builders.ts";
 
 function startBridge(): Promise<{ child: ChildProcessWithoutNullStreams; url: URL }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["packages/mcp/transport/http.ts", "--port", "0"], {
+    const child = spawn(process.execPath, ["scripts/claude-mcp-http.ts", "--port", "0"], {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"],
     });
