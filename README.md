@@ -8,7 +8,7 @@ Status: Pre-release
 WWEP: 0.1  
 Registry: point-in-time verified
 
-WalletWall does not sign, custody, trade, broadcast transactions, provide investment advice or certify regulatory compliance. Nothing here has been published to npm, a release feed or a Copilot marketplace.
+WalletWall does not sign, custody, trade, broadcast transactions, provide investment advice or certify regulatory compliance. Nothing here has been published to npm or a Copilot marketplace. Source and release artifacts are on GitHub Releases ([v0.2.0](https://github.com/Wallet-Wall/walletwallrus-copilot/releases/tag/v0.2.0)), and the local MCP server's metadata is listed in the official MCP Registry as `io.github.Wallet-Wall/walletwall`.
 
 > Inspect stablecoin identity, wallet state, source lineage, conflicts, and vault readiness through WalletWall MCP.
 
@@ -46,14 +46,23 @@ The bundled registry (five stablecoin deployments on Ethereum, Base and Arbitrum
 
 Wallet addresses you put in a prompt are processed by Copilot and the model provider, not by WalletWall. Details and the limits of what is tested: `PRIVACY.md`, `docs/PLUGIN_PATH_PRIVACY.md`.
 
-## Try it locally
+## Install
+
+From this repository on GitHub (verified with GitHub Copilot CLI 1.0.103 against the public repository, with no credentials):
+
+```text
+copilot plugin marketplace add Wallet-Wall/walletwallrus-copilot
+copilot plugin install walletwall@walletwall
+```
+
+Or from a local checkout:
 
 ```text
 copilot plugin marketplace add <path to this checkout>
 copilot plugin install walletwall@walletwall
 ```
 
-The marketplace and the plugin are both named `walletwall`. Verified with GitHub Copilot CLI 1.0.103: `copilot plugin list --json` reports `walletwall` from marketplace `walletwall`, version 0.2.0. This repository is the plugin source only; it is not an accepted listing in any GitHub or Copilot marketplace, registry or catalog.
+The marketplace and the plugin are both named `walletwall`. Verified with GitHub Copilot CLI 1.0.103: `copilot plugin list --json` reports `walletwall` from marketplace `walletwall`, version 0.2.0. This repository is the plugin source only; the plugin is not an accepted listing in any GitHub or Copilot marketplace or catalog. The official MCP Registry listing covers the MCP server's metadata only and is discovery, not endorsement or certification.
 
 In the GitHub Copilot app: **Customize → Plugins → marketplace settings → add this repository → Install**. A new session then has the six WalletWall MCP tools, the skill and the WalletWall canvas. What was verified on Windows and what was not: `docs/DESKTOP_INSTALL_PROOF.md`. Requires `node` on `PATH`.
 
