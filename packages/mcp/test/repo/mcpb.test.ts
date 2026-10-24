@@ -117,13 +117,14 @@ describe("MCPB package (the WalletWall MCP for the official MCP Registry)", () =
 
 describe("MCPB manifest", () => {
   const m = json<Record<string, unknown> & { server: { type: string; entry_point: string; mcp_config: { command: string; args: string[]; env?: unknown } }; tools: { name: string }[]; compatibility: { runtimes: Record<string, string> } }>("mcpb/manifest.json");
-  const plugin = json<{ name: string; version: string; description: string; license: string }>("plugin/plugin.json");
+  const plugin = json<{ name: string; description: string; license: string }>("plugin/plugin.json");
+  const registry = json<{ version: string }>("server.json");
   const tools = json<{ tools: { name: string }[] }>("security/tool-manifest.json").tools.map((t) => t.name);
 
-  test("identity, version, description and license agree with the plugin manifest", () => {
+  test("identity, package version, description and license stay internally consistent without coupling to the plugin release version", () => {
     assert.equal(m["manifest_version"], "0.3");
     assert.equal(m["name"], plugin.name);
-    assert.equal(m["version"], plugin.version);
+    assert.equal(m["version"], registry.version);
     assert.equal(m["description"], DESCRIPTION);
     assert.equal(m["license"], plugin.license);
   });
@@ -143,23 +144,24 @@ describe("MCPB manifest", () => {
 
 describe("server.json for the official MCP Registry", () => {
   const s = json<{ $schema: string; name: string; title: string; description: string; version: string; repository: { url: string; source: string }; packages: { registryType: string; identifier: string; fileSha256: string; transport: { type: string }; environmentVariables?: unknown; runtimeArguments?: unknown }[]; remotes?: unknown }>("server.json");
-  const plugin = json<{ version: string; repository: string }>("plugin/plugin.json");
+  const plugin = json<{ repository: string }>("plugin/plugin.json");
+  const mcpb = json<{ version: string }>("mcpb/manifest.json");
 
-  test("name, title, description, repository and version", () => {
+  test("name, title, description, repository and MCP package version", () => {
     assert.equal(s.$schema, "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json");
     assert.equal(s.name, "io.github.Wallet-Wall/walletwall");
     assert.equal(s.title, "WalletWall");
     assert.equal(s.description, DESCRIPTION);
     assert.ok(s.description.length <= 100);
     assert.deepEqual(s.repository, { url: plugin.repository, source: "github" });
-    assert.equal(s.version, plugin.version);
+    assert.equal(s.version, mcpb.version);
   });
 
-  test("one MCPB package from the tagged GitHub Release, stdio only, with the recorded file hash", () => {
+  test("one MCPB package from its own tagged GitHub Release, stdio only, with the recorded file hash", () => {
     assert.equal(s.packages.length, 1);
     const p = s.packages[0]!;
     assert.equal(p.registryType, "mcpb");
-    assert.equal(p.identifier, `${plugin.repository}/releases/download/v${plugin.version}/walletwall.mcpb`);
+    assert.equal(p.identifier, `${plugin.repository}/releases/download/v${s.version}/walletwall.mcpb`);
     assert.ok(p.identifier.includes("mcp"));
     assert.equal(p.fileSha256, read("security/mcpb.sha256").split(/\s+/)[0]);
     assert.deepEqual(p.transport, { type: "stdio" });
