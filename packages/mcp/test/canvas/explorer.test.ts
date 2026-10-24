@@ -173,9 +173,11 @@ describe("WalletWall canvas reflects structured MCP output and re-derives nothin
       readiness: { assertionId: evil, result: { classification: evil, ruleId: evil, rulesVersion: evil, supportOfInputs: evil, criteria: [{ id: evil, description: evil, outcome: evil, reason: evil }], limitations: [evil], doesNotEstablish: [evil] } },
     };
     const html = render.renderView(view);
-    const allowed = new Set(["h1", "h2", "h3", "p", "code", "strong", "span", "div", "dl", "dt", "dd", "nav", "ul", "ol", "li", "button", "section", "header", "aside", "details", "summary", "table", "thead", "tbody", "tr", "th", "td", "svg", "defs", "marker", "pattern", "path", "line", "polygon", "circle", "g", "title", "rect", "text", "br"]);
+    const allowed = new Set(["h1", "h2", "h3", "p", "code", "strong", "span", "div", "dl", "dt", "dd", "nav", "ul", "ol", "li", "button", "section", "header", "aside", "details", "summary", "table", "thead", "tbody", "tr", "th", "td", "svg", "defs", "marker", "pattern", "path", "line", "polygon", "circle", "g", "title", "rect", "text", "br", "label", "input"]);
     for (const m of html.matchAll(/<\/?([a-zA-Z][a-zA-Z0-9]*)/g)) assert.ok(allowed.has(m[1] as string), `unexpected element <${m[1]}> in the output`);
     assert.ok(!/<img|<script/.test(html), "unescaped markup in the output");
+    // The only form control is the list's own search field, which the renderer writes once with fixed attributes.
+    assert.deepEqual([...html.matchAll(/<input\b[^>]*>/g)].map((m) => m[0]), ['<input id="ww-search" class="ww-search" type="search" placeholder="Search The Wall" autocomplete="off" spellcheck="false" data-list-search>']);
     assert.ok(html.includes("&lt;script&gt;"));
     assert.ok(!/(data-assertion-id|data-node-id|data-node|data-focus-node|data-node-panel|data-from|data-to|data-state|aria-label|title)="[^"]*<[^"]*"/.test(html));
   });

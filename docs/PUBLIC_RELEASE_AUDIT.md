@@ -156,6 +156,17 @@ Historical values, kept for the record only and **not** to be compared against: 
 
 Both artifacts were extracted and searched for `.env` files, `.git` data, session or worktree metadata, logs, backups, source maps, screenshots, local paths, e-mail addresses, tokens and private keys: none. The runtime is unchanged in kind: stdio only, no WalletWall backend, no telemetry, no persistent query storage, no generic network service (the one loopback listener belongs to the canvas, not the MCP runtime).
 
+### Development after v0.2.0
+
+The tables above are the v0.2.0 release record and stay as published; the v0.2.0 tag, assets and checksums are not rewritten. Canvas work after v0.2.0 (the responsive layout, the Coinstellation evidence graph, its matte material and typography pass, and its technical-drawing grammar) changes files under `plugin/`, so the development tree's plugin manifest and plugin artifact differ from the v0.2.0 values. For the current development tree, which is not a release:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Plugin manifest (`security/plugin-manifest.json`, canonical form) | `278cab88bea9d3d73355ce7695b6260876d5c8a40fe4ba115121681670ff0031` |
+| Development plugin artifact (`scripts/pack-plugin.ts`; 18 files) | `9b8fdf5af1ba55503127810c89e7a128fcb461fcca5acac040e0d09419bc7f27` |
+
+The tool manifest, the MCP server bundle and the MCP artifact are unchanged from v0.2.0. A later release records its own values in its own release notes; these development values are not release checksums.
+
 ## Known limitations
 
 - Support states describe how well presented evidence satisfies a published policy. They do not verify upstream data (`TRANSPORT_FIDELITY_NOT_VERIFIED` is always attached to chain readings).

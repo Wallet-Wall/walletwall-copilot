@@ -31,17 +31,14 @@ interface WallNode {
   h: number;
   state?: string | null;
 }
-interface WallMod {
-  buildWall: (view: unknown) => { nodes: WallNode[]; edges: { from: string; to: string; kind: string }[] };
-  layoutWall: (m: unknown) => { nodes: WallNode[]; edges: { from: string; to: string; kind: string }[]; springs: { from: string; to: string; len: number; k: number }[] };
-  forceLayout: (nodes: unknown[], edges: unknown[], ticks: number) => { step: () => boolean };
-  LAYOUT_TICKS: number;
-  NODE_TYPES: Record<string, { name: string; shape: string }>;
+interface ModelMod {
+  buildCoinstellation: (view: unknown, presentation?: unknown) => { nodes: WallNode[]; edges: { from: string; to: string; kind: string }[]; box: Record<string, { w: number; h: number }> };
+  NODE_TYPES: Record<string, { name: string; entity: string }>;
 }
 const { createExplorer } = (await import(pathToFileURL(`${EXT}/explorer.mjs`).href)) as { createExplorer: (o: { serverArgs: string[] }) => Explorer };
 const render = (await import(pathToFileURL(`${EXT}/render.mjs`).href)) as { renderPage: (o: { nonce: string }) => string; renderView: (v: unknown) => string; CLIENT_JS: string; CSS: string; STATE_GEOMETRY: Record<string, string>; UNAVAILABLE: Record<string, string> };
 const brand = (await import(pathToFileURL(`${EXT}/brand.mjs`).href)) as { FONT_FACES: string; MARK: string; WALLABY: Record<string, string>; FONT_FAMILIES: Record<string, string> };
-const wallMod = (await import(pathToFileURL(`${EXT}/wall.mjs`).href)) as WallMod;
+const modelMod = (await import(pathToFileURL(`${EXT}/coinstellation-model.mjs`).href)) as ModelMod;
 const { FIXTURES } = (await import(pathToFileURL(`${EXT}/fixtures.mjs`).href)) as { FIXTURES: Record<string, { bundle: { assertions: { id: string; claimType: string }[] }; evaluatedAt: string }> };
 
 const explorer = createExplorer({ serverArgs: [ENTRIES.bundle] });
@@ -164,7 +161,7 @@ describe("The Wall: semantic graph of exactly what the MCP server returned", () 
     const html = await fragment("conflicting-balances");
     const seam = pieces(html).find((p) => p["data-type"] === "conflict");
     assert.equal(seam?.["data-node-id"], "conflict:a-balance|a-balance-2");
-    assert.equal((html.match(/data-kind="conflict" data-from="as:a-balance(-2)?" data-to="conflict:a-balance\|a-balance-2"/g) ?? []).length, 2);
+    assert.equal((html.match(/<path class="ww-edge" data-kind="conflict" data-from="as:a-balance(-2)?" data-to="conflict:a-balance\|a-balance-2"/g) ?? []).length, 2);
     assert.ok(html.includes('data-cue="conflict"'));
   });
 
@@ -183,7 +180,7 @@ describe("The Wall: semantic graph of exactly what the MCP server returned", () 
     const old = pieces(html).find((p) => p["data-assertion-id"] === "a-balance");
     assert.equal(old?.["data-flags"], "superseded");
     assert.equal(old?.["data-state"], "SUPERSEDED");
-    assert.ok(html.includes('<rect class="ghost"'), "drawn with a faint historical layer behind it");
+    assert.ok(html.includes('<circle class="ghost"'), "drawn with a faint historical outline behind it");
   });
 
   test("a blocked readiness shows which criterion piece is loose, exactly as the engine reported it", async () => {
@@ -193,21 +190,13 @@ describe("The Wall: semantic graph of exactly what the MCP server returned", () 
     assert.ok(html.includes('data-cue="readiness"'));
   });
 
-  test("the layout is deterministic, and replaying the force simulation from the starting positions ends where the server placed every piece", async () => {
+  test("the layout is deterministic: the same view always gives the same picture, and nothing simulates", async () => {
     const html = await fragment("conflicting-balances");
     assert.equal(html.replace(/fixture:[a-z-]+/, ""), (await fragment("conflicting-balances")).replace(/fixture:[a-z-]+/, ""));
     const view = { assertions: [], observations: [], sources: [], derivations: [] };
-    assert.deepEqual(wallMod.layoutWall(wallMod.buildWall(view)).nodes, []);
-    const p = pieces(html);
-    const nodes = p.map((a) => ({ id: a["data-node-id"], x: Number(a["data-x0"]), y: Number(a["data-y0"]), ax: a["data-ax"] === "" ? null : Number(a["data-ax"]), ay: a["data-ay"] === "" ? null : Number(a["data-ay"]), kx: Number(a["data-kx"]), ky: Number(a["data-ky"]), w: Number(a["data-w"]), h: Number(a["data-h"]), fixed: false }));
-    const springs = [...html.matchAll(/<path class="ww-edge" data-kind="[^"]*" data-from="([^"]*)" data-to="([^"]*)" data-len="([^"]*)" data-k="([^"]*)"/g)].map((m) => ({ from: m[1], to: m[2], len: Number(m[3]), k: Number(m[4]) }));
-    const sim = wallMod.forceLayout(nodes, springs, wallMod.LAYOUT_TICKS);
-    while (sim.step());
-    p.forEach((a, i) => {
-      const [x, y] = (/translate\(([-0-9.]+) ([-0-9.]+)\)/.exec(a["transform"] ?? "") ?? []).slice(1).map(Number);
-      assert.ok(Math.round(nodes[i]!.x * 10) / 10 === x, `${a["data-node-id"]} x`);
-      assert.ok(Math.round(nodes[i]!.y * 10) / 10 === y, `${a["data-node-id"]} y`);
-    });
+    assert.deepEqual(modelMod.buildCoinstellation(view).nodes, []);
+    assert.ok(!/forceLayout|velocity|\.vx\b|LAYOUT_TICKS/.test(render.CLIENT_JS), "the page runs no force simulation");
+    for (const p of pieces(html)) assert.ok(/^translate\([-0-9.]+ [-0-9.]+\)$/.test(p["transform"] ?? "") && p["data-px"] !== undefined, `${p["data-node-id"]} has its wide and tall places`);
   });
 
   test("pieces do not overlap once settled", async () => {
@@ -256,7 +245,7 @@ function stage(html: string, opts: { reduce: boolean }) {
   const svg = { ...element(svgAttrs), querySelectorAll: (s: string) => (s === ".ww-node" ? nodes : s === ".ww-edge" ? edges : []), querySelector: () => null };
   const cues = [...html.matchAll(/<li data-cue="([^"]*)" data-node="([^"]*)" data-pose="([^"]*)">([^<]*)<\/li>/g)].map((m) => ({ ...element({ "data-cue": m[1] as string, "data-node": m[2] as string, "data-pose": m[3] as string }), textContent: m[4] as string }));
   const handlers: Record<string, (e: unknown) => void> = {};
-  const app = { ...element({}), innerHTML: "", addEventListener: (t: string, h: (e: unknown) => void) => (handlers[t] = h), querySelector: (s: string) => (s === ".ww-wall-svg" ? svg : s === "[data-guide-toggle]" ? toggle : null), querySelectorAll: (s: string) => (s === ".ww-guide-cues li" ? cues : []) };
+  const app = { ...element({}), innerHTML: "", addEventListener: (t: string, h: (e: unknown) => void) => (handlers[t] = h), querySelector: (s: string) => (s === ".ww-wall-svg" ? svg : s === "[data-guide-toggle]" ? toggle : null), querySelectorAll: (s: string) => (s === ".ww-guide-cues li" ? cues : s === "[data-guide-toggle]" ? [toggle] : []) };
   const toggle = element({ "data-guide-toggle": "" });
   let guideClick: ((e: unknown) => void) | undefined;
   const guide = { ...element({ "data-peek": "out" }), hidden: true, addEventListener: (_t: string, h: (e: unknown) => void) => (guideClick = h) };
@@ -330,21 +319,20 @@ describe("motion means something: assembly once, reduced motion respected, guide
     assert.ok(!keystone.classList.contains("is-resolving"));
   });
 
-  test("WalletWallaby shows one contextual cue, points at the piece it explains, and can be dismissed or turned off", async () => {
+  test("WalletWallaby shows one contextual cue, points at the piece it explains, and the guide control hides it", async () => {
     const s = stage(await fragment("conflicting-balances"), { reduce: false });
     await s.settle();
     s.pump();
     assert.equal(s.guide.hidden, false);
-    assert.match(s.guideText.textContent, /seam split/);
+    assert.match(s.guideText.textContent, /disagree/);
     const seam = s.nodes.find((n) => n.dataset["type"] === "conflict")!;
-    assert.ok(seam.classList.contains("is-pointed"));
-    s.click({ closest: (sel: string) => (sel === "[data-wallaby-dismiss]" ? {} : null) });
+    assert.ok(seam.classList.contains("is-pointed"), "the cue points at the conflict it is about");
+    assert.equal(s.guide.dataset["target"], seam.dataset["nodeId"], "the guide names its target");
+    s.appClick({ closest: (sel: string) => (sel === "[data-guide-toggle]" ? s.toggle : null) });
     assert.equal(s.guide.dataset["peek"], "out");
     for (const t of s.timers.splice(0)) t();
     assert.equal(s.guide.hidden, true);
     assert.ok(!seam.classList.contains("is-pointed"));
-    s.click({ closest: (sel: string) => (sel === "[data-wallaby-off]" ? {} : null) });
-    assert.equal(s.guide.dataset["peek"], "out");
   });
 
   test("Hide Guide hides WalletWallaby and Show Guide brings it back; the control always names what it will do", async () => {
@@ -359,11 +347,8 @@ describe("motion means something: assembly once, reduced motion respected, guide
     s.appClick(toggleTarget);
     assert.equal(s.guide.hidden, false, "Show Guide restores WalletWallaby");
     assert.equal(s.guide.dataset["peek"], "in");
-    assert.match(s.guideText.textContent, /seam split/, "with the cue it was showing");
+    assert.match(s.guideText.textContent, /disagree/, "with the cue it was showing");
     assert.equal(s.toggle.textContent, "Hide Guide");
-    s.click({ closest: (sel: string) => (sel === "[data-wallaby-off]" ? {} : null) });
-    assert.equal(s.guide.hidden, true);
-    assert.equal(s.toggle.textContent, "Show Guide", "the bubble's Hide Guide button and the toolbar control stay in step");
   });
 });
 
@@ -374,7 +359,7 @@ describe("final layout and copy contract", () => {
     const page = render.renderPage({ nonce: "n" });
     const html = await fragment("usdc-established");
     assert.ok(html.includes('<button type="button" data-guide-toggle aria-controls="wallaby">Hide Guide</button>'));
-    assert.ok(page.includes("<button type=\"button\" data-wallaby-off>Hide Guide</button>"));
+    assert.ok(!/data-wallaby-off|data-wallaby-dismiss/.test(page), "the bubble has no buttons of its own: the one guide control is Hide Guide / Show Guide");
     assert.ok(render.CLIENT_JS.includes('ui.guideOff ? "Show Guide" : "Hide Guide"'));
     const scan = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? scan(join(dir, e.name)) : [join(dir, e.name)]));
     const files = [...scan(`${ROOT}plugin`), ...scan(`${ROOT}docs`), `${ROOT}canvas/README.md`].filter((f) => !/\.(png|woff2)$/.test(f));
@@ -401,10 +386,12 @@ describe("final layout and copy contract", () => {
     assert.ok(/<div class="ww-wall-view"><svg class="ww-wall-svg"/.test(html));
     const wallRule = /\.ww-wall-svg\{[^}]*\}/.exec(render.CSS)?.[0] ?? "";
     assert.ok(/width:100%/.test(wallRule) && !/min-width/.test(wallRule), "The Wall takes its frame's width and has no minimum width");
-    assert.ok(!/minWidth/.test(render.CLIENT_JS), "the page script never imposes a minimum width");
+    assert.ok(!/svg\.style\.minWidth/.test(render.CLIENT_JS), "the page script never imposes a minimum width on The Wall");
     assert.ok(!/overflow-x:\s*hidden/.test(render.CSS), "overflow is prevented by layout, not hidden");
     assert.ok(/\.ww-stage\{display:grid;grid-template-columns:minmax\(0,1fr\) minmax\(280px,340px\)/.test(render.CSS), "the inspector column is bounded and The Wall's column can shrink");
-    assert.ok(/@media \(max-width:1180px\)\{\.ww-stage\{grid-template-columns:minmax\(0,1fr\)\}\}/.test(render.CSS), "narrow panels stack the inspector below The Wall");
+    assert.ok(/@media \(min-width:768px\) and \(max-width:1023px\)\{\s*\.ww-stage\{grid-template-columns:minmax\(0,2fr\) minmax\(240px,1fr\)\}/.test(render.CSS), "tablet panels keep the inspector beside The Wall, about a third of the width");
+    assert.ok(/@media \(max-width:767px\)\{[\s\S]*?\.ww-detail\{position:fixed;left:0;right:0;bottom:0/.test(render.CSS), "phone panels turn the inspector into a bottom sheet, never a full-width block under The Wall");
+    assert.ok(!/max-width:1180px/.test(render.CSS), "no breakpoint stacks the inspector under The Wall any more");
     for (const z of ['data-zoom="out"', 'data-zoom="in"', 'data-zoom="fit"', "data-zoom-level"]) assert.ok(html.includes(z), z);
     assert.ok(render.CLIENT_JS.includes('wall.svg.setAttribute("viewBox"'), "zoom and pan change the view box, not the page scroll");
   });
@@ -420,7 +407,8 @@ describe("final layout and copy contract", () => {
 
   test("scrollbars are narrow and use WalletWall tokens only", () => {
     assert.ok(/\*\{box-sizing:border-box;scrollbar-width:thin\}/.test(render.CSS));
-    assert.ok(render.CSS.includes("html{scrollbar-color:var(--ww-deep-slate) var(--ww-cream)}"));
+    assert.ok(render.CSS.includes("html{scrollbar-color:var(--ww-deep-slate) var(--ww-page)}"), "the page's track is the page");
+    assert.ok(render.CSS.includes(".ww-detail{scrollbar-color:var(--ww-deep-slate) var(--ww-rail)}"), "the rail's track is the rail");
     for (const m of render.CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
       if (!/scrollbar/.test(`${m[1]}${m[2]}`)) continue;
       assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(m[2] as string), `${(m[1] as string).trim()} uses WalletWall tokens, not raw colours`);

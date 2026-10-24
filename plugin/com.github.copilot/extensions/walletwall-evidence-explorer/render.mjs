@@ -1,13 +1,19 @@
-// Rendering for the WalletWall canvas. Pure functions: structured MCP results in, escaped HTML out.
+// Rendering for the WalletWall canvas. Pure functions: the authoritative Canvas view in, escaped HTML out.
+//
+// The WalletWall Canvas visualizes an authoritative MCP-evaluated view. Fixtures provide input, `explorer.mjs` owns Canvas
+// state, and Coinstellation is a deterministic presentation projection. No renderer, layout, interaction, motion, or
+// browser-time calculation may create, strengthen, or replace WalletWall evidence state.
 //
 // Rules this file must keep:
 //  - It never computes or upgrades a support, freshness or finality state, an authority decision, a conflict or a
 //    readiness classification. It prints what the WalletWall MCP server returned.
 //  - A state value outside the WWEP 0.1 enumerations is shown as "not recognised" instead of being rendered as a state.
 //  - No "verified", "safe" or "approved" colour or wording. ESTABLISHED is described as "evidence satisfies policy".
-//  - Limitations are always on screen next to the states they qualify.
+//  - Limitations stay next to the states they qualify: their count is a fact beside the states, the codes one step away.
 //  - Replay, Scenario, Compare, Receipt and QR are drawn as reserved, disabled affordances only. Nothing here fakes them.
-import { ASSERTION_LABELS, NODE_TYPES, EDGE_KINDS, buildWall, esc, layoutWall, nodeName, renderWall, short } from "./wall.mjs";
+//  - A piece that is not a claim gets visual focus only; the one assertion selection is view.selectedId.
+import { ASSERTION_LABELS, NODE_TYPES, EDGE_KINDS, buildCoinstellation, short } from "./coinstellation-model.mjs";
+import { esc, renderWall } from "./wall.mjs";
 import { FONT_FACES, MARK, WALLABY } from "./brand.mjs";
 import { CSS } from "./styles.mjs";
 import { CLIENT_JS } from "./client.mjs";
@@ -42,16 +48,28 @@ export const FINALITY_HINTS = {
   UNKNOWN_FINALITY: "Finality was not stated for at least one observation.",
 };
 
-/** How each state is drawn on The Wall. Meaning never depends on colour alone: shape, line and label carry it too. */
+/** One line under the selected piece's title: the same meaning as the hints above, shortened. */
+export const SUPPORT_SHORT = {
+  ESTABLISHED: "Evidence satisfies the published policy.",
+  SUPPORTED: "Meets policy except authority or finality.",
+  PARTIAL: "Usable evidence, but not enough.",
+  CONFLICTING: "Evidence about this claim disagrees.",
+  STALE: "Evidence is older than policy allows.",
+  SUPERSEDED: "A later assertion replaces this one.",
+  UNKNOWN: "No result or an error; not false.",
+  NOT_ESTABLISHED: "No admissible basis under the policy.",
+};
+
+/** How each state is drawn on The Wall. Meaning never depends on colour alone: ring, line, fill and label carry it too. */
 export const STATE_GEOMETRY = {
-  ESTABLISHED: "solid, fully seated piece",
-  SUPPORTED: "seated piece, lighter outline",
+  ESTABLISHED: "solid piece with a firm ring",
+  SUPPORTED: "solid piece with a lighter ring",
   PARTIAL: "half-filled piece",
-  CONFLICTING: "split seam with diverging connections",
-  STALE: "recessed, faded piece",
-  SUPERSEDED: "faint historical layer behind its replacement",
-  UNKNOWN: "empty, hatched slot: a missing brick, not a zero",
-  NOT_ESTABLISHED: "outline only, no fill",
+  CONFLICTING: "rust ring with one fractured ring outside it, a broken connection and a conflict mark (a broken ring split by a seam) between the claims",
+  STALE: "receded piece inside a dotted ring",
+  SUPERSEDED: "faint piece with a historical outline behind it",
+  UNKNOWN: "open, dashed piece: an empty slot, not a zero",
+  NOT_ESTABLISHED: "open piece, outline only",
 };
 
 export const LIMITATION_LABELS = {
@@ -145,6 +163,17 @@ function stateChip(value, allowed) {
   return `<span class="chip" data-state="${esc(value)}"${attention ? ' data-attention="true"' : ""}>${esc(value)}</span>`;
 }
 
+/** An explanation folded behind "Why?", so nothing long stands between the reader and The Wall. */
+const explain = (html) => `<p class="muted small ww-explain">${html}</p><details class="ww-why-more"><summary>Why?</summary><p class="muted small">${html}</p></details>`;
+/** A hint folded behind "Why?" next to the state it explains. */
+const why = (text) => (text ? `<details class="ww-why"><summary>Why?</summary><p class="muted small">${esc(text)}</p></details>` : "");
+
+/**
+ * The head of the detail surface: what is in focus, its state, one line of meaning, and whether this is the selected
+ * assertion (shared with the agent) or visual focus on a piece that is not a claim. On a phone it is the sheet's peek.
+ */
+const sheetSummary = (title, chip, meaning, kind) => `<div class="ww-sheet-summary"><p class="ww-sheet-title"><span>${esc(title)}</span>${chip}</p><p class="ww-sheet-meaning">${esc(meaning)}</p><p class="ww-focus-kind">${kind}</p></div>`;
+
 const ADDRESS_KEYS = new Set(["address", "token", "holder"]);
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const isAddressField = (key, value) => typeof value === "string" && (ADDRESS_KEYS.has(key) || EVM_ADDRESS.test(value));
@@ -187,44 +216,6 @@ function traceLayers(trace) {
   ].filter((l) => l.nodes.length > 0);
 }
 
-/** Layered provenance graph from the MCP `trace_provenance` result: authority/source, observation, assertion, derivation. */
-export function renderGraph(trace) {
-  if (trace === null || trace === undefined || trace.prov === undefined) return '<p class="muted">No provenance trace is available.</p>';
-  const { prov } = trace;
-  const layers = traceLayers(trace);
-  if (layers.length === 0) return '<p class="muted">The trace contains no records.</p>';
-  const W = 760;
-  const rowH = 86;
-  const H = layers.length * rowH + 10;
-  const pos = new Map();
-  layers.forEach((layer, li) => {
-    layer.nodes.forEach((n, ni) => pos.set(n.id, { x: ((ni + 1) * W) / (layer.nodes.length + 1), y: li * rowH + 40 }));
-  });
-  const edges = [];
-  // Edges stop at the node borders so the arrowheads stay visible.
-  const add = (from, to, label) => {
-    const a = pos.get(from);
-    const b = pos.get(to);
-    if (!a || !b) return;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const pad = (Math.abs(dy) >= Math.abs(dx) * 0.2 ? 22 : 82) / len;
-    edges.push(`<line x1="${(a.x + dx * pad).toFixed(1)}" y1="${(a.y + dy * pad).toFixed(1)}" x2="${(b.x - dx * pad).toFixed(1)}" y2="${(b.y - dy * pad).toFixed(1)}" marker-end="url(#arrow)"><title>${esc(label)}</title></line>`);
-  };
-  for (const r of Object.values(prov.wasAttributedTo ?? {})) add(r["prov:agent"], r["prov:entity"], "attributed to");
-  for (const r of Object.values(prov.wasDerivedFrom ?? {})) add(r["prov:usedEntity"], r["prov:generatedEntity"], "was derived from");
-  for (const r of Object.values(prov.wasGeneratedBy ?? {})) add(r["prov:activity"], r["prov:entity"], "was generated by");
-  const nodes = layers.flatMap((layer) =>
-    layer.nodes.map((n) => {
-      const p = pos.get(n.id);
-      return `<g class="node${n.target ? " target" : ""}" transform="translate(${(p.x - 78).toFixed(1)} ${(p.y - 20).toFixed(1)})"><title>${esc(n.id)}</title><rect width="156" height="40" rx="2"/><text x="78" y="17" text-anchor="middle" class="t1">${esc(short(n.label, 22))}</text><text x="78" y="32" text-anchor="middle" class="t2">${esc(short(n.sub, 26))}</text></g>`;
-    }),
-  );
-  const rows = layers.map((l, li) => `<text x="4" y="${li * rowH + 12}" class="layer">${esc(l.title.toUpperCase())}</text>`);
-  return `<svg class="graph" viewBox="0 0 ${W} ${H}" role="img" aria-label="Provenance: ${esc(layers.map((l) => l.title).join(" to "))}"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>${rows.join("")}${edges.join("")}${nodes.join("")}</svg><p class="muted small">Arrows point from the thing a record was made from to the record made from it: evidence into the claim it supports, and a WalletWall derivation into the assertion it generated. Transport (for example an RPC provider) is shown only as an attribute of a source; it is not an authority.</p>${trace.issues?.length ? `<p class="note" data-attention="true">Trace issues: ${trace.issues.map((i) => `<code>${esc(i.code)}</code>`).join(" ")}</p>` : ""}`;
-}
-
 /** The "Why WalletWall says this" ladder: the selected claim's lineage, read bottom-up, from `trace_provenance`. */
 function whyLadder(trace) {
   if (trace === null || trace === undefined || trace.prov === undefined) return '<p class="muted small">No provenance trace is available for this claim.</p>';
@@ -244,7 +235,7 @@ function readinessPanel(readiness) {
     return `<section class="ww-section ww-criteria" aria-labelledby="h-ready"><h2 id="h-ready">Vault technical readiness</h2><p class="note" data-attention="true">The readiness rules could not be applied (<code>${esc(readiness.errorCode)}</code>).</p></section>`;
   }
   const r = readiness.result;
-  const rows = (Array.isArray(r.criteria) ? r.criteria : []).map((c) => `<tr><th scope="row">${esc(c.id)}</th><td>${esc(c.description)}</td><td>${stateChip(c.outcome, CRITERION_OUTCOMES)}</td><td><code>${esc(c.reason)}</code></td></tr>`).join("");
+  const rows = (Array.isArray(r.criteria) ? r.criteria : []).map((c) => `<tr><th scope="row">${esc(c.id)}</th><td data-label="Description">${esc(c.description)}</td><td data-label="Outcome">${stateChip(c.outcome, CRITERION_OUTCOMES)}</td><td data-label="Reason"><code>${esc(c.reason)}</code></td></tr>`).join("");
   const nots = (Array.isArray(r.doesNotEstablish) ? r.doesNotEstablish : []).map((x) => `<li>${esc(x)}</li>`).join("");
   return `<section class="ww-section ww-criteria" aria-labelledby="h-ready"><h2 id="h-ready">Vault technical readiness</h2>
 <p>Rules <code>${esc(r.ruleId)}</code> <code>${esc(r.rulesVersion)}</code> applied to assertion <code>${esc(readiness.assertionId)}</code>: ${stateChip(r.classification, READINESS_CLASSES)}</p>
@@ -255,8 +246,11 @@ function readinessPanel(readiness) {
 }
 
 /** The readiness keystone resting on its criterion pieces. A piece that is not MET leaves a visible gap or sits loose. */
-function readinessAssembly(readiness) {
+function readinessAssembly(readiness, model) {
   if (readiness === null || readiness === undefined) return "";
+  const keystone = model.nodes.find((n) => n.type === "readiness" && n.assertionId === readiness.assertionId);
+  const focus = keystone ? ` data-focus-node="${esc(keystone.id)}"` : "";
+  const show = keystone ? `<p class="ww-assembly-show"><button type="button" class="link" data-focus-node="${esc(keystone.id)}">Show readiness on The Wall</button></p>` : "";
   if (readiness.errorCode !== undefined || !isObject(readiness.result)) {
     return `<section class="ww-section ww-assembly" aria-labelledby="h-assembly"><h2 id="h-assembly">Readiness assembly</h2><div class="ww-arch" data-fit="false"><div class="ww-keystone" data-classification="NONE"><span class="ww-eyebrow">Vault readiness</span><span>Not assessed: a required input is missing (<code>${esc(readiness.errorCode)}</code>).</span></div><div class="ww-course ww-course-empty" aria-hidden="true"></div></div></section>`;
   }
@@ -271,79 +265,154 @@ function readinessAssembly(readiness) {
     })
     .join("");
   return `<section class="ww-section ww-assembly" aria-labelledby="h-assembly"><h2 id="h-assembly">Readiness assembly</h2>
-<p class="muted small">The keystone seats only when every criterion piece is in place. Pieces and outcomes exactly as returned by <code>assess_vault_readiness</code>; WalletWall's canvas decides nothing here.</p>
-<div class="ww-arch" data-fit="${seated}"><div class="ww-keystone" data-classification="${known ? esc(r.classification) : "UNRECOGNISED"}"><span class="ww-eyebrow">Vault readiness</span>${stateChip(r.classification, READINESS_CLASSES)}<span class="small">${seated ? "Seated: every criterion piece is in place." : "Not seated: at least one criterion piece is missing or loose."}</span></div><ol class="ww-course" aria-label="Readiness criteria">${pieces}</ol></div></section>`;
+${explain("The keystone seats only when every criterion piece is in place. Pieces and outcomes exactly as returned by <code>assess_vault_readiness</code>; WalletWall's canvas decides nothing here.")}
+<div class="ww-arch" data-fit="${seated}"><div class="ww-keystone" data-classification="${known ? esc(r.classification) : "UNRECOGNISED"}"><span class="ww-eyebrow">Vault readiness</span>${stateChip(r.classification, READINESS_CLASSES)}<span class="small">${seated ? "Seated: every criterion piece is in place." : "Not seated: at least one criterion piece is missing or loose."}</span></div><ol class="ww-course" aria-label="Readiness criteria"${focus}>${pieces}</ol></div>${show}</section>`;
 }
 
-/** Wallprint: WalletWall's profile of this asset context, laid as masonry courses. Every facet repeats a returned result. */
+/**
+ * Wallprint: a compact summary of the Coinstellation, one item per facet. Each value repeats a returned result exactly
+ * (nothing is combined into a new state); each item with a piece behind it leads to that piece.
+ */
 function wallprint(view, model) {
   const as = view.assertions;
   const identity = as.find((a) => a.claimType === "ASSET_IDENTITY");
-  const evalOf = (a) => a?.evaluation ?? null;
+  const ie = identity?.evaluation ?? null;
+  const ids = new Set(model.nodes.map((n) => n.id));
+  const target = (id) => (id !== undefined && ids.has(id) ? id : undefined);
   const chains = [...new Set(as.map((a) => a.subject?.chainId).filter((c) => typeof c === "string"))];
   const wallets = model.nodes.filter((n) => n.type === "wallet");
   const authorities = model.nodes.filter((n) => n.type === "authority");
   const conflicts = model.nodes.filter((n) => n.type === "conflict");
-  const limitations = new Set(as.flatMap((a) => (Array.isArray(evalOf(a)?.limitations) ? evalOf(a).limitations : [])));
-  const readinessInputs = view.readiness?.result?.inputs;
-  const brick = (title, body, attention, wide) => `<div class="ww-brick${wide ? " wide" : ""}"${attention ? ' data-attention="true"' : ""}><span class="ww-eyebrow">${esc(title)}</span>${body}</div>`;
+  const r = view.readiness;
+  const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
   const attentionState = (s) => s !== null && s !== undefined && !ATTENTION_FREE.includes(s);
-  const idState = evalOf(identity)?.supportState;
-  const rd = view.readiness?.result?.classification;
-  const freshness = as.map((a) => `<li><code>${esc(short(a.id, 22))}</code> ${evalOf(a) ? stateChip(evalOf(a).freshnessState, FRESHNESS_STATES) : '<span class="muted">no evaluation</span>'}</li>`).join("");
-  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  return `<section class="ww-section ww-wallprint" aria-labelledby="h-wallprint"><h2 id="h-wallprint">Wallprint</h2>
-<p class="muted small">WalletWall's profile of this asset context, course by course. Each facet repeats a result already shown above; nothing here is a new score.</p>
-<div class="ww-courses">
-<div class="ww-course-row">${brick("Wallmark", identity ? `<span>${esc(identity.value?.symbol ?? "symbol not stated")} <span class="muted small">as presented</span></span>${stateChip(idState, SUPPORT_STATES)}` : '<span class="muted">No identity claim in this bundle.</span>', !identity || attentionState(idState), true)}${brick("Vault readiness", view.readiness ? (view.readiness.result ? stateChip(rd, READINESS_CLASSES) : `<span>not assessed: <code>${esc(view.readiness.errorCode)}</code></span>`) : '<span class="muted">No readiness claim in this bundle.</span>', Boolean(view.readiness) && rd !== "CRITERIA_MET", true)}</div>
-<div class="ww-course-row offset">${brick("Sources", `<span>${plural(view.sources.length, "source")} · ${plural(authorities.length, "authority").replace(/ys$/, "ies")} · ${plural(view.observations.length, "observation")}</span>`, false)}${brick("Chain", chains.length ? chains.map((c) => `<code>${esc(c)}</code>`).join(" ") : '<span class="muted">not stated</span>', chains.length === 0)}${brick("Wallet", wallets.length ? `<span>${wallets.length} holder${wallets.length === 1 ? "" : "s"}, listed in full on The Wall</span>` : '<span class="muted">no holder in this bundle</span>', false)}</div>
-<div class="ww-course-row">${brick("Freshness", `<ul class="ww-mini">${freshness}</ul>`, as.some((a) => attentionState(evalOf(a)?.freshnessState)))}${brick("Conflicts", conflicts.length ? `<span>${conflicts.length} split seam${conflicts.length === 1 ? "" : "s"}</span>` : '<span class="muted">none reported</span>', conflicts.length > 0)}${brick("Dependencies", Array.isArray(readinessInputs) ? `<ul class="ww-mini">${readinessInputs.map((i) => `<li><code>${esc(i.assertionId)}</code> ${stateChip(i.supportState, SUPPORT_STATES)}</li>`).join("")}</ul>` : '<span class="muted">no readiness inputs</span>', Array.isArray(readinessInputs) && readinessInputs.some((i) => attentionState(i.supportState)))}${brick("Limitations", `<span>${limitations.size} distinct code${limitations.size === 1 ? "" : "s"}</span>`, limitations.size > 0)}</div>
-</div></section>`;
+  const item = (key, value, focus, attention) => {
+    const f = target(focus);
+    const inner = `<span class="ww-eyebrow">${esc(key)}</span><span class="ww-brick-value">${value}</span>`;
+    return `<li class="ww-brick"${attention ? ' data-attention="true"' : ""}${f ? ` data-focus-node="${esc(f)}"` : ""}>${f ? `<button type="button" class="ww-brick-key" data-focus-node="${esc(f)}">${inner}</button>` : `<span class="ww-brick-key">${inner}</span>`}</li>`;
+  };
+  const items = [
+    item("Wallmark", identity ? `<span>${esc(short(identity.value?.symbol ?? "symbol not stated", 12))}</span>${ie ? stateChip(ie.supportState, SUPPORT_STATES) : '<span class="chip" data-attention="true" data-state="NA">no evaluation</span>'}` : '<span class="muted">none in this bundle</span>', identity ? `as:${identity.id}` : undefined, !ie || attentionState(ie.supportState)),
+    item("Readiness", r ? (r.result ? stateChip(r.result.classification, READINESS_CLASSES) : '<span class="chip" data-attention="true" data-state="NA">not assessed</span>') : '<span class="muted">none in this bundle</span>', r ? `as:${r.assertionId}` : undefined, Boolean(r) && r.result?.classification !== "CRITERIA_MET"),
+    item("Freshness", ie ? `${stateChip(ie.freshnessState, FRESHNESS_STATES)}<span class="muted small">Wallmark</span>` : '<span class="muted">no evaluation</span>', identity ? `as:${identity.id}` : undefined, Boolean(ie) && attentionState(ie.freshnessState)),
+    item("Conflicts", conflicts.length ? `<span class="chip" data-attention="true" data-state="CONFLICTING">${plural(conflicts.length, "conflict")}</span>` : '<span class="muted">none reported</span>', conflicts[0]?.id, conflicts.length > 0),
+    item("Sources", `<span>${plural(view.sources.length, "source")} · ${plural(authorities.length, "authority", "authorities")}</span>`, model.nodes.find((n) => n.type === "source")?.id, false),
+    item("Chain", chains.length ? chains.map((c) => `<code>${esc(c)}</code>`).join(" ") : '<span class="muted">not stated</span>', chains.length ? `chain:${chains[0]}` : undefined, chains.length === 0),
+    item("Wallet", wallets.length ? `<span>${plural(wallets.length, "holder")}</span>` : '<span class="muted">none</span>', wallets[0]?.id, false),
+  ];
+  const violations = Number(view.invariantViolationCount);
+  if (Number.isFinite(violations) && violations > 0) items.push(item("Invariants", `<span class="chip" data-attention="true" data-state="NA">${plural(violations, "violation")}</span>`, undefined, true));
+  return `<section class="ww-section ww-wallprint" aria-labelledby="h-wallprint"><h2 id="h-wallprint">Wallprint</h2><ul class="ww-courses">${items.join("")}</ul></section>`;
 }
 
 /** Receipt and QR: reserved space only. There are no immutable snapshots yet, so nothing here produces a receipt. */
 function receipt() {
   return `<section class="ww-section ww-receipt" aria-labelledby="h-receipt"><h2 id="h-receipt">Receipt</h2>
-<div class="ww-receipt-body"><div class="ww-qr-slot" role="img" aria-label="Reserved space for a future receipt QR code. No QR code is generated."><span>QR</span><span class="small">reserved</span></div>
+<button type="button" class="ww-receipt-row" data-receipt-toggle aria-expanded="false" aria-controls="receipt-body"><span class="ww-receipt-row-text"><strong>Receipt</strong><span class="ww-reason">${esc(UNAVAILABLE.receipt)}</span></span><span aria-hidden="true">›</span></button>
+<div class="ww-receipt-body" id="receipt-body"><div class="ww-qr-slot" role="img" aria-label="Reserved space for a future receipt QR code. No QR code is generated."><span>QR</span><span class="small">reserved</span></div>
 <div><p>A receipt will let someone else check this exact state later. That needs immutable snapshots, which WalletWall does not create yet, so these controls are disabled.</p>
 <div class="ww-actions"><button type="button" disabled aria-describedby="receipt-why">Copy receipt</button><button type="button" disabled aria-describedby="receipt-why">Verify</button><button type="button" disabled aria-describedby="receipt-why">QR</button></div>
 <p id="receipt-why" class="ww-reason">${esc(UNAVAILABLE.receipt)}</p>
 <p class="muted small">When it exists, the QR code will locate a verifiable snapshot receipt. It will never encode a wallet address, a local URL, a Copilot session, a key or the query itself.</p></div></div></section>`;
 }
 
-/** The compact identity rail: mark, name, and the Wallmark facts of the bundle's identity claim, as presented. */
-function identityRail(view) {
+/** The summary header: mark, name, the asset as presented and its chain ID; the critical state strip below. */
+function summaryHeader(view, model) {
   const identity = view.assertions.find((a) => a.claimType === "ASSET_IDENTITY");
-  const v = view.versions ?? {};
-  const fact = (dt, dd) => `<div><dt>${esc(dt)}</dt><dd>${dd}</dd></div>`;
-  const facts = identity
-    ? [
-        fact("Asset", `${esc(identity.value?.symbol ?? "not stated")} <span class="muted small">as presented</span>`),
-        fact("Chain", `<code>${esc(identity.subject?.chainId ?? "not stated")}</code>`),
-        fact("Contract", typeof identity.subject?.address === "string" ? addressValue("contract address", identity.subject.address, identity.subject?.chainId) : '<span class="muted">not stated</span>'),
-        fact("Issuer or protocol", `<code>${esc(identity.value?.issuerAuthorityId ?? "not stated")}</code>`),
-        fact("Wallmark", identity.evaluation ? stateChip(identity.evaluation.supportState, SUPPORT_STATES) : '<span class="muted">no evaluation</span>'),
-        fact("Freshness", identity.evaluation ? stateChip(identity.evaluation.freshnessState, FRESHNESS_STATES) : '<span class="muted">no evaluation</span>'),
-      ]
-    : [fact("Wallmark", '<span class="muted">No identity claim in this bundle.</span>')];
-  facts.push(fact("Registry", `<code>${esc(v.registry)}</code>`));
-  return `<header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="The only lens with complete semantics today">Observed</span></div><dl class="ww-rail-facts" aria-label="Wallmark identity">${facts.join("")}</dl></header>`;
+  const chain = identity?.subject?.chainId ?? view.assertions.find((a) => typeof a.subject?.chainId === "string")?.subject?.chainId;
+  const asset = `<p class="ww-rail-asset"><span class="ww-rail-symbol">${esc(identity ? (identity.value?.symbol ?? "symbol not stated") : "No Wallmark")}</span><span class="ww-rail-sep" aria-hidden="true">·</span><span class="ww-rail-chain">${typeof chain === "string" ? `chain ${esc(chain)}` : "chain not stated"}</span></p>`;
+  return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="The only lens with complete semantics today">Observed</span></div>${asset}</header>${stateStrip(view, model)}</div>`;
 }
 
-function toolbar() {
-  return `<div class="ww-toolbar"><div class="ww-modes" role="group" aria-label="View"><button type="button" data-mode="overview" aria-pressed="true">Overview</button><button type="button" data-mode="trace" aria-pressed="false">Trace</button><button type="button" disabled aria-describedby="why-compare">Compare</button></div>
-<div class="ww-lens" role="group" aria-label="State lens"><button type="button" class="is-on" aria-pressed="true">Observed</button><button type="button" disabled aria-describedby="why-replay">Replay</button><button type="button" disabled aria-describedby="why-scenario">Scenario</button></div>
-<div class="ww-tools"><button type="button" data-motion-toggle aria-pressed="false">Reduce motion</button><button type="button" data-guide-toggle aria-controls="wallaby">Hide Guide</button></div>
-<ul class="ww-reasons"><li id="why-compare">${esc(UNAVAILABLE.compare)}</li><li id="why-replay">${esc(UNAVAILABLE.replay)}</li><li id="why-scenario">${esc(UNAVAILABLE.scenario)}</li></ul></div>`;
+/**
+ * The critical state strip under the phone header: the Wallmark, freshness and readiness exactly as returned, plus a
+ * conflict or invariant chip only when there is one. Each chip leads to its piece on The Wall.
+ */
+function stateStrip(view, model) {
+  const identity = view.assertions.find((a) => a.claimType === "ASSET_IDENTITY");
+  const ids = new Set(model.nodes.map((n) => n.id));
+  const item = (key, chip, focus) => `<li>${focus && ids.has(focus) ? `<button type="button" class="ww-strip-item" data-focus-node="${esc(focus)}">` : '<span class="ww-strip-item">'}<span class="ww-strip-key">${esc(key)}</span>${chip}${focus && ids.has(focus) ? "</button>" : "</span>"}</li>`;
+  const wallmark = identity ? `as:${identity.id}` : undefined;
+  const items = [
+    item("Wallmark", identity?.evaluation ? stateChip(identity.evaluation.supportState, SUPPORT_STATES) : '<span class="chip" data-attention="true" data-state="NA">none</span>', wallmark),
+    item("Freshness", identity?.evaluation ? stateChip(identity.evaluation.freshnessState, FRESHNESS_STATES) : '<span class="chip" data-state="NA">N/A</span>', wallmark),
+  ];
+  if (view.readiness) {
+    const r = view.readiness;
+    items.push(item("Readiness", r.result ? stateChip(r.result.classification, READINESS_CLASSES) : '<span class="chip" data-attention="true" data-state="NA">not assessed</span>', `as:${r.assertionId}`));
+  }
+  // A conflict, when the engine reported one, leads the strip: it is what a phone shows first.
+  const conflicts = model.nodes.filter((n) => n.type === "conflict");
+  if (conflicts.length) items.unshift(item("Conflict", `<span class="chip" data-attention="true" data-state="CONFLICTING">${conflicts.length} conflict${conflicts.length === 1 ? "" : "s"}</span>`, conflicts[0].id));
+  const violations = Number(view.invariantViolationCount);
+  if (Number.isFinite(violations) && violations > 0) items.push(item("Invariants", `<span class="chip" data-attention="true" data-state="NA">${violations} violation${violations === 1 ? "" : "s"}</span>`));
+  return `<ul class="ww-strip" aria-label="Current state">${items.join("")}</ul>`;
 }
 
-function assertionNav(view) {
-  return `<nav class="ww-section ww-claims" aria-label="Claims in this bundle"><h2>Claims in this bundle</h2><ul class="nav">${view.assertions
-    .map((a) => {
-      const selected = a.id === view.selectedId;
-      return `<li><button type="button" data-assertion-id="${esc(a.id)}" aria-pressed="${selected}"><span class="nav-id">${esc(short(a.id, 28))}</span><span class="nav-type">${esc(ASSERTION_LABELS[a.claimType] ?? a.claimType)}</span>${a.evaluation ? stateChip(a.evaluation.supportState, SUPPORT_STATES) : ""}</button></li>`;
+/**
+ * The Wall's one control group: Overview and Trace, Fit, the guide, and More. More holds everything else, so nothing is
+ * phone-only and no future capability takes a primary place.
+ */
+function stageTools() {
+  const menu = [
+    '<button type="button" data-mode="trace">Trace</button>',
+    '<button type="button" data-guide-toggle aria-controls="wallaby">Hide Guide</button>',
+    '<button type="button" data-zoom="in" aria-label="Zoom in">Zoom in</button>',
+    '<button type="button" data-zoom="out" aria-label="Zoom out" disabled>Zoom out</button>',
+    '<button type="button" data-reset-layout>Reset layout</button>',
+    '<button type="button" data-motion-toggle aria-pressed="false">Reduce motion</button>',
+    '<button type="button" data-list-view>List view</button>',
+    '<button type="button" data-panel-toggle aria-expanded="false" aria-controls="panel-info">About this panel</button>',
+  ].join("");
+  return `<div class="ww-wall-tools" role="toolbar" aria-label="The Wall"><div class="ww-modes" role="group" aria-label="View"><button type="button" data-mode="overview" aria-pressed="true">Overview</button><button type="button" data-mode="trace" aria-pressed="false">Trace</button></div><button type="button" class="ww-tool-in" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="fit" disabled>Fit</button><button type="button" data-guide-toggle aria-controls="wallaby">Hide Guide</button><button type="button" class="ww-icon-button ww-wall-menu-toggle" data-wall-menu-toggle aria-expanded="false" aria-controls="wall-menu" aria-label="More options">More</button><div class="ww-wall-menu" id="wall-menu" hidden>${menu}</div></div><span class="ww-zoom-level" data-zoom-level aria-live="polite">Whole wall</span>`;
+}
+
+const LIST_FILTERS = [
+  ["all", "All"],
+  ["claims", "Claims"],
+  ["sources", "Sources"],
+  ["observations", "Observations"],
+  ["conflicts", "Conflicts"],
+  ["readiness", "Readiness"],
+  ["missing", "Missing"],
+];
+
+/**
+ * The list: every piece of The Wall as a row, an alternate lens on the same pieces. Search and filter chips; at most two
+ * chips a row; a row leads back to its piece. Addresses are printed in full, as everywhere outside a piece's face.
+ */
+function listSurface(view, model) {
+  const supports = (n) => model.edges.filter((e) => e.to === n.id && e.kind === "supports").length;
+  const rows = model.nodes
+    .map((n) => {
+      const kinds = ["all"];
+      if (n.type === "assertion" || n.type === "wallmark" || n.type === "readiness") kinds.push("claims");
+      if (n.type === "authority" || n.type === "source") kinds.push("sources");
+      if (n.type === "observation") kinds.push("observations");
+      if (n.type === "conflict" || n.wwepState === "CONFLICTING") kinds.push("conflicts");
+      if (n.type === "readiness" || n.type === "snapshot" || n.type === "derivation" || (n.type === "gap" && n.gapFor === "readiness")) kinds.push("readiness");
+      if (n.type === "gap" || n.missing) kinds.push("missing");
+      const name = n.type === "assertion" ? `${ASSERTION_LABELS[n.data?.claimType] ?? "Claim"} claim` : n.type === "wallmark" ? "Wallmark" : n.type === "readiness" ? "Vault readiness" : n.label;
+      const state = n.wwepState === undefined ? "" : n.wwepState === null ? '<span class="chip" data-state="NA">no evaluation</span>' : stateChip(n.wwepState, SUPPORT_STATES);
+      const cls = n.type === "readiness" ? (n.classification !== undefined ? stateChip(n.classification, READINESS_CLASSES) : '<span class="chip" data-attention="true" data-state="NA">not assessed</span>') : "";
+      const type = `<span class="chip ww-type-chip" data-state="NA">${esc(NODE_TYPES[n.type].name)}</span>`;
+      const chips = n.type === "readiness" ? `${cls}${state}` : `${state}${type}`;
+      const count = supports(n);
+      const second = n.address ? `<code>${esc(n.address)}</code>` : n.assertionId !== undefined ? `<code>${esc(n.assertionId)}</code>${count ? ` · ${count} supporting observation${count === 1 ? "" : "s"}` : ""}` : n.exactValue !== undefined ? `<code>${esc(short(n.exactValue, 40))}</code>` : "";
+      // Searchable text, exactly as presented (the page compares without regard to case).
+      const text = [name, n.address ? undefined : n.label, n.address, n.assertionId, n.exactValue, n.wwepState, n.classification, NODE_TYPES[n.type].name].filter((x) => typeof x === "string").join(" ");
+      return `<li data-kinds="${kinds.join(" ")}" data-text="${esc(text)}"><button type="button" class="ww-list-row" data-focus-node="${esc(n.id)}"${n.assertionId !== undefined && n.assertionId === view.selectedId ? ' aria-current="true"' : ""}><span class="ww-list-name">${esc(name)}</span><span class="ww-list-meta">${chips}</span>${second ? `<span class="ww-list-sub muted small">${second}</span>` : ""}</button></li>`;
     })
-    .join("")}</ul></nav>`;
+    .join("");
+  const filters = LIST_FILTERS.map(([key, label]) => `<button type="button" data-list-filter="${key}" aria-pressed="${key === "all"}">${label}</button>`).join("");
+  return `<section class="ww-section ww-list" id="ww-list" aria-labelledby="h-list"><h2 id="h-list">Inspect The Wall</h2><label class="ww-sr" for="ww-search">Search The Wall</label><input id="ww-search" class="ww-search" type="search" placeholder="Search The Wall" autocomplete="off" spellcheck="false" data-list-search><div class="ww-filters" role="group" aria-label="Show">${filters}</div><ul class="ww-list-rows">${rows}</ul><p class="muted small" data-list-empty hidden>No piece matches.</p></section>`;
+}
+
+/** Lenses and modes that are not live yet: in the panel's About section, each with its reason in visible text. */
+function panelToolbar() {
+  return `<div class="ww-toolbar"><div class="ww-lens" role="group" aria-label="State lens"><button type="button" class="is-on" aria-pressed="true">Observed</button><button type="button" disabled aria-describedby="why-replay">Replay</button><button type="button" disabled aria-describedby="why-scenario">Scenario</button></div>
+<div class="ww-lens" role="group" aria-label="More views"><button type="button" disabled aria-describedby="why-compare">Compare</button></div>
+<ul class="ww-reasons"><li id="why-compare">${esc(UNAVAILABLE.compare)}</li><li id="why-replay">${esc(UNAVAILABLE.replay)}</li><li id="why-scenario">${esc(UNAVAILABLE.scenario)}</li></ul></div>`;
 }
 
 function dependencies(view, a) {
@@ -362,36 +431,48 @@ function dependencies(view, a) {
   return items.length ? `<ul class="limits">${items.join("")}</ul>` : '<p class="muted">This assertion lists no observations or input assertions.</p>';
 }
 
+/**
+ * The selected assertion: its state and at most six facts first; the claim as presented, provenance, limitation codes
+ * and sources one step away. All of it repeats the WalletWall MCP results.
+ */
 function detail(view, a) {
   const e = a.evaluation;
   const auth = e?.authority;
-  const conflicts = e?.conflictsWith?.length ? e.conflictsWith.map((c) => `<button type="button" class="link" data-assertion-id="${esc(c)}">${esc(c)}</button>`).join(", ") : '<span class="muted">none reported</span>';
   const claim = ASSERTION_LABELS[a.claimType] ?? a.claimType;
-  return `<div data-assertion-detail><section aria-labelledby="h-assertion"><p class="ww-eyebrow">${esc(a.claimType === "ASSET_IDENTITY" ? "Wallmark" : a.claimType === "VAULT_TECHNICAL_READINESS" ? "Keystone" : "Claim")}</p><h2 id="h-assertion">${esc(claim)} <code>${esc(a.id)}</code></h2>
-<p class="claim muted small">Claim type <code>${esc(a.claimType)}</code>, origin as presented <code>${esc(a.origin)}</code>, temporality <code>${esc(a.temporality)}</code></p>
-<p><strong>Claim as presented:</strong> ${claimSentence(a)}</p>
-<div class="two"><div><h3>Subject (as presented)</h3>${records(a.subject)}</div><div><h3>Value (as presented)</h3>${records(a.value, a.subject?.chainId)}</div></div>
-<p class="muted small">Subject and value are copied from the supplied bundle. They are claims, not findings. Addresses are shown in full, exactly as presented; Copy copies that exact text.</p></section>
-<section aria-labelledby="h-states"><h2 id="h-states">Why WalletWall says this</h2>
-<p class="muted small">Support, freshness, finality and conflicts exactly as returned by WalletWall MCP.</p>
-${whyLadder(view.provenance)}<p><button type="button" class="ww-why-button" data-why>Show this path on The Wall</button></p>
-${
-  e
+  const title = a.claimType === "ASSET_IDENTITY" ? "Wallmark" : a.claimType === "VAULT_TECHNICAL_READINESS" ? "Vault readiness" : `${claim} claim`;
+  const chip = e ? stateChip(e.supportState, SUPPORT_STATES) : '<span class="chip" data-attention="true" data-state="NA">no evaluation</span>';
+  const meaning = e ? (SUPPORT_SHORT[e.supportState] ?? "This state is not one WalletWall recognises.") : "No evaluation was returned for this assertion.";
+  const lims = Array.isArray(e?.limitations) ? e.limitations : [];
+  const fact = (dt, dd) => `<div><dt>${dt}</dt><dd>${dd}</dd></div>`;
+  const conflicts = e?.conflictsWith?.length ? e.conflictsWith.map((c) => `<button type="button" class="link" data-assertion-id="${esc(c)}">${esc(c)}</button>`).join(", ") : null;
+  const facts = e
+    ? `<dl class="states ww-facts">${[
+        fact("Support", `${stateChip(e.supportState, SUPPORT_STATES)}${why(SUPPORT_HINTS[e.supportState])}`),
+        fact("Freshness", `${stateChip(e.freshnessState, FRESHNESS_STATES)}${why(FRESHNESS_HINTS[e.freshnessState])}`),
+        fact("Finality", e.finalityState === null ? '<span class="chip" data-state="NA">N/A</span> <span class="muted small">does not apply to this claim type</span>' : `${stateChip(e.finalityState, FINALITY_STATES)}${why(FINALITY_HINTS[e.finalityState])}`),
+        fact("Authority", auth ? `<span>${auth.satisfied === true ? "requirement satisfied" : "requirement not satisfied"}</span>` : '<span class="muted">none defined for this claim type</span>'),
+        ...(conflicts ? [fact("Conflicts", conflicts)] : []),
+        fact("Limitations", lims.length ? `<span class="chip" data-attention="true" data-state="NA">${lims.length}</span> <span class="muted small">under Limitations</span>` : '<span class="muted">none returned</span>'),
+      ].join("")}</dl>`
+    : '<p class="note" data-attention="true">No evaluation was returned for this assertion.</p>';
+  const more = e
     ? `<dl class="states">
-<div><dt>Support</dt><dd>${stateChip(e.supportState, SUPPORT_STATES)} <span class="muted">${esc(SUPPORT_HINTS[e.supportState] ?? "")}</span></dd></div>
 <div><dt>Authority class</dt><dd>${auth ? `<code>${esc(auth.kind)}</code> · <code>${esc(auth.authorityId)}</code> · scope <code>${esc(auth.scope)}</code> · requirement satisfied: <strong>${auth.satisfied === true ? "yes" : "no"}</strong>` : '<span class="muted">no authority defined for this claim type</span>'}</dd></div>
-<div><dt>Freshness</dt><dd>${stateChip(e.freshnessState, FRESHNESS_STATES)} <span class="muted">${esc(FRESHNESS_HINTS[e.freshnessState] ?? "")}</span></dd></div>
-<div><dt>Finality</dt><dd>${e.finalityState === null ? '<span class="chip" data-state="NA">N/A</span> <span class="muted">finality does not apply to this claim type</span>' : `${stateChip(e.finalityState, FINALITY_STATES)} <span class="muted">${esc(FINALITY_HINTS[e.finalityState] ?? "")}</span>`}</dd></div>
 <div><dt>Independent corroboration</dt><dd>${e.independentCorroboration === null ? '<span class="muted">not applicable (derived)</span>' : `<code>${esc(e.independentCorroboration)}</code>`}</dd></div>
-<div><dt>Conflicts</dt><dd>${conflicts}</dd></div>
 <div><dt>Superseded by</dt><dd>${e.supersededBy ? `<button type="button" class="link" data-assertion-id="${esc(e.supersededBy)}">${esc(e.supersededBy)}</button>` : '<span class="muted">not superseded</span>'}</dd></div>
 <div><dt>Policy</dt><dd><code>${esc(e.policyId ?? "none")}</code></dd></div>
 </dl>`
-    : '<p class="note" data-attention="true">No evaluation was returned for this assertion.</p>'
-}
-</section>
-<section aria-labelledby="h-limits"><h2 id="h-limits">Limitations</h2>${limitationsList(e?.limitations)}<p class="muted small">Limitations qualify every state above. They are never hidden.</p></section>
-<section aria-labelledby="h-deps"><h2 id="h-deps">Sources</h2>${dependencies(view, a)}</section></div>`;
+    : "";
+  return `<div data-assertion-detail>${sheetSummary(title, chip, meaning, `Selected assertion · <code>${esc(short(a.id, 28))}</code>`)}
+<section aria-labelledby="h-states"><h2 id="h-states" class="ww-sr">Why WalletWall says this</h2>${facts}</section>
+<details class="ww-more" data-more="provenance"><summary>Provenance</summary><section aria-labelledby="h-prov"><h2 id="h-prov" class="ww-sr">Provenance</h2><p class="muted small">The lineage trace_provenance returned for this claim; Trace shows it on The Wall.</p>${whyLadder(view.provenance)}<p><button type="button" class="ww-why-button" data-why>Show this path on The Wall</button></p></section></details>
+<details class="ww-more"><summary>Details</summary><section aria-labelledby="h-assertion"><h2 id="h-assertion">${esc(claim)} <code>${esc(a.id)}</code></h2>
+<p class="claim muted small">Claim type <code>${esc(a.claimType)}</code>, origin as presented <code>${esc(a.origin)}</code>, temporality <code>${esc(a.temporality)}</code></p>
+<p><strong>Claim as presented:</strong> ${claimSentence(a)}</p>
+<div class="two"><div><h3>Subject (as presented)</h3>${records(a.subject)}</div><div><h3>Value (as presented)</h3>${records(a.value, a.subject?.chainId)}</div></div>
+<p class="muted small">Subject and value are copied from the supplied bundle. They are claims, not findings. Addresses are shown in full, exactly as presented; Copy copies that exact text.</p>${more}</section></details>
+<details class="ww-more"><summary>Limitations${lims.length ? ` (${lims.length})` : ""}</summary><section aria-labelledby="h-limits"><h2 id="h-limits" class="ww-sr">Limitations</h2>${limitationsList(e?.limitations)}<p class="muted small">Limitations qualify every state above. They are never hidden.</p></section></details>
+<details class="ww-more"><summary>Sources</summary><section aria-labelledby="h-deps"><h2 id="h-deps" class="ww-sr">Sources</h2>${dependencies(view, a)}</section></details></div>`;
 }
 
 const PIECE_NOTES = {
@@ -408,10 +489,10 @@ const PIECE_NOTES = {
   chain: "The chain ID a claim is about. It anchors contracts and wallets.",
 };
 
-/** Detail panels for pieces that are not claims. The page shows one at a time when the piece is focused. */
+/** Panels for pieces that are not claims: visual focus only, never an assertion selection. One shows at a time. */
 function piecePanels(model) {
   const byId = new Map(model.nodes.map((n) => [n.id, n]));
-  const pieceRef = (n) => (n.address ? `<code>${esc(n.address)}</code>` : esc(short(n.label, 30)));
+  const pieceRef = (n) => (n.address ? `<code>${esc(n.address)}</code>` : esc(n.label));
   const focusLink = (n) => `<button type="button" class="link" data-focus-node="${esc(n.id)}">${pieceRef(n)}</button>`;
   return model.nodes
     .filter((n) => n.assertionId === undefined)
@@ -426,84 +507,147 @@ function piecePanels(model) {
       else if (n.type === "observation") presented = records({ id: n.data.id, sourceId: n.data.sourceId, origin: n.data.origin, result: n.data.result, observedAt: n.data.observedAt, finality: n.data.finality, subject: n.data.subject, payload: n.data.payload });
       else presented = records(n.data);
       const finality = n.type === "observation" ? `<div><dt>Finality</dt><dd><code>${esc(n.data.finality)}</code> <span class="muted">as stated by the observation</span></dd></div><div><dt>Observed at</dt><dd><code>${esc(n.data.observedAt)}</code></dd></div>` : "";
-      return `<section class="ww-node-detail" data-node-panel="${esc(n.id)}" hidden aria-label="${esc(nodeName(n))}"><p class="ww-eyebrow">${esc(t.name)} · ${esc(t.shape)}</p><h2>${n.address ? `<code>${esc(n.address)}</code>` : esc(n.label)}</h2>
-<p class="muted small">${esc(PIECE_NOTES[n.type] ?? "")}</p>
-<dl class="states"><div><dt>As presented</dt><dd>${presented}</dd></div><div><dt>Support</dt><dd><span class="muted">Not a claim, so it carries no support state.</span></dd></div>${finality}${n.unattested ? '<div><dt>Authority</dt><dd><span class="chip" data-attention="true" data-state="NA">no source</span> <span class="muted">Named by the identity claim; no source in the bundle speaks for it.</span></dd></div>' : ""}<div><dt>Rests on</dt><dd>${incoming.length ? `<ul class="limits">${incoming.join("")}</ul>` : '<span class="muted">nothing</span>'}</dd></div><div><dt>Supports</dt><dd>${outgoing.length ? `<ul class="limits">${outgoing.join("")}</ul>` : '<span class="muted">nothing</span>'}</dd></div></dl></section>`;
+      const summaryChip = n.type === "observation" ? `<span class="chip"${n.missing ? ' data-attention="true"' : ""} data-state="NA">${esc(String(n.data?.result ?? "result not stated").toLowerCase().replace("_", " "))}</span>` : n.missing ? '<span class="chip" data-attention="true" data-state="NA">missing</span>' : "";
+      return `<section class="ww-node-detail" data-node-panel="${esc(n.id)}" hidden aria-label="${esc(n.accessibleLabel)}">${sheetSummary(n.label, summaryChip, (PIECE_NOTES[n.type] ?? "").split(". ")[0].replace(/\.?$/, "."), `Visual focus · ${esc(t.name)}, not an assertion selection`)}<h2>${n.address ? `<code>${esc(n.address)}</code>` : esc(n.exactValue ?? n.label)}</h2>
+<dl class="states ww-facts"><div><dt>As presented</dt><dd>${presented}</dd></div>${finality}${n.unattested ? '<div><dt>Authority</dt><dd><span class="chip" data-attention="true" data-state="NA">no source</span> <span class="muted">Named by the identity claim; no source in the bundle speaks for it.</span></dd></div>' : ""}<div><dt>Rests on</dt><dd>${incoming.length ? `<ul class="limits">${incoming.join("")}</ul>` : '<span class="muted">nothing</span>'}</dd></div><div><dt>Supports</dt><dd>${outgoing.length ? `<ul class="limits">${outgoing.join("")}</ul>` : '<span class="muted">nothing</span>'}</dd></div></dl>
+<details class="ww-more"><summary>Details</summary><p class="muted small">${esc(PIECE_NOTES[n.type] ?? "")}</p><dl class="states"><div><dt>Support</dt><dd><span class="muted">Not a claim, so it carries no support state.</span></dd></div></dl></details></section>`;
     })
     .join("");
 }
 
-/** The Wall as a table: the same pieces, states and connections, for anyone who cannot or does not want to read a graph. */
+/** The Wall as a table: the same pieces, states, selection and connections, for anyone who does not read a graph. */
 function textVersion(model) {
   const byId = new Map(model.nodes.map((n) => [n.id, n]));
+  const name = (n) => (n.address ? `<code>${esc(n.address)}</code>` : `${esc(n.label)}${n.exactValue !== undefined && n.exactValue !== n.label ? ` <code>${esc(short(n.exactValue, 40))}</code>` : ""}`);
   const rows = model.nodes
     .map((n) => {
-      const rests = model.edges.filter((e) => e.to === n.id).map((e) => {
-        const from = byId.get(e.from);
-        return `${from.address ? `<code>${esc(from.address)}</code>` : esc(short(from.label, 26))} <span class="muted">(${esc(EDGE_KINDS[e.kind].name)})</span>`;
-      });
-      const state = n.state === undefined ? '<span class="muted">not a claim</span>' : n.state === null ? '<span class="muted">no evaluation</span>' : stateChip(n.state, SUPPORT_STATES);
-      return `<tr><th scope="row"><button type="button" class="link" data-focus-node="${esc(n.id)}">${n.address ? `<code>${esc(n.address)}</code>` : esc(n.label)}</button></th><td>${esc(NODE_TYPES[n.type].name)}</td><td>${state}${n.classification ? ` ${stateChip(n.classification, READINESS_CLASSES)}` : ""}${n.missing ? ' <span class="muted">missing</span>' : ""}</td><td>${rests.join("<br/>") || '<span class="muted">nothing</span>'}</td></tr>`;
+      const rests = model.edges.filter((e) => e.to === n.id).map((e) => `${name(byId.get(e.from))} <span class="muted">(${esc(EDGE_KINDS[e.kind].name)})</span>`);
+      const state = n.wwepState === undefined ? '<span class="muted">not a claim</span>' : n.wwepState === null ? '<span class="muted">no evaluation</span>' : stateChip(n.wwepState, SUPPORT_STATES);
+      const selected = n.assertionId !== undefined && n.assertionId === model.authoritativeSelectedAssertionId;
+      return `<tr><th scope="row"><button type="button" class="link" data-focus-node="${esc(n.id)}"${selected ? ' aria-current="true"' : ""}>${name(n)}</button>${selected ? ' <span class="muted small">selected</span>' : ""}</th><td>${esc(NODE_TYPES[n.type].name)}</td><td>${state}${n.classification !== undefined ? ` ${stateChip(n.classification, READINESS_CLASSES)}` : ""}${n.missing ? ' <span class="muted">missing</span>' : ""}</td><td>${rests.join("<br/>") || '<span class="muted">nothing</span>'}</td></tr>`;
     })
     .join("");
   return `<details class="ww-section ww-text-version"><summary>The Wall as a list (${model.nodes.length} pieces)</summary><div class="ww-table-wrap"><table><thead><tr><th>Piece</th><th>Type</th><th>State</th><th>Rests on</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
 function legend() {
-  const swatch = (state) => `<li><svg class="ww-swatch" viewBox="0 0 40 20" aria-hidden="true"><g class="ww-node" data-type="assertion" data-state="${state}"><rect class="body" x="2" y="2" width="36" height="16" rx="1"/></g></svg><span><strong>${state}</strong> <span class="muted">${esc(STATE_GEOMETRY[state])}</span></span></li>`;
-  return `<details class="ww-legend"><summary>How to read The Wall</summary><ul class="ww-legend-list">${SUPPORT_STATES.map(swatch).join("")}</ul><p class="muted small">Pieces rest on what supports them: authorities and sources on the left, observations, then claims, then WalletWall's derivation and the readiness keystone in its chamber. Subjects (chain, contract, wallet) form the foundation course. Terracotta marks only the selected piece and its path; it never means good or bad.</p></details>`;
+  const swatch = (state) => `<li><svg class="ww-swatch" viewBox="0 0 40 24" aria-hidden="true"><g class="ww-node" data-type="assertion" data-state="${state}" data-visual="${state.toLowerCase().replace("_", "-")}">${state === "CONFLICTING" ? '<circle class="ww-ring ww-ring-conflict" cx="20" cy="12" r="10.5"/>' : ""}${state === "STALE" ? '<circle class="ww-ring ww-ring-stale" cx="20" cy="12" r="10.5"/>' : ""}<circle class="body" cx="20" cy="12" r="7"/>${state === "PARTIAL" ? '<path class="half" d="M20 5A7 7 0 0 0 20 19Z"/>' : ""}</g></svg><span><strong>${state}</strong> <span class="muted">${esc(STATE_GEOMETRY[state])}</span></span></li>`;
+  // The drawing's notation: which kinds are node objects and which are drafting marks, and what each line class means.
+  const mark = (tier, type, art, words) => `<li><svg class="ww-swatch" viewBox="0 0 40 24" aria-hidden="true"><g class="ww-node" data-tier="${tier}" data-type="${type}" transform="translate(20 12)">${art}</g></svg><span>${words}</span></li>`;
+  const line = (cls, words) => `<li><svg class="ww-swatch" viewBox="0 0 40 24" aria-hidden="true"><path class="ww-edge ww-edge-key" data-line="${cls}" d="M3 12H31"/></svg><span>${words}</span></li>`;
+  const notation = [
+    mark("anchor", "assertion", '<circle class="body" r="7"/>', "<strong>Claim, Wallmark, conflict, readiness</strong> <span class=\"muted\">the only node objects: a disc (the Wallmark a terracotta seal), a broken ring for a conflict, the keystone</span>"),
+    mark("fact", "observation", '<circle class="ww-draft ww-draft-ring" r="3.6"/><path class="ww-draft" d="M8.5 0H4.8M-8.5 0H-4.8M0 8.5V4.8M0 -8.5V-4.8"/>', "<strong>Observation</strong> <span class=\"muted\">a registration cross</span>"),
+    mark("fact", "derivation", '<circle class="ww-draft ww-draft-ring" r="6.5"/><path class="ww-draft" d="M-3.4 -3.4L3.4 3.4M3.4 -3.4L-3.4 3.4"/>', "<strong>WalletWall rule</strong> <span class=\"muted\">a summing junction</span>"),
+    mark("context", "source", '<rect class="ww-draft ww-draft-solid" x="-2.5" y="-2.5" width="5" height="5"/>', "<strong>Source, authority, subject</strong> <span class=\"muted\">an index mark or small glyph and a name; its ring appears when you focus it</span>"),
+    line("primary", "<strong>Evidence</strong> <span class=\"muted\">solid, with an arrow: what a claim or the rule rests on</span>"),
+    line("secondary", "<strong>Leader</strong> <span class=\"muted\">finer: a source or authority to what it reports</span>"),
+    line("reference", "<strong>Reference</strong> <span class=\"muted\">hairline: the subjects a claim is about</span>"),
+    line("construction", "<strong>Reservation</strong> <span class=\"muted\">dashed: the readiness keystone's snapshot slot</span>"),
+  ].join("");
+  return `<details class="ww-section ww-legend"><summary>How to read The Wall</summary><ul class="ww-legend-list">${SUPPORT_STATES.map(swatch).join("")}</ul><ul class="ww-legend-list">${notation}</ul><p class="muted small">The Wall is drawn as a technical plate. Pieces rest on what supports them: authorities and sources first, then observations, claims, WalletWall's derivation and the readiness keystone, which stands at the end of the evaluation axis from the Wallmark; subjects (chain, contract, wallet) stand in a context column beside the claims they are about. States are written beside each piece. Terracotta marks focus, the selected path and Trace; it never means good or bad.</p></details>`;
 }
 
-/** Short guide messages tied to what this bundle actually shows. The page shows at most one per change. */
+/**
+ * WalletWallaby's cues, each tied to one piece the cue is about (data-node). The first is chosen by the model's dominant
+ * story, a fixed precedence over returned states (conflict, then staleness, then a weak focal claim, then an
+ * established Wallmark); one per piece follows, for when that piece is selected. Every cue repeats returned states only.
+ */
 function guideCues(view, model) {
   const cues = [];
+  const byId = new Map(model.nodes.map((n) => [n.id, n]));
   const first = (type, pred = () => true) => model.nodes.find((n) => n.type === type && pred(n));
-  const conflict = first("conflict");
-  if (conflict) cues.push(["conflict", conflict.id, "inspect", "This seam split because two claims about the same thing disagree. WalletWall does not pick a winner."]);
+  const st = (n) => (n.wwepState === null ? "without an evaluation" : KNOWN.includes(n.wwepState) ? n.wwepState : "in a state WalletWall does not recognise");
+  const t = model.storyTarget ? byId.get(model.storyTarget) : null;
+  if (model.dominantStory === "conflict" && t) cues.push(["conflict", t.id, "inspect", "These two claims disagree, so WalletWall marks a conflict between them and picks no winner."]);
+  else if (model.dominantStory === "stale" && t) cues.push(["stale", t.id, "inspect", t.type === "wallmark" ? "The Wallmark is STALE: its evidence is older than the policy allows for a current claim." : `${t.type === "readiness" ? "Readiness" : t.label} is STALE: an input is older than the policy allows.`]);
+  else if (model.dominantStory === "other" && t) cues.push([t.wwepState === "PARTIAL" ? "partial" : "invariant", t.id, "inspect", t.wwepState === "PARTIAL" ? `${t.type === "readiness" ? "Readiness" : t.label} is PARTIAL: some usable evidence exists, but not enough for the policy.` : "The engine reports invariant violations on this claim. About this panel lists each one."]);
+  else if (model.dominantStory === "unknown" && t) cues.push(["unknown", t.id, "inspect", `${t.type === "readiness" ? "Readiness" : t.label} is ${st(t)}: shown as missing evidence, never as false or zero.`]);
+  else if (model.dominantStory === "established" && t) cues.push(["established", t.id, "perch", "This Wallmark's evidence satisfies the published policy, and the readiness keystone rests on it."]);
   const missing = model.nodes.find((n) => n.missing);
-  if (missing) cues.push(["unknown", missing.id, "inspect", missing.type === "observation" ? "This brick is missing on purpose: the source returned no result. WalletWall leaves the gap instead of filling it with 0 or false." : "This slot is empty because the bundle refers to something it does not contain."]);
+  if (missing) cues.push(["unknown", missing.id, "inspect", missing.type === "observation" ? "This observation returned no result. WalletWall leaves the gap instead of filling it with zero." : "This slot is empty because the bundle refers to something it does not contain."]);
   const keystone = first("readiness");
-  if (keystone && view.readiness && view.readiness.result?.classification !== "CRITERIA_MET") cues.push(["readiness", keystone.id, "perch", "The keystone does not seat: at least one readiness criterion is not in place. The Readiness assembly shows which piece is missing or loose."]);
-  const stale = model.nodes.find((n) => n.state === "STALE");
-  if (stale) cues.push(["stale", stale.id, "inspect", "This piece receded because its evidence is older than the policy allows for a current claim."]);
+  if (keystone && view.readiness && view.readiness.result?.classification !== "CRITERIA_MET") cues.push(["readiness", keystone.id, "perch", "The keystone is not seated: a readiness criterion is not in place. The checklist shows which."]);
   const superseded = model.nodes.find((n) => n.superseded);
-  if (superseded) cues.push(["superseded", superseded.id, "perch", "This faint piece was superseded by a later claim. It stays on The Wall as history; it is not deleted or rewritten."]);
-  cues.push(["orientation", "", "perch", "This is The Wall. Each piece rests on what supports it. Select a piece, then use Why WalletWall says this to trace its path."]);
+  if (superseded) cues.push(["superseded", superseded.id, "perch", "This faint piece was superseded by a later claim. It stays on The Wall as history."]);
+  const anchor = model.nodes.find((n) => n.primary) ?? model.nodes[0];
+  if (anchor) cues.push(["orientation", anchor.id, "perch", "Select a piece to see what it rests on and what rests on it."]);
+  // One cue per piece, for when it is selected.
+  for (const n of model.nodes) {
+    const obs = model.edges.filter((e) => e.to === n.id && e.kind === "supports").length;
+    const src = model.edges.find((e) => e.to === n.id && e.kind === "observed");
+    const via = n.type === "source" && typeof n.data?.transport?.retrievedVia === "string" ? short(n.data.transport.retrievedVia, 20) : null;
+    const text = {
+      wallmark: () => `The Wallmark is ${st(n)}${n.freshness ? `, freshness ${KNOWN_FRESH.includes(n.freshness) ? n.freshness : "not recognised"}` : ""}. Trace shows the source and observation it rests on.`,
+      assertion: () => `${n.label} is ${st(n)}. ${n.wwepState === "CONFLICTING" ? "It disagrees with another claim; WalletWall picks no winner." : `It rests on ${obs} observation${obs === 1 ? "" : "s"}.`}`,
+      readiness: () => `Readiness is ${n.readinessError ? "not assessed" : KNOWN_CLASS.includes(n.classification) ? n.classification : "not recognised"}; its support is ${st(n)}. The checklist shows each criterion as returned.`,
+      observation: () => `${n.label} came from ${src ? byId.get(src.from).label : "a source not in the bundle"}. ${n.missing ? "It returned no result, which is not zero." : "Its value is in the detail, exactly as presented."}`,
+      source: () => `A ${String(n.label).toLowerCase()} source.${via ? ` Transport such as ${via} is not an authority.` : " What it observed rests on it."}`,
+      authority: () => (n.unattested ? "Named as issuer by the Wallmark; no source in the bundle speaks for it." : "An issuer or protocol authority. Sources speak for it; it is never inferred from transport."),
+      derivation: () => "A WalletWall rule. Its result is WalletWall-derived, never an upstream authority.",
+      conflict: () => "These two claims disagree. WalletWall marks the conflict and picks no winner.",
+      gap: () => "Something the bundle refers to is missing. The gap stays visible; it is never filled with zero.",
+      snapshot: () => "Reserved for immutable snapshots. Nothing is stored or snapshotted today.",
+      contract: () => "The contract the claims are about. Its full address is in the detail, with Copy.",
+      wallet: () => "The holder a balance claim is about. Its full address is in the detail, with Copy.",
+      chain: () => "The chain ID the claims are about. It anchors the contract and the wallet.",
+      stablecoin: () => "The symbol the Wallmark presents. A symbol is not an identity.",
+    }[n.type];
+    if (text) cues.push(["node", n.id, n.type === "conflict" || n.missing ? "inspect" : "perch", text()]);
+  }
   return `<ul class="ww-guide-cues" hidden>${cues.map(([cue, node, pose, text]) => `<li data-cue="${cue}" data-node="${esc(node)}" data-pose="${pose}">${esc(text)}</li>`).join("")}</ul>`;
 }
+const KNOWN = SUPPORT_STATES;
+const KNOWN_FRESH = FRESHNESS_STATES;
+const KNOWN_CLASS = READINESS_CLASSES;
 
 export function renderView(view) {
   if (view.status === "empty") {
     const fx = (view.fixtures ?? []).map((f) => `<li><code>${esc(f.name)}</code> <span class="muted">${esc(f.title)}</span></li>`).join("");
-    return `<header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header><p class="note">Nothing is loaded. Ask Copilot to inspect a WWEP evidence bundle and open it here, or open WalletWall with one of the bundled synthetic fixtures:</p><ul class="limits">${fx}</ul><p class="muted small">This panel only displays results returned by the local WalletWall MCP server. It computes nothing itself.</p>`;
+    return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header></div><p class="note">Nothing is loaded. Ask Copilot to inspect a WWEP evidence bundle and open it here, or open WalletWall with one of the bundled synthetic fixtures:</p><ul class="limits">${fx}</ul><p class="muted small">This panel only displays results returned by the local WalletWall MCP server. It computes nothing itself.</p>`;
   }
   if (view.status === "error") {
-    return `<header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header><p class="note" data-attention="true" role="alert">The evidence could not be evaluated: <code>${esc(view.error.code)}</code>. ${esc(view.error.message)} No states are shown.</p>`;
+    return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header></div><p class="note" data-attention="true" role="alert">The evidence could not be evaluated: <code>${esc(view.error.code)}</code>. ${esc(view.error.message)} No states are shown.</p>`;
   }
   const selected = view.assertions.find((a) => a.id === view.selectedId) ?? view.assertions[0];
   const v = view.versions ?? {};
   const inv = Array.isArray(view.invariantViolations) ? view.invariantViolations : [];
-  const model = layoutWall(buildWall(view));
-  return `${identityRail(view)}
+  // The visual model is a projection of this view; if it cannot be built, the evaluated state stays inspectable.
+  let model;
+  try {
+    model = buildCoinstellation(view, { mode: "overview" });
+  } catch {
+    model = null;
+  }
+  // Without a model every assertion stays reachable: a plain list of each one with its returned support state.
+  const unplaced = () =>
+    `<div class="note" data-attention="true"><p>The Wall could not be drawn for this bundle. Each assertion is listed with its evaluated support state; select one to see its detail.</p><ul class="limits">${view.assertions
+      .map((a) => `<li><button type="button" class="link" data-assertion-id="${esc(a.id)}">${esc(ASSERTION_LABELS[a.claimType] ?? a.claimType)} <code>${esc(a.id)}</code></button> ${a.evaluation ? stateChip(a.evaluation.supportState, SUPPORT_STATES) : '<span class="chip" data-attention="true" data-state="NA">no evaluation</span>'}</li>`)
+      .join("")}</ul></div>`;
+  const wall = model ? renderWall(model, { digest: view.bundleDigest }) : unplaced();
+  const empty = { nodes: [], edges: [] };
+  return `${summaryHeader(view, model ?? empty)}
+<div class="ww-panel-info" id="panel-info">
 <p class="note ww-boundary">States describe how well the presented evidence satisfies published policy. They do not verify that upstream data is true, and they are not statements about safety, solvency or investment merit.</p>
-${toolbar()}
+${panelToolbar()}
 <p class="meta">Evaluated at <code>${esc(view.evaluatedAt)}</code> · WWEP <code>${esc(v.wwep)}</code> · registry <code>${esc(v.registry)}</code> · policies <code>${esc(v.policies)}</code> · rules <code>${esc(v.rules)}</code><br/>Bundle digest <code>${esc(view.bundleDigest)}</code> · Invariant violations: <strong>${esc(view.invariantViolationCount)}</strong>${view.source ? ` · Source: <code>${esc(view.source)}</code>` : ""}</p>
 ${inv.length ? `<ul class="limits ww-violations">${inv.map((x) => `<li data-attention="true"><code>${esc(x.invariant)}</code> <code>${esc(x.code)}</code> ${x.assertionId ? `on <code>${esc(x.assertionId)}</code>` : ""} <span class="muted">${esc(x.rule)}</span></li>`).join("")}</ul>` : ""}
-<div class="ww-flow">
-<div class="ww-stage"><section class="ww-wall" aria-labelledby="h-wall"><div class="ww-section-head"><h2 id="h-wall">The Wall</h2><p class="muted small">The whole wall fits this frame. Select a piece to see its details. Drag a piece to move it; it stays pinned until Reset layout. Zoom in to read closely, then drag the background to pan.</p><div class="ww-wall-tools"><div class="ww-zoom" role="group" aria-label="Zoom The Wall"><button type="button" data-zoom="out" aria-label="Zoom out" disabled>−</button><span class="ww-zoom-level" data-zoom-level aria-live="polite">Whole wall</span><button type="button" data-zoom="in" aria-label="Zoom in">+</button><button type="button" data-zoom="fit" disabled>Fit</button></div><button type="button" data-reset-layout>Reset layout</button></div></div><div class="ww-wall-view">${renderWall(model, { selectedNodeId: selected ? `as:${selected.id}` : null, digest: view.bundleDigest })}</div>${legend()}</section>
-<aside class="ww-detail" id="detail" aria-label="Selected piece">${selected ? detail(view, selected) : '<p class="muted">The bundle has no assertions.</p>'}${piecePanels(model)}</aside></div>
-${readinessAssembly(view.readiness)}
-<section class="ww-section ww-lineage" aria-labelledby="h-prov"><h2 id="h-prov">Source lineage</h2><p class="muted small">The selected claim's provenance as returned by <code>trace_provenance</code>.</p>${renderGraph(view.provenance)}</section>
-${wallprint(view, model)}
-${readinessPanel(view.readiness)}
-${receipt()}
-${assertionNav(view)}
-${textVersion(model)}
 </div>
-${guideCues(view, model)}`;
+<div class="ww-flow">
+<div class="ww-stage"><section class="ww-wall" aria-labelledby="h-wall"><div class="ww-section-head"><h2 id="h-wall">The Wall</h2>${stageTools()}<button type="button" class="ww-back" data-back-overview>Back to Overview</button></div><div class="ww-guide-slot"></div><div class="ww-wall-view">${wall}</div><div class="ww-tip" id="ww-tip" role="tooltip" hidden></div></section>
+<aside class="ww-detail" id="detail" aria-label="Selected piece" data-sheet="peek"><div class="ww-sheet-bar"><button type="button" class="ww-sheet-grip" data-sheet-toggle aria-expanded="false" aria-controls="detail" aria-label="Show more of the selected piece"><span aria-hidden="true"></span></button></div>${selected ? detail(view, selected) : '<p class="muted">The bundle has no assertions.</p>'}${model ? piecePanels(model) : ""}<div class="ww-sheet-actions" role="group" aria-label="Selected piece actions"><button type="button" data-mode="trace">Trace</button><button type="button" data-show-on-wall>Show on Wall</button><button type="button" data-sheet-full>More</button></div></aside></div>
+${wallprint(view, model ?? empty)}
+${readinessAssembly(view.readiness, model ?? empty)}
+${listSurface(view, model ?? empty)}
+${readinessPanel(view.readiness)}
+${legend()}
+${receipt()}
+${textVersion(model ?? empty)}
+</div>
+${model ? guideCues(view, model) : ""}`;
 }
 
 export function renderPage({ nonce }) {
   const brandCss = `.ww-mark{background-image:url("${MARK}")}.ww-wallaby-art[data-pose="inspect"]{background-image:url("${WALLABY.inspect}")}.ww-wallaby-art[data-pose="perch"]{background-image:url("${WALLABY.perch}")}`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>WalletWall</title><link rel="icon" type="image/png" sizes="96x96" href="${MARK}"><style nonce="${esc(nonce)}">${FONT_FACES}\n${brandCss}\n${CSS}</style></head><body><main id="app" data-mode="overview" data-motion="full"><p class="muted">Loading…</p></main><p id="view-status" class="ww-sr" role="status" aria-live="polite"></p><aside id="wallaby" class="ww-wallaby" hidden data-peek="out" aria-label="WalletWallaby, the WalletWall guide"><span id="wallaby-art" class="ww-wallaby-art" data-pose="inspect" aria-hidden="true"></span><div class="ww-wallaby-bubble"><p class="ww-eyebrow">WalletWallaby</p><p id="wallaby-text"></p><div class="ww-actions"><button type="button" data-wallaby-dismiss>Got it</button><button type="button" data-wallaby-off>Hide Guide</button></div></div></aside><p id="copy-status" class="copy-status" role="status" aria-live="polite"></p><script nonce="${esc(nonce)}">${CLIENT_JS}</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>WalletWall</title><link rel="icon" type="image/png" sizes="96x96" href="${MARK}"><style nonce="${esc(nonce)}">${FONT_FACES}\n${brandCss}\n${CSS}</style></head><body><main id="app" data-mode="overview" data-motion="full"><p class="muted">Loading…</p></main><p id="view-status" class="ww-sr" role="status" aria-live="polite"></p><aside id="wallaby" class="ww-wallaby" hidden data-peek="out" aria-label="WalletWallaby, the WalletWall guide"><span id="wallaby-art" class="ww-wallaby-art" data-pose="inspect" aria-hidden="true"></span><div class="ww-wallaby-bubble"><p class="ww-eyebrow">WalletWallaby</p><p id="wallaby-text"></p></div></aside><p id="copy-status" class="copy-status" role="status" aria-live="polite"></p><script nonce="${esc(nonce)}">${CLIENT_JS}</script></body></html>`;
 }
