@@ -2,7 +2,7 @@
   "manifestVersion": "1",
   "plugin": {
     "name": "walletwall",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "format": "Agent Plugins 1.0.0",
     "schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
   },
@@ -38,8 +38,8 @@
     },
     {
       "path": "plugin/README.md",
-      "sha256": "7f07f7e29ef7b8d4f65a21d5df870cbdf00d31f17372735e16fd126c546ef98c",
-      "bytes": 2936
+      "sha256": "0bfbf5ca35aab56fd5b8c3b800300871f74558897a2e9f04cf1be394a14108e7",
+      "bytes": 2937
     },
     {
       "path": "plugin/THIRD_PARTY_NOTICES.md",
@@ -108,7 +108,7 @@
     },
     {
       "path": "plugin/plugin.json",
-      "sha256": "c7903fe5a3e8a1fa48dc82e8d800100fe9f05a87956765095afc7ca1c9c6afca",
+      "sha256": "b2d6a10ab79d3f403c9fe8a333af274bef058cf418e7efe0d1d19892bf2e9781",
       "bytes": 532
     },
     {
