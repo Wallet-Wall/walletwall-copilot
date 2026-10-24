@@ -49,6 +49,39 @@ export default defineConfig(
     rules: { "no-restricted-properties": "off", "no-console": "error" },
   },
   {
+    // Optional user-run Claude bridge. It may bind one loopback HTTP listener only.
+    // Core packages/mcp/src remains offline and stdio-only.
+    files: ["packages/mcp/transport/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["fs", "fs/promises", "net", "https", "http2", "dgram", "dns", "dns/promises", "tls", "child_process", "cluster", "worker_threads", "os", "vm", "inspector", "readline", "repl", "v8", "perf_hooks"]
+            .flatMap((m) => [m, `node:${m}`])
+            .map((name) => ({ name, message: "The Claude bridge may only use loopback HTTP; no disk, outbound network or subprocess access." })),
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "No outbound network access." },
+        { name: "XMLHttpRequest", message: "No outbound network access." },
+        { name: "WebSocket", message: "No outbound network access." },
+        { name: "localStorage", message: "No persistence." },
+        { name: "sessionStorage", message: "No persistence." },
+        { name: "indexedDB", message: "No persistence." },
+      ],
+      "no-restricted-properties": [
+        "error",
+        { object: "process", property: "env", message: "The Claude bridge reads no environment." },
+        { object: "Date", property: "now", message: "No clock reads." },
+        { object: "Math", property: "random", message: "No generated identifiers." },
+      ],
+      "no-eval": "error",
+      "no-new-func": "error",
+      "no-console": "error",
+    },
+  },
+  {
     files: ["scripts/**/*.ts", "evals/**/*.ts", "packages/mcp/test/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "off",
