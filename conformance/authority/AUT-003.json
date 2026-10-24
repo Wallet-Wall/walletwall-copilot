@@ -1,0 +1,108 @@
+{
+  "id": "AUT-003",
+  "category": "authority",
+  "claimCategory": "authority",
+  "description": "Two independent provider-reported balances reach SUPPORTED at most, never ESTABLISHED.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-prov-a",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderA"
+        },
+        "independenceGroup": "grp-a"
+      },
+      {
+        "id": "src-prov-b",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderB"
+        },
+        "independenceGroup": "grp-b"
+      }
+    ],
+    "observations": [
+      {
+        "id": "o1",
+        "sourceId": "src-prov-a",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        }
+      },
+      {
+        "id": "o2",
+        "sourceId": "src-prov-b",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-balance",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "PROVIDER_OBSERVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        },
+        "observationIds": [
+          "o1",
+          "o2"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": []
+  },
+  "expect": {
+    "assertions": {
+      "a-balance": {
+        "supportState": "SUPPORTED",
+        "authoritySatisfied": false,
+        "independentCorroboration": 2,
+        "limitationsInclude": [
+          "NO_AUTHORITATIVE_OBSERVATION"
+        ]
+      }
+    },
+    "violations": {
+      "none": true
+    }
+  }
+}

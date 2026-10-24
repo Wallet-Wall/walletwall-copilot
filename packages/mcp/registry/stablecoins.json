@@ -1,0 +1,167 @@
+{
+  "registryVersion": "0.2.0",
+  "status": "VERIFIED_POINT_IN_TIME",
+  "note": "Each record carries its own verification block. Only records whose identity is AUTHORITY_ATTESTED are loaded for lookups; anything else is excluded from the factual registry. Verification is a point-in-time check on verifiedAt. It does not establish that a contract is safe, solvent or unchanged since that date.",
+  "assets": [
+    {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "chainId": "1",
+      "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "decimals": "6",
+      "issuerName": "Circle",
+      "authorityId": "issuer:circle",
+      "verification": {
+        "status": "AUTHORITY_ATTESTED",
+        "verifiedAt": "2026-10-24",
+        "identity": {
+          "class": "AUTHORITY_ATTESTED",
+          "authorityId": "issuer:circle",
+          "publisher": "Circle",
+          "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "locator": "Mainnet table, row Ethereum",
+          "publishedAddress": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "retrievedAt": "2026-10-24"
+        },
+        "decimals": {
+          "class": "CHAIN_OBSERVED",
+          "chainId": "1",
+          "blockNumber": "26259206",
+          "blockHash": "0x659476146e9835688850b450b798ccc2d5451d718fac9b23d39f2726d6933cc7",
+          "blockTimestamp": "2026-10-24T01:26:47.000Z",
+          "finality": "FINALIZED",
+          "method": "eth_call decimals()",
+          "observedValue": "6"
+        }
+      }
+    },
+    {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "chainId": "8453",
+      "address": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "decimals": "6",
+      "issuerName": "Circle",
+      "authorityId": "issuer:circle",
+      "verification": {
+        "status": "AUTHORITY_ATTESTED",
+        "verifiedAt": "2026-10-24",
+        "identity": {
+          "class": "AUTHORITY_ATTESTED",
+          "authorityId": "issuer:circle",
+          "publisher": "Circle",
+          "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "locator": "Mainnet table, row Base",
+          "publishedAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          "retrievedAt": "2026-10-24"
+        },
+        "decimals": {
+          "class": "CHAIN_OBSERVED",
+          "chainId": "8453",
+          "blockNumber": "53007918",
+          "blockHash": "0x372ea667de43f87f3f1763959e6dc19f3dd78084fb6c0d19c75ef49f417fd7cc",
+          "blockTimestamp": "2026-10-24T01:26:23.000Z",
+          "finality": "FINALIZED",
+          "method": "eth_call decimals()",
+          "observedValue": "6"
+        }
+      }
+    },
+    {
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "chainId": "42161",
+      "address": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+      "decimals": "6",
+      "issuerName": "Circle",
+      "authorityId": "issuer:circle",
+      "verification": {
+        "status": "AUTHORITY_ATTESTED",
+        "verifiedAt": "2026-10-24",
+        "identity": {
+          "class": "AUTHORITY_ATTESTED",
+          "authorityId": "issuer:circle",
+          "publisher": "Circle",
+          "url": "https://developers.circle.com/stablecoins/usdc-contract-addresses",
+          "locator": "Mainnet table, row Arbitrum",
+          "publishedAddress": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+          "retrievedAt": "2026-10-24"
+        },
+        "decimals": {
+          "class": "CHAIN_OBSERVED",
+          "chainId": "42161",
+          "blockNumber": "517700527",
+          "blockHash": "0x3ae0efcc296e8f0f9e07983592dd42d22152877227c0046d8485c672ddbd09aa",
+          "blockTimestamp": "2026-10-24T01:25:01.000Z",
+          "finality": "FINALIZED",
+          "method": "eth_call decimals()",
+          "observedValue": "6"
+        }
+      }
+    },
+    {
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "chainId": "1",
+      "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "decimals": "6",
+      "issuerName": "Tether",
+      "authorityId": "issuer:tether",
+      "verification": {
+        "status": "AUTHORITY_ATTESTED",
+        "verifiedAt": "2026-10-24",
+        "identity": {
+          "class": "AUTHORITY_ATTESTED",
+          "authorityId": "issuer:tether",
+          "publisher": "Tether",
+          "url": "https://tether.to/en/supported-protocols/",
+          "locator": "ERC20 Token via Ethereum Blockchain, Ethereum Network, USDT contract address",
+          "publishedAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "retrievedAt": "2026-10-24"
+        },
+        "decimals": {
+          "class": "CHAIN_OBSERVED",
+          "chainId": "1",
+          "blockNumber": "26259206",
+          "blockHash": "0x659476146e9835688850b450b798ccc2d5451d718fac9b23d39f2726d6933cc7",
+          "blockTimestamp": "2026-10-24T01:26:47.000Z",
+          "finality": "FINALIZED",
+          "method": "eth_call decimals()",
+          "observedValue": "6"
+        }
+      }
+    },
+    {
+      "symbol": "DAI",
+      "name": "Dai Stablecoin",
+      "chainId": "1",
+      "address": "0x6b175474e89094c44da98b954eedeac495271d0f",
+      "decimals": "18",
+      "issuerName": "Maker/Sky protocol",
+      "authorityId": "protocol:sky",
+      "verification": {
+        "status": "AUTHORITY_ATTESTED",
+        "verifiedAt": "2026-10-24",
+        "identity": {
+          "class": "AUTHORITY_ATTESTED",
+          "authorityId": "protocol:sky",
+          "publisher": "Sky Ecosystem chainlog",
+          "url": "https://chainlog.sky.money/api/mainnet/active.json",
+          "locator": "key MCD_DAI",
+          "publishedAddress": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+          "retrievedAt": "2026-10-24"
+        },
+        "decimals": {
+          "class": "CHAIN_OBSERVED",
+          "chainId": "1",
+          "blockNumber": "26259206",
+          "blockHash": "0x659476146e9835688850b450b798ccc2d5451d718fac9b23d39f2726d6933cc7",
+          "blockTimestamp": "2026-10-24T01:26:47.000Z",
+          "finality": "FINALIZED",
+          "method": "eth_call decimals()",
+          "observedValue": "18"
+        }
+      }
+    }
+  ]
+}

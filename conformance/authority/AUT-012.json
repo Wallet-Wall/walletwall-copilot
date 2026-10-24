@@ -1,0 +1,76 @@
+{
+  "id": "AUT-012",
+  "category": "authority",
+  "claimCategory": "authority",
+  "description": "A user-supplied balance can never establish chain state.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-user",
+        "kind": "USER_INPUT",
+        "independenceGroup": "grp-user"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-user",
+        "sourceId": "src-user",
+        "origin": "USER_SUPPLIED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-balance",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "USER_SUPPLIED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        },
+        "observationIds": [
+          "obs-user"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": []
+  },
+  "expect": {
+    "assertions": {
+      "a-balance": {
+        "supportState": "PARTIAL",
+        "authoritySatisfied": false,
+        "limitationsInclude": [
+          "NON_AUTHORITATIVE_ONLY"
+        ]
+      }
+    },
+    "violations": {
+      "none": true
+    }
+  }
+}

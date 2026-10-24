@@ -1,0 +1,264 @@
+{
+  "id": "CNF-004",
+  "category": "conflict",
+  "claimCategory": "conflict",
+  "description": "Conflict in a dependency propagates to the derived readiness assertion.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-chain",
+        "kind": "CHAIN_STATE",
+        "transport": {
+          "retrievedVia": "Alchemy"
+        },
+        "independenceGroup": "grp-chain"
+      },
+      {
+        "id": "src-issuer",
+        "kind": "ISSUER_PUBLICATION",
+        "authorityId": "issuer:circle",
+        "independenceGroup": "grp-issuer"
+      },
+      {
+        "id": "src-prov-a",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderA"
+        },
+        "independenceGroup": "grp-a"
+      },
+      {
+        "id": "src-prov-b",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderB"
+        },
+        "independenceGroup": "grp-b"
+      },
+      {
+        "id": "src-chain-2",
+        "kind": "CHAIN_STATE",
+        "transport": {
+          "retrievedVia": "LocalNode"
+        },
+        "independenceGroup": "grp-chain-2"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-identity",
+        "sourceId": "src-issuer",
+        "origin": "AUTHORITY_ATTESTED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {
+          "symbol": "USDC",
+          "decimals": "6",
+          "issuerAuthorityId": "issuer:circle"
+        }
+      },
+      {
+        "id": "obs-balance",
+        "sourceId": "src-chain",
+        "origin": "CHAIN_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        }
+      },
+      {
+        "id": "obs-price-a",
+        "sourceId": "src-prov-a",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {
+          "priceUsd": "1.0001"
+        }
+      },
+      {
+        "id": "obs-price-b",
+        "sourceId": "src-prov-b",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {
+          "priceUsd": "1.0001"
+        }
+      },
+      {
+        "id": "obs-balance-2",
+        "sourceId": "src-chain-2",
+        "origin": "CHAIN_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1400000",
+          "decimals": "6"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-identity",
+        "claimType": "ASSET_IDENTITY",
+        "origin": "AUTHORITY_ATTESTED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "value": {
+          "symbol": "USDC",
+          "decimals": "6",
+          "issuerAuthorityId": "issuer:circle"
+        },
+        "observationIds": [
+          "obs-identity"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "a-balance",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "CHAIN_OBSERVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        },
+        "observationIds": [
+          "obs-balance"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "a-price",
+        "claimType": "TOKEN_USD_PRICE",
+        "origin": "PROVIDER_OBSERVED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "value": {
+          "priceUsd": "1.0001"
+        },
+        "observationIds": [
+          "obs-price-a",
+          "obs-price-b"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "readiness-result",
+        "claimType": "VAULT_TECHNICAL_READINESS",
+        "origin": "WALLETWALL_DERIVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "classification": "CRITERIA_MET"
+        },
+        "observationIds": [],
+        "derivationId": "readiness-derivation",
+        "assertedAt": "2026-10-23T12:00:30Z",
+        "limitations": [
+          "REGISTRY_VERIFIED_POINT_IN_TIME",
+          "TRANSPORT_FIDELITY_NOT_VERIFIED",
+          "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY"
+        ]
+      },
+      {
+        "id": "a-balance-2",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "CHAIN_OBSERVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "1400000",
+          "decimals": "6"
+        },
+        "observationIds": [
+          "obs-balance-2"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": [
+      {
+        "id": "readiness-derivation",
+        "ruleId": "wwvr.vault-technical-readiness",
+        "rulesVersion": "0.1.0-draft",
+        "inputAssertionIds": [
+          "a-identity",
+          "a-balance"
+        ],
+        "outputAssertionId": "readiness-result"
+      }
+    ]
+  },
+  "expect": {
+    "assertions": {
+      "a-balance": {
+        "supportState": "CONFLICTING"
+      },
+      "readiness-result": {
+        "supportState": "CONFLICTING"
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "policiesVersion": "0.1.0-draft",
+  "note": "Authority is claim-specific. There is no global source ranking. A policy states which origins may establish a claim type and what only corroborates it.",
+  "policies": [
+    {
+      "policyId": "wwap/asset-identity/0.1",
+      "claimType": "ASSET_IDENTITY",
+      "authority": {
+        "authorityId": "issuer-publication",
+        "kind": "ISSUER_PUBLICATION",
+        "description": "Publication by the issuer or protocol that is appropriate to the specific stablecoin deployment. The source authorityId must equal the registry authorityId for that deployment."
+      },
+      "authoritativeOrigins": ["AUTHORITY_ATTESTED"],
+      "authorityIdSource": "REGISTRY",
+      "corroboratingOrigins": ["CHAIN_OBSERVED", "PROVIDER_OBSERVED"],
+      "maxSupportWithoutAuthority": "PARTIAL",
+      "requiresFinality": false,
+      "finalityApplies": false,
+      "maxAgeSeconds": 2592000,
+      "minIndependentCorroboration": 2,
+      "requiredDependencyClaimTypes": [],
+      "derived": false,
+      "subjectKeys": ["chainId", "address"],
+      "supersessionKeys": ["chainId", "address"],
+      "valueKeys": ["symbol", "decimals", "issuerAuthorityId"],
+      "ruleId": null
+    },
+    {
+      "policyId": "wwap/token-balance-at-block/0.1",
+      "claimType": "TOKEN_BALANCE_AT_BLOCK",
+      "authority": {
+        "authorityId": "canonical-chain-state",
+        "kind": "CANONICAL_CHAIN_STATE",
+        "description": "Canonical finalized chain state at the identified block. RPC and provider endpoints are transport, never authority."
+      },
+      "authoritativeOrigins": ["CHAIN_OBSERVED"],
+      "authorityIdSource": "NONE",
+      "corroboratingOrigins": ["PROVIDER_OBSERVED"],
+      "maxSupportWithoutAuthority": "SUPPORTED",
+      "requiresFinality": true,
+      "finalityApplies": true,
+      "maxAgeSeconds": 120,
+      "minIndependentCorroboration": 2,
+      "requiredDependencyClaimTypes": [],
+      "derived": false,
+      "subjectKeys": ["chainId", "token", "holder", "blockNumber", "blockHash"],
+      "supersessionKeys": ["chainId", "token", "holder"],
+      "valueKeys": ["balanceAtomic", "decimals"],
+      "ruleId": null
+    },
+    {
+      "policyId": "wwap/token-usd-price/0.1",
+      "claimType": "TOKEN_USD_PRICE",
+      "authority": {
+        "authorityId": "none",
+        "kind": "NONE",
+        "description": "No canonical authority exists for a market price. A price is always a provider observation and can be at most SUPPORTED."
+      },
+      "authoritativeOrigins": [],
+      "authorityIdSource": "NONE",
+      "corroboratingOrigins": ["PROVIDER_OBSERVED", "CHAIN_OBSERVED"],
+      "maxSupportWithoutAuthority": "SUPPORTED",
+      "requiresFinality": false,
+      "finalityApplies": false,
+      "maxAgeSeconds": 300,
+      "minIndependentCorroboration": 2,
+      "requiredDependencyClaimTypes": [],
+      "derived": false,
+      "subjectKeys": ["chainId", "token"],
+      "supersessionKeys": ["chainId", "token"],
+      "valueKeys": ["priceUsd"],
+      "ruleId": null
+    },
+    {
+      "policyId": "wwap/token-usd-value/0.1",
+      "claimType": "TOKEN_USD_VALUE",
+      "authority": {
+        "authorityId": "walletwall-rules",
+        "kind": "WALLETWALL_RULES",
+        "description": "A WalletWall derivation from explicit balance evidence and explicit price evidence. It never carries more support than its weakest dependency."
+      },
+      "authoritativeOrigins": [],
+      "authorityIdSource": "NONE",
+      "corroboratingOrigins": [],
+      "maxSupportWithoutAuthority": "PARTIAL",
+      "requiresFinality": false,
+      "finalityApplies": true,
+      "maxAgeSeconds": null,
+      "minIndependentCorroboration": 1,
+      "requiredDependencyClaimTypes": ["TOKEN_BALANCE_AT_BLOCK", "TOKEN_USD_PRICE"],
+      "derived": true,
+      "subjectKeys": ["chainId", "token", "holder", "blockNumber", "blockHash"],
+      "supersessionKeys": ["chainId", "token", "holder"],
+      "valueKeys": ["usdScaled18", "rounding"],
+      "ruleId": "wwdr.usd-value"
+    },
+    {
+      "policyId": "wwap/vault-technical-readiness/0.1",
+      "claimType": "VAULT_TECHNICAL_READINESS",
+      "authority": {
+        "authorityId": "walletwall-rules",
+        "kind": "WALLETWALL_RULES",
+        "description": "WalletWall's published rules, authoritative only for the WalletWall-defined technical-readiness classification and nothing upstream of it."
+      },
+      "authoritativeOrigins": [],
+      "authorityIdSource": "NONE",
+      "corroboratingOrigins": [],
+      "maxSupportWithoutAuthority": "PARTIAL",
+      "requiresFinality": false,
+      "finalityApplies": true,
+      "maxAgeSeconds": null,
+      "minIndependentCorroboration": 1,
+      "requiredDependencyClaimTypes": ["ASSET_IDENTITY", "TOKEN_BALANCE_AT_BLOCK"],
+      "derived": true,
+      "subjectKeys": ["chainId", "token", "holder", "blockNumber", "blockHash"],
+      "supersessionKeys": ["chainId", "token", "holder"],
+      "valueKeys": ["classification"],
+      "ruleId": "wwvr.vault-technical-readiness"
+    }
+  ],
+  "rules": [
+    { "ruleId": "wwdr.usd-value", "rulesVersion": "0.1.0-draft" },
+    { "ruleId": "wwvr.vault-technical-readiness", "rulesVersion": "0.1.0-draft" }
+  ]
+}

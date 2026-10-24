@@ -1,0 +1,80 @@
+{
+  "id": "EVD-008",
+  "category": "evidence",
+  "claimCategory": "no-result-vs-zero",
+  "description": "A NO_RESULT observation is UNKNOWN. Presenting it as a zero balance violates INV-04.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-chain",
+        "kind": "CHAIN_STATE",
+        "transport": {
+          "retrievedVia": "Alchemy"
+        },
+        "independenceGroup": "grp-chain"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-nr",
+        "sourceId": "src-chain",
+        "origin": "CHAIN_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "NO_RESULT",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {}
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-nr",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "CHAIN_OBSERVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "0",
+          "decimals": "6"
+        },
+        "observationIds": [
+          "obs-nr"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": []
+  },
+  "expect": {
+    "assertions": {
+      "a-nr": {
+        "supportState": "UNKNOWN",
+        "limitationsInclude": [
+          "NO_RESULT"
+        ]
+      }
+    },
+    "violations": {
+      "include": [
+        {
+          "invariant": "INV-04",
+          "code": "NO_RESULT_AS_ZERO"
+        }
+      ]
+    }
+  }
+}

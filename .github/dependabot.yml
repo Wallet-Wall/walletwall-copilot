@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # HOLD (review by 2027-01-31). typescript-eslint 8.x supports TypeScript <6.1.0 and refuses TypeScript 7 at install
+      # (ERESOLVE, see closed PR #1). Only the held major is ignored: TypeScript 6.x updates and any later major still open
+      # pull requests. Remove this entry when typescript-eslint supports TypeScript 7. See docs/DEPENDENCY_POLICY.md.
+      - dependency-name: typescript
+        versions: ["7.x"]
+      # HOLD (review whenever the Node.js major in CI changes, and by 2027-01-31). @types/node tracks the Node.js major we
+      # test against (24). Only the newer majors that exist today are ignored; minor and patch updates, and any major
+      # published after 26.x, still open pull requests. See docs/DEPENDENCY_POLICY.md.
+      - dependency-name: "@types/node"
+        versions: ["25.x", "26.x"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

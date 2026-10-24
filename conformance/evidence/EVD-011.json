@@ -1,0 +1,181 @@
+{
+  "id": "EVD-011",
+  "category": "evidence",
+  "claimCategory": "decimal-precision",
+  "description": "18-decimal balance times a 18-decimal price recomputes exactly with BigInt and floors at 18 decimals.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-chain",
+        "kind": "CHAIN_STATE",
+        "transport": {
+          "retrievedVia": "Alchemy"
+        },
+        "independenceGroup": "grp-chain"
+      },
+      {
+        "id": "src-prov-a",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderA"
+        },
+        "independenceGroup": "grp-a"
+      },
+      {
+        "id": "src-prov-b",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderB"
+        },
+        "independenceGroup": "grp-b"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-balance",
+        "sourceId": "src-chain",
+        "origin": "CHAIN_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1000000000000000001",
+          "decimals": "18"
+        }
+      },
+      {
+        "id": "obs-price-a",
+        "sourceId": "src-prov-a",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0x6b175474e89094c44da98b954eedeac495271d0f"
+        },
+        "payload": {
+          "priceUsd": "0.999999999999999999"
+        }
+      },
+      {
+        "id": "obs-price-b",
+        "sourceId": "src-prov-b",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0x6b175474e89094c44da98b954eedeac495271d0f"
+        },
+        "payload": {
+          "priceUsd": "0.999999999999999999"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-balance",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "CHAIN_OBSERVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "1000000000000000001",
+          "decimals": "18"
+        },
+        "observationIds": [
+          "obs-balance"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "a-price",
+        "claimType": "TOKEN_USD_PRICE",
+        "origin": "PROVIDER_OBSERVED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "token": "0x6b175474e89094c44da98b954eedeac495271d0f"
+        },
+        "value": {
+          "priceUsd": "0.999999999999999999"
+        },
+        "observationIds": [
+          "obs-price-a",
+          "obs-price-b"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "a-usd",
+        "claimType": "TOKEN_USD_VALUE",
+        "origin": "WALLETWALL_DERIVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0x6b175474e89094c44da98b954eedeac495271d0f",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "usdScaled18": "999999999999999999",
+          "rounding": "FLOOR_SCALED_18"
+        },
+        "observationIds": [],
+        "derivationId": "d-usd",
+        "assertedAt": "2026-10-23T12:00:30Z",
+        "limitations": [
+          "NO_AUTHORITATIVE_OBSERVATION",
+          "PRICE_IS_PROVIDER_OBSERVATION",
+          "REGISTRY_VERIFIED_POINT_IN_TIME",
+          "TRANSPORT_FIDELITY_NOT_VERIFIED",
+          "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY"
+        ]
+      }
+    ],
+    "derivations": [
+      {
+        "id": "d-usd",
+        "ruleId": "wwdr.usd-value",
+        "rulesVersion": "0.1.0-draft",
+        "inputAssertionIds": [
+          "a-balance",
+          "a-price"
+        ],
+        "outputAssertionId": "a-usd"
+      }
+    ]
+  },
+  "expect": {
+    "assertions": {
+      "a-balance": {
+        "supportState": "ESTABLISHED"
+      },
+      "a-usd": {
+        "supportState": "SUPPORTED",
+        "freshnessState": "PINNED"
+      }
+    },
+    "violations": {
+      "none": true
+    }
+  }
+}

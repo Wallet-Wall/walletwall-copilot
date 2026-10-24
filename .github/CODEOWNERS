@@ -1,0 +1,41 @@
+# Heightened review for sensitive paths. The last matching pattern wins, so the general rule is first.
+# Before enabling "Require review from Code Owners" add a second maintainer or an organization team as an owner,
+# otherwise the only code owner cannot approve their own pull requests (see docs/PUBLIC_VISIBILITY_FLIP_CHECKLIST.md).
+
+*                                   @sirmrdrgod
+
+# CI, automation and dependency policy
+/.github/                           @sirmrdrgod
+/.github/workflows/                 @sirmrdrgod
+/.github/dependabot.yml             @sirmrdrgod
+/.github/CODEOWNERS                 @sirmrdrgod
+/package.json                       @sirmrdrgod
+/package-lock.json                  @sirmrdrgod
+/scripts/                           @sirmrdrgod
+
+# What ships to users: plugin, MCP server, canvas, skills, manifests and hashes
+/plugin/                            @sirmrdrgod
+/canvas/                            @sirmrdrgod
+/skills/                            @sirmrdrgod
+/security/                          @sirmrdrgod
+/packages/mcp/                      @sirmrdrgod
+
+# Protocol and data: WWEP semantics, schemas, authority policy, registry, conformance
+/spec/                              @sirmrdrgod
+/packages/mcp/src/                  @sirmrdrgod
+/packages/mcp/src/schemas.ts        @sirmrdrgod
+/packages/mcp/authority-policies/   @sirmrdrgod
+/packages/mcp/registry/             @sirmrdrgod
+/conformance/                       @sirmrdrgod
+/evals/                             @sirmrdrgod
+
+# Privacy, security, licensing and public claims
+/LICENSE                            @sirmrdrgod
+/SECURITY.md                        @sirmrdrgod
+/PRIVACY.md                         @sirmrdrgod
+/BOUNDARIES.md                      @sirmrdrgod
+/THREAT_MODEL.md                    @sirmrdrgod
+/DATA_SOURCES.md                    @sirmrdrgod
+/TRADEMARKS.md                      @sirmrdrgod
+/CONTRIBUTING.md                    @sirmrdrgod
+/docs/                              @sirmrdrgod

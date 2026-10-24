@@ -1,0 +1,190 @@
+{
+  "id": "ADV-009",
+  "category": "adversarial",
+  "claimCategory": "dependency-graph",
+  "description": "Dangling references are reported, never resolved to a default.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-chain",
+        "kind": "CHAIN_STATE",
+        "transport": {
+          "retrievedVia": "Alchemy"
+        },
+        "independenceGroup": "grp-chain"
+      },
+      {
+        "id": "src-issuer",
+        "kind": "ISSUER_PUBLICATION",
+        "authorityId": "issuer:circle",
+        "independenceGroup": "grp-issuer"
+      },
+      {
+        "id": "src-prov-a",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderA"
+        },
+        "independenceGroup": "grp-a"
+      },
+      {
+        "id": "src-prov-b",
+        "kind": "PROVIDER_ENDPOINT",
+        "transport": {
+          "retrievedVia": "ProviderB"
+        },
+        "independenceGroup": "grp-b"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-identity",
+        "sourceId": "src-issuer",
+        "origin": "AUTHORITY_ATTESTED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {
+          "symbol": "USDC",
+          "decimals": "6",
+          "issuerAuthorityId": "issuer:circle"
+        }
+      },
+      {
+        "id": "obs-balance",
+        "sourceId": "src-chain",
+        "origin": "CHAIN_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "FINALIZED",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "payload": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        }
+      },
+      {
+        "id": "obs-price-a",
+        "sourceId": "src-prov-a",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {
+          "priceUsd": "1.0001"
+        }
+      },
+      {
+        "id": "obs-price-b",
+        "sourceId": "src-prov-b",
+        "origin": "PROVIDER_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {
+          "priceUsd": "1.0001"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-identity",
+        "claimType": "ASSET_IDENTITY",
+        "origin": "AUTHORITY_ATTESTED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "value": {
+          "symbol": "USDC",
+          "decimals": "6",
+          "issuerAuthorityId": "issuer:circle"
+        },
+        "observationIds": [
+          "obs-identity"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "a-balance",
+        "claimType": "TOKEN_BALANCE_AT_BLOCK",
+        "origin": "CHAIN_OBSERVED",
+        "temporality": "PINNED",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "holder": "0x1234567890123456789012345678901234567890",
+          "blockNumber": "21000000",
+          "blockHash": "0xabababababababababababababababababababababababababababababababab"
+        },
+        "value": {
+          "balanceAtomic": "1500000",
+          "decimals": "6"
+        },
+        "observationIds": [
+          "obs-balance",
+          "obs-missing"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      },
+      {
+        "id": "a-price",
+        "claimType": "TOKEN_USD_PRICE",
+        "origin": "PROVIDER_OBSERVED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "value": {
+          "priceUsd": "1.0001"
+        },
+        "observationIds": [
+          "obs-price-a",
+          "obs-price-b"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": []
+  },
+  "expect": {
+    "assertions": {
+      "a-balance": {
+        "supportState": "ESTABLISHED",
+        "limitationsInclude": [
+          "DANGLING_REFERENCE"
+        ]
+      }
+    },
+    "violations": {
+      "include": [
+        {
+          "invariant": "INV-00",
+          "code": "DANGLING_REFERENCE"
+        }
+      ]
+    }
+  }
+}

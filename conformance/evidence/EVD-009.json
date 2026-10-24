@@ -1,0 +1,68 @@
+{
+  "id": "EVD-009",
+  "category": "evidence",
+  "claimCategory": "unknown-vs-false",
+  "description": "An ERROR observation is UNKNOWN. Presenting it as false violates INV-05.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-issuer",
+        "kind": "ISSUER_PUBLICATION",
+        "authorityId": "issuer:circle",
+        "independenceGroup": "grp-issuer"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-err",
+        "sourceId": "src-issuer",
+        "origin": "AUTHORITY_ATTESTED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "ERROR",
+        "subject": {
+          "chainId": "1",
+          "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "payload": {}
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-flag",
+        "claimType": "ASSET_IDENTITY",
+        "origin": "AUTHORITY_ATTESTED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        },
+        "value": {
+          "holderFlagged": false
+        },
+        "observationIds": [
+          "obs-err"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": []
+  },
+  "expect": {
+    "assertions": {
+      "a-flag": {
+        "supportState": "UNKNOWN"
+      }
+    },
+    "violations": {
+      "include": [
+        {
+          "invariant": "INV-05",
+          "code": "UNKNOWN_AS_FALSE"
+        }
+      ]
+    }
+  }
+}

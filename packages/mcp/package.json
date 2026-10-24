@@ -1,0 +1,21 @@
+{
+  "name": "@walletwall/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WalletWall local, offline, read-only MCP engine (stdio). Not published.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "src/server.ts",
+  "files": [
+    "src",
+    "registry",
+    "authority-policies"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  }
+}

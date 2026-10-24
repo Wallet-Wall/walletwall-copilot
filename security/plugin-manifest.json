@@ -1,0 +1,120 @@
+{
+  "manifestVersion": "1",
+  "plugin": {
+    "name": "walletwall",
+    "version": "0.2.0",
+    "format": "Agent Plugins 1.0.0",
+    "schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+  },
+  "versions": {
+    "engine": "walletwall-mcp@0.1.0",
+    "wwep": "0.1",
+    "registry": "0.2.0",
+    "policies": "0.1.0-draft",
+    "rules": "0.1.0-draft"
+  },
+  "mcpServers": {
+    "walletwall": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/server/walletwall-mcp.mjs"
+      ]
+    }
+  },
+  "canvasExtensions": [
+    "walletwall-evidence-explorer"
+  ],
+  "skills": [
+    "walletwall-evidence"
+  ],
+  "toolManifestSha256": "2d2f857c2b0c8ef824a3bc59d52baef6895db0209f16830d4a5025800ca815ec",
+  "serverBundleSha256": "3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1",
+  "files": [
+    {
+      "path": "plugin/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "path": "plugin/README.md",
+      "sha256": "7f07f7e29ef7b8d4f65a21d5df870cbdf00d31f17372735e16fd126c546ef98c",
+      "bytes": 2936
+    },
+    {
+      "path": "plugin/THIRD_PARTY_NOTICES.md",
+      "sha256": "a533a596dcd2c37cec07980093ab5b5d12b5af929c4db9302ccd72e1b62b1d50",
+      "bytes": 18448
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/brand.mjs",
+      "sha256": "4053c7e20bd38c0b9e538da649d841c13bcbcc4c95ce66059cfedcbd8cbf6199",
+      "bytes": 179904
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/client.mjs",
+      "sha256": "ca7c6ca3da86d7f3d1f73f5e19c9b3e41fdd43bcdcf6e298c9742fdc1096b68f",
+      "bytes": 25995
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/copilot-extension.json",
+      "sha256": "564c4f7f388022c95ae784630de52a191ecd2b576c255b7b214d54dc4b678f93",
+      "bytes": 61
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/explorer.mjs",
+      "sha256": "aa011e7f89da9a7f53985779ea427d2e92f7aaf22dfb9c7c145ab164c036463f",
+      "bytes": 14617
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/extension.mjs",
+      "sha256": "fdd8cc0dd10a29972aa83d576279723a6d7b60430b8f0d800eeb534d7413c90b",
+      "bytes": 3668
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/fixtures.mjs",
+      "sha256": "328004ba7ddd8548533d1a47cbae6a4d3098bfe12938ff5f3605373bc921f70b",
+      "bytes": 38076
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/mcp-client.mjs",
+      "sha256": "b23f3eb4b9f6925093703d056fb0e9723625c012a7bda141823eb2a76d4f9f0f",
+      "bytes": 4516
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/render.mjs",
+      "sha256": "5cea292722384fe3110c8cb8007cf1e57a3e6ddac9adeffa3fa3c307d4d23098",
+      "bytes": 47709
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/styles.mjs",
+      "sha256": "648b00d6595f7d8b36eda453e8f424eb616cdd24be18280f58b97aa2bfe048e4",
+      "bytes": 21001
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wall.mjs",
+      "sha256": "5c9868e45d65ec19f4479c76ebcc46b4a8e4a2342d1ae1e1b546e9e199779df6",
+      "bytes": 29134
+    },
+    {
+      "path": "plugin/mcp.json",
+      "sha256": "79004bf393cd91a629eb68babb7ff85a5f3cbf409e92bbfd73f7be79a793f2ee",
+      "bytes": 231
+    },
+    {
+      "path": "plugin/plugin.json",
+      "sha256": "c7903fe5a3e8a1fa48dc82e8d800100fe9f05a87956765095afc7ca1c9c6afca",
+      "bytes": 532
+    },
+    {
+      "path": "plugin/server/walletwall-mcp.mjs",
+      "sha256": "3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1",
+      "bytes": 971608
+    },
+    {
+      "path": "plugin/skills/walletwall-evidence/SKILL.md",
+      "sha256": "b3bf19f6e20c64779687a168776244677b5f9405a5e5703f6fb698462ae83c07",
+      "bytes": 4835
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "walletwall",
+  "version": "0.2.0",
+  "description": "Stablecoin intelligence and vault readiness for GitHub Copilot.",
+  "author": {
+    "name": "WalletWall"
+  },
+  "homepage": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+  "repository": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+  "license": "Apache-2.0",
+  "keywords": ["walletwall", "evidence", "provenance", "stablecoin", "mcp", "canvas", "offline", "read-only"]
+}

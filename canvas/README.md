@@ -1,0 +1,27 @@
+# WalletWall canvas
+
+The implementation lives inside the plugin, because a Copilot plugin ships its canvas with it: `plugin/com.github.copilot/extensions/walletwall-evidence-explorer/`. The folder and the canvas id keep their historical name to avoid churn; the canvas is presented to users as **WalletWall**. This directory only holds the contract the implementation must keep.
+
+## What it shows (one evidence bundle)
+
+**The Wall** (the centre of the panel): every source, authority, observation, claim, WalletWall derivation and the vault readiness keystone of the bundle as pieces of a deterministic relationship graph, with the claims' subjects (chain, contract, wallet, stablecoin) as its foundation. Each claim piece carries exactly the support state the MCP server returned. Beside it, for the selected piece: subject and value as presented; support state; authority class (kind, authority ID, scope, whether the requirement is satisfied); freshness; finality (or N/A); independent corroboration; conflicts and supersession; limitations (always on screen next to the states, each with a plain-language description); **Sources**. The block that shows support, freshness, finality and conflicts is headed "Why WalletWall says this" and traces the claim's lineage from `trace_provenance`; its button emphasises that path on The Wall. Below: the **Readiness assembly** (the `assess_vault_readiness` criteria as pieces under the keystone), **Source lineage**, the **Wallprint**, the criteria table and "does not establish" list, a reserved **Receipt** area, the claims list and a text version of The Wall. Design rules: `docs/CANVAS_DESIGN_SYSTEM.md`.
+
+## Contract
+
+1. It renders structured results of the existing MCP tools; it does not compute states and does not add evidence. Every state comes from a call to the bundled `walletwall-mcp.mjs` made by the canvas itself, so the panel cannot drift from what the tools return. A state value outside the WWEP enumerations is displayed as "not recognised", never as a state. The Wall's layout is geometry only: it never ranks, scores or resolves evidence.
+2. Same privacy posture: local only, no outbound network, no persistence, no telemetry. The one listener is loopback-only, which the Copilot app requires for canvases. Fonts (Sora, Manrope, IBM Plex Mono) and brand images (the WalletWall brick-wallet mark, WalletWallaby) are embedded as `data:` URIs; the page's CSP allows `data:` for fonts and images and nothing else beyond its own origin. See `docs/PLUGIN_PATH_PRIVACY.md`.
+3. Read-only. No action signs, sends, swaps or writes.
+4. No colour or wording that implies safety or approval: no green "verified" badge; `ESTABLISHED` is described as "presented evidence satisfies the published policy"; terracotta marks only the selected piece and its path; every state is carried by shape, line and label, not colour alone.
+5. Agent-callable actions: `set_bundle`, `select_assertion`, `get_view`. `get_view` returns the MCP results the panel shows, so the agent describes the panel without re-deriving anything.
+6. **Addresses** are printed in full in every detail, list and rail, exactly as the bundle presents them (no shortening, no case or checksum change), as selectable text, with the chain ID next to them and two controls: Copy (exactly the full value) and, when the chain is stated, Copy chain + address (`chainId:<id> address:<full value>`). A piece on The Wall may show a shortened face; its accessible name and detail carry the full value, and nothing ever copies the shortened face. Nothing is stored because an address was copied, and the status line does not repeat the address.
+7. The listener has four routes (`GET /`, `GET /view`, `GET /events`, `POST /select`), requires an unguessable path key and the exact `Host`, and refuses a foreign `Origin` or a non-JSON body on `POST /select`.
+8. **Only the Observed lens exists.** Compare, Replay, Scenario, Receipt (Copy receipt, Verify) and QR are shown as disabled, reserved affordances with their reason on screen ("Requires immutable snapshot"; "Scenario — simulation engine not yet enabled"). Nothing generates a receipt, a QR code or a snapshot.
+9. Motion only plays when the bundle changed or the user acted (assembly, rearrangement, drag), stops by itself, and never plays under reduced motion (system setting or the panel's own toggle). The WalletWallaby guide is optional, dismissible, and can be turned off; it is never needed to understand the panel.
+
+## Opening it
+
+`open_canvas` with `canvasId: "walletwall-evidence-explorer"` and input `{ "fixture": "usdc-established" | "stale-identity" | "conflicting-balances" | "partial-provider-balance" | "unknown-balance" | "superseded-balance" | "readiness-blocked" }` for a bundled synthetic example, or `{ "bundle": <WWEP bundle>, "evaluatedAt": "<UTC time>" }` for the same input you pass to `inspect_evidence`.
+
+## Deferred
+
+Everything beyond one bundle and the Observed lens: immutable snapshots, receipts, QR verification, replay of historical states, scenarios or simulation, multi-bundle comparison, diffing, export, editing evidence. See `docs/DESKTOP_INSTALL_PROOF.md` for what has and has not been verified inside the Desktop app.

@@ -1,0 +1,101 @@
+{
+  "note": "Brand assets embedded in the WalletWall canvas. Every file here is copied or derived from a named WalletWall brand source; nothing is redrawn. scripts/gen-canvas-brand.ts embeds them into the plugin and fails if a hash below no longer matches the file.",
+  "colorSource": {
+    "repository": "Wallet-Wall/walletwall-audio-visual-docs",
+    "commit": "d013c06baf43fee8046d0eb93b03c0648c735209",
+    "path": "contracts/walletwall-brand.json",
+    "describes": "Values copied from the canonical WalletWall app :root (src/index.css) and src/theme.js, drift-checked against the app repository."
+  },
+  "images": [
+    {
+      "file": "walletwall-brick-wallet-96.png",
+      "sha256": "179a4f9a1b74d0287b8199d5b6316f6b84c7840afbb7a1b4d90d1f43a9a54665",
+      "role": "WalletWall mark (identity rail) and the canvas page favicon (<link rel=\"icon\">, the same embedded file)",
+      "source": {
+        "repository": "Wallet-Wall/walletwall-audio-visual-docs",
+        "commit": "d013c06baf43fee8046d0eb93b03c0648c735209",
+        "path": "assets/brand/walletwall-brick-wallet.png",
+        "sha256": "91926a2eebc1777194ecf491049b8a7af3cf0892b09b363c5b2a17cd17d5dbad"
+      },
+      "transform": "Uniformly downscaled from 496x496 to 96x96 (high-quality bicubic, alpha kept). Not recoloured, cropped, stretched or redrawn."
+    },
+    {
+      "file": "walletwallaby-inspect.png",
+      "sha256": "3d632e92f4142d723e0cd177b3730e37f6d67c0dfaf8f50947f7d6e46cfd71ad",
+      "role": "WalletWallaby guide, inspecting pose",
+      "source": {
+        "repository": "Wallet-Wall/walletwall-audio-visual-docs",
+        "commit": "d013c06baf43fee8046d0eb93b03c0648c735209",
+        "path": "blender/proof/reference/inspect.png",
+        "sha256": "f9297b6979ce72661fc2dbe16e6b02138410e93b13e406648cee3579893c6463"
+      },
+      "transform": "Cropped to the character's alpha bounds (2 px margin) and uniformly downscaled to 150 px high."
+    },
+    {
+      "file": "walletwallaby-perch.png",
+      "sha256": "9a065dfdcaa880b07bbf83acee5dc65425642a837e2e54b4d74312695193e712",
+      "role": "WalletWallaby guide, perched pose",
+      "source": {
+        "repository": "Wallet-Wall/walletwall-audio-visual-docs",
+        "commit": "d013c06baf43fee8046d0eb93b03c0648c735209",
+        "path": "blender/proof/reference/perch.png",
+        "sha256": "6ad13b9b2addf9c86d90f2c19e67971a69938270182b59b8673452df74aa32ad"
+      },
+      "transform": "Cropped to the character's alpha bounds (2 px margin) and uniformly downscaled to 150 px high."
+    }
+  ],
+  "fonts": [
+    {
+      "file": "fonts/sora-latin-wght-normal.woff2",
+      "sha256": "fa26406eeda9a3c6ec3d9ea8813c3045d6dc755e30c716d5c094e8ef43be5a7f",
+      "family": "Sora Variable",
+      "role": "display",
+      "weight": "100 800",
+      "format": "woff2-variations",
+      "package": "@fontsource-variable/sora",
+      "version": "5.2.8",
+      "license": "OFL-1.1",
+      "licenseFile": "fonts/OFL-Sora.txt"
+    },
+    {
+      "file": "fonts/manrope-latin-wght-normal.woff2",
+      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "family": "Manrope Variable",
+      "role": "ui",
+      "weight": "200 800",
+      "format": "woff2-variations",
+      "package": "@fontsource-variable/manrope",
+      "version": "5.2.8",
+      "license": "OFL-1.1",
+      "licenseFile": "fonts/OFL-Manrope.txt"
+    },
+    {
+      "file": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+      "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7",
+      "family": "IBM Plex Mono",
+      "role": "mono",
+      "weight": "400",
+      "format": "woff2",
+      "package": "@fontsource/ibm-plex-mono",
+      "version": "5.2.7",
+      "license": "OFL-1.1",
+      "licenseFile": "fonts/OFL-IBM-Plex-Mono.txt"
+    },
+    {
+      "file": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+      "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22",
+      "family": "IBM Plex Mono",
+      "role": "mono",
+      "weight": "500",
+      "format": "woff2",
+      "package": "@fontsource/ibm-plex-mono",
+      "version": "5.2.7",
+      "license": "OFL-1.1",
+      "licenseFile": "fonts/OFL-IBM-Plex-Mono.txt"
+    }
+  ],
+  "fontSource": {
+    "selection": "The WalletWall app's :root (--font-display Sora, --font-ui Manrope, --font-mono IBM Plex Mono) and the @fontsource versions its lockfile pins. The app source is not public, so the npm packages above are the verifiable source.",
+    "describes": "The files here are those npm packages' latin subsets, unmodified: each SHA-256 above equals the file of the same name in the published package tarball."
+  }
+}

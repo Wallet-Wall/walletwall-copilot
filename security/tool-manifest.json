@@ -1,0 +1,2316 @@
+{
+  "manifestVersion": "1",
+  "wwepVersion": "0.1",
+  "server": {
+    "name": "walletwall-mcp",
+    "version": "0.1.0",
+    "transport": "stdio"
+  },
+  "tools": [
+    {
+      "name": "assess_vault_readiness",
+      "title": "Assess vault technical readiness",
+      "description": "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bundle": {
+            "type": "object",
+            "properties": {
+              "wwepVersion": {
+                "type": "string",
+                "const": "0.1"
+              },
+              "registryVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "rulesVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "sources": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_STATE",
+                        "ISSUER_PUBLICATION",
+                        "PROVIDER_ENDPOINT",
+                        "USER_INPUT",
+                        "WALLETWALL_RULES"
+                      ]
+                    },
+                    "authorityId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "transport": {
+                      "type": "object",
+                      "properties": {
+                        "retrievedVia": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                        }
+                      },
+                      "required": [
+                        "retrievedVia"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "independenceGroup": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "observations": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "sourceId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "finality": {
+                      "type": "string",
+                      "enum": [
+                        "FINALIZED",
+                        "UNFINALIZED",
+                        "UNKNOWN_FINALITY"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE",
+                        "NO_RESULT",
+                        "ERROR"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sourceId",
+                    "origin",
+                    "observedAt",
+                    "finality",
+                    "result",
+                    "subject",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "assertions": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "claimType": {
+                      "type": "string",
+                      "enum": [
+                        "ASSET_IDENTITY",
+                        "TOKEN_BALANCE_AT_BLOCK",
+                        "TOKEN_USD_PRICE",
+                        "TOKEN_USD_VALUE",
+                        "VAULT_TECHNICAL_READINESS"
+                      ]
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "temporality": {
+                      "type": "string",
+                      "enum": [
+                        "CURRENT",
+                        "PINNED"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "observationIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "derivationId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "limitations": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "NO_SOURCE",
+                          "NO_RESULT",
+                          "DANGLING_REFERENCE",
+                          "TRANSPORT_FIDELITY_NOT_VERIFIED",
+                          "NOT_FINALIZED",
+                          "FINALITY_UNKNOWN",
+                          "STALE_EVIDENCE",
+                          "FRESHNESS_UNKNOWN",
+                          "OBSERVATION_FROM_FUTURE",
+                          "NO_AUTHORITATIVE_OBSERVATION",
+                          "NON_AUTHORITATIVE_ONLY",
+                          "INSUFFICIENT_INDEPENDENT_CORROBORATION",
+                          "DUPLICATE_EVIDENCE_COLLAPSED",
+                          "ORIGIN_SOURCE_KIND_MISMATCH",
+                          "AUTHORITY_ID_MISMATCH",
+                          "SUBJECT_MISMATCH",
+                          "INVALID_SUBJECT",
+                          "VALUE_MISMATCH",
+                          "OBSERVATION_DISAGREEMENT",
+                          "NOT_IN_REGISTRY",
+                          "CHAIN_NOT_IN_REGISTRY",
+                          "REGISTRY_MISMATCH",
+                          "REGISTRY_VERIFIED_POINT_IN_TIME",
+                          "SYMBOL_NOT_AUTHORITY",
+                          "POLICY_MISSING",
+                          "DERIVATION_MISSING",
+                          "DERIVATION_NOT_PERMITTED",
+                          "MISSING_REQUIRED_DEPENDENCY",
+                          "DEPENDENCY_CYCLE",
+                          "DEPENDENCY_SUPERSEDED",
+                          "PINNED_DEPENDENCY_FOR_CURRENT_CLAIM",
+                          "RULES_UNKNOWN",
+                          "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY",
+                          "CONFLICT_DECLARED",
+                          "CONFLICT_DETECTED",
+                          "SUPERSEDED",
+                          "REGISTRY_VERSION_MISMATCH",
+                          "RULES_VERSION_MISMATCH",
+                          "PRICE_IS_PROVIDER_OBSERVATION",
+                          "INVALID_VALUE"
+                        ]
+                      }
+                    },
+                    "declared": {
+                      "type": "object",
+                      "properties": {
+                        "supportState": {
+                          "type": "string",
+                          "enum": [
+                            "ESTABLISHED",
+                            "SUPPORTED",
+                            "PARTIAL",
+                            "CONFLICTING",
+                            "STALE",
+                            "SUPERSEDED",
+                            "UNKNOWN",
+                            "NOT_ESTABLISHED"
+                          ]
+                        },
+                        "freshnessState": {
+                          "type": "string",
+                          "enum": [
+                            "CURRENT",
+                            "STALE",
+                            "PINNED",
+                            "UNKNOWN_FRESHNESS"
+                          ]
+                        },
+                        "finalityState": {
+                          "type": "string",
+                          "enum": [
+                            "FINALIZED",
+                            "UNFINALIZED",
+                            "UNKNOWN_FINALITY"
+                          ]
+                        },
+                        "independentCorroboration": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,3}$"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimType",
+                    "origin",
+                    "temporality",
+                    "subject",
+                    "value",
+                    "observationIds",
+                    "assertedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "derivations": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "ruleId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "rulesVersion": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                    },
+                    "inputAssertionIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "outputAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "ruleId",
+                    "rulesVersion",
+                    "inputAssertionIds",
+                    "outputAssertionId"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "conflicts": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertionIds": {
+                      "minItems": 2,
+                      "maxItems": 16,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE_DISAGREEMENT",
+                        "AUTHORITY_DISAGREEMENT",
+                        "SUBJECT_DISAGREEMENT"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "assertionIds",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "supersessions": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersededAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersedingAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "effectiveAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "CORRECTED",
+                        "NEWER_OBSERVATION",
+                        "RULES_UPDATED",
+                        "REGISTRY_UPDATED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supersededAssertionId",
+                    "supersedingAssertionId",
+                    "effectiveAt",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "wwepVersion",
+              "sources",
+              "observations",
+              "assertions",
+              "derivations"
+            ],
+            "additionalProperties": false
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+          },
+          "identityAssertionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+          },
+          "balanceAssertionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+          }
+        },
+        "required": [
+          "bundle",
+          "evaluatedAt",
+          "identityAssertionId",
+          "balanceAssertionId"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Assess vault technical readiness",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "check_invariants",
+      "title": "Check evidence invariants",
+      "description": "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bundle": {
+            "type": "object",
+            "properties": {
+              "wwepVersion": {
+                "type": "string",
+                "const": "0.1"
+              },
+              "registryVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "rulesVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "sources": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_STATE",
+                        "ISSUER_PUBLICATION",
+                        "PROVIDER_ENDPOINT",
+                        "USER_INPUT",
+                        "WALLETWALL_RULES"
+                      ]
+                    },
+                    "authorityId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "transport": {
+                      "type": "object",
+                      "properties": {
+                        "retrievedVia": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                        }
+                      },
+                      "required": [
+                        "retrievedVia"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "independenceGroup": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "observations": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "sourceId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "finality": {
+                      "type": "string",
+                      "enum": [
+                        "FINALIZED",
+                        "UNFINALIZED",
+                        "UNKNOWN_FINALITY"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE",
+                        "NO_RESULT",
+                        "ERROR"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sourceId",
+                    "origin",
+                    "observedAt",
+                    "finality",
+                    "result",
+                    "subject",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "assertions": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "claimType": {
+                      "type": "string",
+                      "enum": [
+                        "ASSET_IDENTITY",
+                        "TOKEN_BALANCE_AT_BLOCK",
+                        "TOKEN_USD_PRICE",
+                        "TOKEN_USD_VALUE",
+                        "VAULT_TECHNICAL_READINESS"
+                      ]
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "temporality": {
+                      "type": "string",
+                      "enum": [
+                        "CURRENT",
+                        "PINNED"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "observationIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "derivationId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "limitations": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "NO_SOURCE",
+                          "NO_RESULT",
+                          "DANGLING_REFERENCE",
+                          "TRANSPORT_FIDELITY_NOT_VERIFIED",
+                          "NOT_FINALIZED",
+                          "FINALITY_UNKNOWN",
+                          "STALE_EVIDENCE",
+                          "FRESHNESS_UNKNOWN",
+                          "OBSERVATION_FROM_FUTURE",
+                          "NO_AUTHORITATIVE_OBSERVATION",
+                          "NON_AUTHORITATIVE_ONLY",
+                          "INSUFFICIENT_INDEPENDENT_CORROBORATION",
+                          "DUPLICATE_EVIDENCE_COLLAPSED",
+                          "ORIGIN_SOURCE_KIND_MISMATCH",
+                          "AUTHORITY_ID_MISMATCH",
+                          "SUBJECT_MISMATCH",
+                          "INVALID_SUBJECT",
+                          "VALUE_MISMATCH",
+                          "OBSERVATION_DISAGREEMENT",
+                          "NOT_IN_REGISTRY",
+                          "CHAIN_NOT_IN_REGISTRY",
+                          "REGISTRY_MISMATCH",
+                          "REGISTRY_VERIFIED_POINT_IN_TIME",
+                          "SYMBOL_NOT_AUTHORITY",
+                          "POLICY_MISSING",
+                          "DERIVATION_MISSING",
+                          "DERIVATION_NOT_PERMITTED",
+                          "MISSING_REQUIRED_DEPENDENCY",
+                          "DEPENDENCY_CYCLE",
+                          "DEPENDENCY_SUPERSEDED",
+                          "PINNED_DEPENDENCY_FOR_CURRENT_CLAIM",
+                          "RULES_UNKNOWN",
+                          "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY",
+                          "CONFLICT_DECLARED",
+                          "CONFLICT_DETECTED",
+                          "SUPERSEDED",
+                          "REGISTRY_VERSION_MISMATCH",
+                          "RULES_VERSION_MISMATCH",
+                          "PRICE_IS_PROVIDER_OBSERVATION",
+                          "INVALID_VALUE"
+                        ]
+                      }
+                    },
+                    "declared": {
+                      "type": "object",
+                      "properties": {
+                        "supportState": {
+                          "type": "string",
+                          "enum": [
+                            "ESTABLISHED",
+                            "SUPPORTED",
+                            "PARTIAL",
+                            "CONFLICTING",
+                            "STALE",
+                            "SUPERSEDED",
+                            "UNKNOWN",
+                            "NOT_ESTABLISHED"
+                          ]
+                        },
+                        "freshnessState": {
+                          "type": "string",
+                          "enum": [
+                            "CURRENT",
+                            "STALE",
+                            "PINNED",
+                            "UNKNOWN_FRESHNESS"
+                          ]
+                        },
+                        "finalityState": {
+                          "type": "string",
+                          "enum": [
+                            "FINALIZED",
+                            "UNFINALIZED",
+                            "UNKNOWN_FINALITY"
+                          ]
+                        },
+                        "independentCorroboration": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,3}$"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimType",
+                    "origin",
+                    "temporality",
+                    "subject",
+                    "value",
+                    "observationIds",
+                    "assertedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "derivations": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "ruleId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "rulesVersion": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                    },
+                    "inputAssertionIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "outputAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "ruleId",
+                    "rulesVersion",
+                    "inputAssertionIds",
+                    "outputAssertionId"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "conflicts": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertionIds": {
+                      "minItems": 2,
+                      "maxItems": 16,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE_DISAGREEMENT",
+                        "AUTHORITY_DISAGREEMENT",
+                        "SUBJECT_DISAGREEMENT"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "assertionIds",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "supersessions": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersededAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersedingAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "effectiveAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "CORRECTED",
+                        "NEWER_OBSERVATION",
+                        "RULES_UPDATED",
+                        "REGISTRY_UPDATED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supersededAssertionId",
+                    "supersedingAssertionId",
+                    "effectiveAt",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "wwepVersion",
+              "sources",
+              "observations",
+              "assertions",
+              "derivations"
+            ],
+            "additionalProperties": false
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+          }
+        },
+        "required": [
+          "bundle",
+          "evaluatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Check evidence invariants",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "inspect_evidence",
+      "title": "Inspect evidence bundle",
+      "description": "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bundle": {
+            "type": "object",
+            "properties": {
+              "wwepVersion": {
+                "type": "string",
+                "const": "0.1"
+              },
+              "registryVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "rulesVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "sources": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_STATE",
+                        "ISSUER_PUBLICATION",
+                        "PROVIDER_ENDPOINT",
+                        "USER_INPUT",
+                        "WALLETWALL_RULES"
+                      ]
+                    },
+                    "authorityId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "transport": {
+                      "type": "object",
+                      "properties": {
+                        "retrievedVia": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                        }
+                      },
+                      "required": [
+                        "retrievedVia"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "independenceGroup": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "observations": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "sourceId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "finality": {
+                      "type": "string",
+                      "enum": [
+                        "FINALIZED",
+                        "UNFINALIZED",
+                        "UNKNOWN_FINALITY"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE",
+                        "NO_RESULT",
+                        "ERROR"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sourceId",
+                    "origin",
+                    "observedAt",
+                    "finality",
+                    "result",
+                    "subject",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "assertions": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "claimType": {
+                      "type": "string",
+                      "enum": [
+                        "ASSET_IDENTITY",
+                        "TOKEN_BALANCE_AT_BLOCK",
+                        "TOKEN_USD_PRICE",
+                        "TOKEN_USD_VALUE",
+                        "VAULT_TECHNICAL_READINESS"
+                      ]
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "temporality": {
+                      "type": "string",
+                      "enum": [
+                        "CURRENT",
+                        "PINNED"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "observationIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "derivationId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "limitations": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "NO_SOURCE",
+                          "NO_RESULT",
+                          "DANGLING_REFERENCE",
+                          "TRANSPORT_FIDELITY_NOT_VERIFIED",
+                          "NOT_FINALIZED",
+                          "FINALITY_UNKNOWN",
+                          "STALE_EVIDENCE",
+                          "FRESHNESS_UNKNOWN",
+                          "OBSERVATION_FROM_FUTURE",
+                          "NO_AUTHORITATIVE_OBSERVATION",
+                          "NON_AUTHORITATIVE_ONLY",
+                          "INSUFFICIENT_INDEPENDENT_CORROBORATION",
+                          "DUPLICATE_EVIDENCE_COLLAPSED",
+                          "ORIGIN_SOURCE_KIND_MISMATCH",
+                          "AUTHORITY_ID_MISMATCH",
+                          "SUBJECT_MISMATCH",
+                          "INVALID_SUBJECT",
+                          "VALUE_MISMATCH",
+                          "OBSERVATION_DISAGREEMENT",
+                          "NOT_IN_REGISTRY",
+                          "CHAIN_NOT_IN_REGISTRY",
+                          "REGISTRY_MISMATCH",
+                          "REGISTRY_VERIFIED_POINT_IN_TIME",
+                          "SYMBOL_NOT_AUTHORITY",
+                          "POLICY_MISSING",
+                          "DERIVATION_MISSING",
+                          "DERIVATION_NOT_PERMITTED",
+                          "MISSING_REQUIRED_DEPENDENCY",
+                          "DEPENDENCY_CYCLE",
+                          "DEPENDENCY_SUPERSEDED",
+                          "PINNED_DEPENDENCY_FOR_CURRENT_CLAIM",
+                          "RULES_UNKNOWN",
+                          "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY",
+                          "CONFLICT_DECLARED",
+                          "CONFLICT_DETECTED",
+                          "SUPERSEDED",
+                          "REGISTRY_VERSION_MISMATCH",
+                          "RULES_VERSION_MISMATCH",
+                          "PRICE_IS_PROVIDER_OBSERVATION",
+                          "INVALID_VALUE"
+                        ]
+                      }
+                    },
+                    "declared": {
+                      "type": "object",
+                      "properties": {
+                        "supportState": {
+                          "type": "string",
+                          "enum": [
+                            "ESTABLISHED",
+                            "SUPPORTED",
+                            "PARTIAL",
+                            "CONFLICTING",
+                            "STALE",
+                            "SUPERSEDED",
+                            "UNKNOWN",
+                            "NOT_ESTABLISHED"
+                          ]
+                        },
+                        "freshnessState": {
+                          "type": "string",
+                          "enum": [
+                            "CURRENT",
+                            "STALE",
+                            "PINNED",
+                            "UNKNOWN_FRESHNESS"
+                          ]
+                        },
+                        "finalityState": {
+                          "type": "string",
+                          "enum": [
+                            "FINALIZED",
+                            "UNFINALIZED",
+                            "UNKNOWN_FINALITY"
+                          ]
+                        },
+                        "independentCorroboration": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,3}$"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimType",
+                    "origin",
+                    "temporality",
+                    "subject",
+                    "value",
+                    "observationIds",
+                    "assertedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "derivations": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "ruleId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "rulesVersion": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                    },
+                    "inputAssertionIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "outputAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "ruleId",
+                    "rulesVersion",
+                    "inputAssertionIds",
+                    "outputAssertionId"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "conflicts": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertionIds": {
+                      "minItems": 2,
+                      "maxItems": 16,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE_DISAGREEMENT",
+                        "AUTHORITY_DISAGREEMENT",
+                        "SUBJECT_DISAGREEMENT"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "assertionIds",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "supersessions": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersededAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersedingAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "effectiveAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "CORRECTED",
+                        "NEWER_OBSERVATION",
+                        "RULES_UPDATED",
+                        "REGISTRY_UPDATED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supersededAssertionId",
+                    "supersedingAssertionId",
+                    "effectiveAt",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "wwepVersion",
+              "sources",
+              "observations",
+              "assertions",
+              "derivations"
+            ],
+            "additionalProperties": false
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+          }
+        },
+        "required": [
+          "bundle",
+          "evaluatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Inspect evidence bundle",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "normalize_observation",
+      "title": "Normalize balance observation",
+      "description": "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+          },
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "CHAIN_OBSERVED",
+              "AUTHORITY_ATTESTED",
+              "PROVIDER_OBSERVED",
+              "USER_SUPPLIED",
+              "WALLETWALL_DERIVED"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+          },
+          "finality": {
+            "type": "string",
+            "enum": [
+              "FINALIZED",
+              "UNFINALIZED",
+              "UNKNOWN_FINALITY"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "VALUE",
+              "NO_RESULT",
+              "ERROR"
+            ]
+          },
+          "chainId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$"
+          },
+          "holder": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$"
+          },
+          "blockNumber": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,17})$"
+          },
+          "blockHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$"
+          },
+          "balanceAtomic": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,77})$"
+          },
+          "decimals": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]?)$"
+          }
+        },
+        "required": [
+          "id",
+          "sourceId",
+          "origin",
+          "observedAt",
+          "finality",
+          "result",
+          "chainId",
+          "token",
+          "holder",
+          "blockNumber",
+          "blockHash"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Normalize balance observation",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "resolve_asset",
+      "title": "Resolve stablecoin deployment",
+      "description": "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "chainId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,17}$"
+          },
+          "address": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$"
+          },
+          "symbol": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9]{1,16}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Resolve stablecoin deployment",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "trace_provenance",
+      "title": "Trace assertion provenance",
+      "description": "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only.",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "bundle": {
+            "type": "object",
+            "properties": {
+              "wwepVersion": {
+                "type": "string",
+                "const": "0.1"
+              },
+              "registryVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "rulesVersion": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+              },
+              "sources": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_STATE",
+                        "ISSUER_PUBLICATION",
+                        "PROVIDER_ENDPOINT",
+                        "USER_INPUT",
+                        "WALLETWALL_RULES"
+                      ]
+                    },
+                    "authorityId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "transport": {
+                      "type": "object",
+                      "properties": {
+                        "retrievedVia": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                        }
+                      },
+                      "required": [
+                        "retrievedVia"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "independenceGroup": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "observations": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "sourceId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "finality": {
+                      "type": "string",
+                      "enum": [
+                        "FINALIZED",
+                        "UNFINALIZED",
+                        "UNKNOWN_FINALITY"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE",
+                        "NO_RESULT",
+                        "ERROR"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "payload": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sourceId",
+                    "origin",
+                    "observedAt",
+                    "finality",
+                    "result",
+                    "subject",
+                    "payload"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "assertions": {
+                "maxItems": 128,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "claimType": {
+                      "type": "string",
+                      "enum": [
+                        "ASSET_IDENTITY",
+                        "TOKEN_BALANCE_AT_BLOCK",
+                        "TOKEN_USD_PRICE",
+                        "TOKEN_USD_VALUE",
+                        "VAULT_TECHNICAL_READINESS"
+                      ]
+                    },
+                    "origin": {
+                      "type": "string",
+                      "enum": [
+                        "CHAIN_OBSERVED",
+                        "AUTHORITY_ATTESTED",
+                        "PROVIDER_OBSERVED",
+                        "USER_SUPPLIED",
+                        "WALLETWALL_DERIVED"
+                      ]
+                    },
+                    "temporality": {
+                      "type": "string",
+                      "enum": [
+                        "CURRENT",
+                        "PINNED"
+                      ]
+                    },
+                    "subject": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "observationIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "derivationId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertedAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "limitations": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "NO_SOURCE",
+                          "NO_RESULT",
+                          "DANGLING_REFERENCE",
+                          "TRANSPORT_FIDELITY_NOT_VERIFIED",
+                          "NOT_FINALIZED",
+                          "FINALITY_UNKNOWN",
+                          "STALE_EVIDENCE",
+                          "FRESHNESS_UNKNOWN",
+                          "OBSERVATION_FROM_FUTURE",
+                          "NO_AUTHORITATIVE_OBSERVATION",
+                          "NON_AUTHORITATIVE_ONLY",
+                          "INSUFFICIENT_INDEPENDENT_CORROBORATION",
+                          "DUPLICATE_EVIDENCE_COLLAPSED",
+                          "ORIGIN_SOURCE_KIND_MISMATCH",
+                          "AUTHORITY_ID_MISMATCH",
+                          "SUBJECT_MISMATCH",
+                          "INVALID_SUBJECT",
+                          "VALUE_MISMATCH",
+                          "OBSERVATION_DISAGREEMENT",
+                          "NOT_IN_REGISTRY",
+                          "CHAIN_NOT_IN_REGISTRY",
+                          "REGISTRY_MISMATCH",
+                          "REGISTRY_VERIFIED_POINT_IN_TIME",
+                          "SYMBOL_NOT_AUTHORITY",
+                          "POLICY_MISSING",
+                          "DERIVATION_MISSING",
+                          "DERIVATION_NOT_PERMITTED",
+                          "MISSING_REQUIRED_DEPENDENCY",
+                          "DEPENDENCY_CYCLE",
+                          "DEPENDENCY_SUPERSEDED",
+                          "PINNED_DEPENDENCY_FOR_CURRENT_CLAIM",
+                          "RULES_UNKNOWN",
+                          "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY",
+                          "CONFLICT_DECLARED",
+                          "CONFLICT_DETECTED",
+                          "SUPERSEDED",
+                          "REGISTRY_VERSION_MISMATCH",
+                          "RULES_VERSION_MISMATCH",
+                          "PRICE_IS_PROVIDER_OBSERVATION",
+                          "INVALID_VALUE"
+                        ]
+                      }
+                    },
+                    "declared": {
+                      "type": "object",
+                      "properties": {
+                        "supportState": {
+                          "type": "string",
+                          "enum": [
+                            "ESTABLISHED",
+                            "SUPPORTED",
+                            "PARTIAL",
+                            "CONFLICTING",
+                            "STALE",
+                            "SUPERSEDED",
+                            "UNKNOWN",
+                            "NOT_ESTABLISHED"
+                          ]
+                        },
+                        "freshnessState": {
+                          "type": "string",
+                          "enum": [
+                            "CURRENT",
+                            "STALE",
+                            "PINNED",
+                            "UNKNOWN_FRESHNESS"
+                          ]
+                        },
+                        "finalityState": {
+                          "type": "string",
+                          "enum": [
+                            "FINALIZED",
+                            "UNFINALIZED",
+                            "UNKNOWN_FINALITY"
+                          ]
+                        },
+                        "independentCorroboration": {
+                          "type": "string",
+                          "pattern": "^[0-9]{1,3}$"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "claimType",
+                    "origin",
+                    "temporality",
+                    "subject",
+                    "value",
+                    "observationIds",
+                    "assertedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "derivations": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "ruleId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "rulesVersion": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[A-Za-z0-9 _.:/+-]{0,128}$"
+                    },
+                    "inputAssertionIds": {
+                      "maxItems": 32,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "outputAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "ruleId",
+                    "rulesVersion",
+                    "inputAssertionIds",
+                    "outputAssertionId"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "conflicts": {
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "assertionIds": {
+                      "minItems": 2,
+                      "maxItems": 16,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                      }
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "VALUE_DISAGREEMENT",
+                        "AUTHORITY_DISAGREEMENT",
+                        "SUBJECT_DISAGREEMENT"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "assertionIds",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "supersessions": {
+                "maxItems": 64,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersededAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "supersedingAssertionId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+                    },
+                    "effectiveAt": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "CORRECTED",
+                        "NEWER_OBSERVATION",
+                        "RULES_UPDATED",
+                        "REGISTRY_UPDATED"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "supersededAssertionId",
+                    "supersedingAssertionId",
+                    "effectiveAt",
+                    "reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "wwepVersion",
+              "sources",
+              "observations",
+              "assertions",
+              "derivations"
+            ],
+            "additionalProperties": false
+          },
+          "assertionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+          }
+        },
+        "required": [
+          "bundle",
+          "assertionId"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Trace assertion provenance",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "walletwall://registry/stablecoins",
+      "name": "registry-stablecoins",
+      "title": "Stablecoin deployment registry (record-level verification)",
+      "description": "Bundled, static registry of stablecoin deployments. Each record carries the authority publication and chain observation it was verified against, with the verification date. Point-in-time; not a safety statement.",
+      "mimeType": "application/json",
+      "sha256": "b326a30bb6a99d6aedad94edc2a53fbad4add14a53190473ef1ea7b7e9da551d"
+    },
+    {
+      "uri": "walletwall://registry/chains",
+      "name": "registry-chains",
+      "title": "Chain registry (chain IDs observed, finality labels descriptive)",
+      "description": "Bundled, static registry of supported chains and their finality models.",
+      "mimeType": "application/json",
+      "sha256": "abf05ebbe7e609a804c46cadbf5bccd27af1f1892a72a906338d4b5142fb9836"
+    },
+    {
+      "uri": "walletwall://schemas/evidence",
+      "name": "schema-evidence",
+      "title": "WWEP 0.1 evidence bundle JSON Schema",
+      "description": "JSON Schema for the WWEP 0.1 evidence bundle accepted by the evidence tools.",
+      "mimeType": "application/schema+json",
+      "sha256": "d3007c89090e362a50132e2a360f0da13ba0ff75f151cdf1afb6d6eaa995544a"
+    },
+    {
+      "uri": "walletwall://policies/authority",
+      "name": "policies-authority",
+      "title": "Claim-specific authority policies",
+      "description": "Bundled authority policies. Authority is defined per claim type; there is no global source ranking.",
+      "mimeType": "application/json",
+      "sha256": "4202f1dde8cae6fac90a2ccf73dafb12876322e2a1cca9803100addacf73b071"
+    },
+    {
+      "uri": "walletwall://spec/wwep",
+      "name": "spec-wwep",
+      "title": "WalletWall Evidence Profile 0.1 (draft)",
+      "description": "Normative draft text of the WalletWall Evidence Profile 0.1. Not an industry standard.",
+      "mimeType": "text/markdown",
+      "sha256": "bf515f0db536df61e7e507011a5c8e435d99d2f68a7a8c3bf6f144f6caa0838b"
+    },
+    {
+      "uri": "walletwall://conformance/version",
+      "name": "conformance-version",
+      "title": "Engine, rules and data versions",
+      "description": "Versions and content digests of the bundled engine, registry, policies, rules and specification.",
+      "mimeType": "application/json",
+      "sha256": "f75d75b694cb6547cb84072f15eb60cd8df7a428f0e05af36b826f776fc574db"
+    }
+  ]
+}

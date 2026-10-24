@@ -1,0 +1,77 @@
+{
+  "id": "EVD-002",
+  "category": "evidence",
+  "claimCategory": "asset-identity",
+  "description": "Spoofed token symbol: an unregistered contract reports symbol USDC on chain. Symbol is not authority.",
+  "evaluatedAt": "2026-10-23T12:00:30Z",
+  "bundle": {
+    "wwepVersion": "0.1",
+    "sources": [
+      {
+        "id": "src-chain",
+        "kind": "CHAIN_STATE",
+        "transport": {
+          "retrievedVia": "Alchemy"
+        },
+        "independenceGroup": "grp-chain"
+      }
+    ],
+    "observations": [
+      {
+        "id": "obs-spoof",
+        "sourceId": "src-chain",
+        "origin": "CHAIN_OBSERVED",
+        "observedAt": "2026-10-23T12:00:00Z",
+        "finality": "UNKNOWN_FINALITY",
+        "result": "VALUE",
+        "subject": {
+          "chainId": "1",
+          "address": "0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead"
+        },
+        "payload": {
+          "symbol": "USDC",
+          "decimals": "6",
+          "issuerAuthorityId": "issuer:circle"
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "id": "a-spoof",
+        "claimType": "ASSET_IDENTITY",
+        "origin": "CHAIN_OBSERVED",
+        "temporality": "CURRENT",
+        "subject": {
+          "chainId": "1",
+          "address": "0xdeaddeaddeaddeaddeaddeaddeaddeaddeaddead"
+        },
+        "value": {
+          "symbol": "USDC",
+          "decimals": "6",
+          "issuerAuthorityId": "issuer:circle"
+        },
+        "observationIds": [
+          "obs-spoof"
+        ],
+        "assertedAt": "2026-10-23T12:00:00Z"
+      }
+    ],
+    "derivations": []
+  },
+  "expect": {
+    "assertions": {
+      "a-spoof": {
+        "supportState": "PARTIAL",
+        "authoritySatisfied": false,
+        "limitationsInclude": [
+          "SYMBOL_NOT_AUTHORITY",
+          "NOT_IN_REGISTRY",
+          "NO_AUTHORITATIVE_OBSERVATION"
+        ]
+      }
+    },
+    "violations": {
+      "none": true
+    }
+  }
+}

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/Wallet-Wall/walletwallrus-copilot/security/advisories/new
+    about: Do not open a public issue for a vulnerability. Use GitHub private vulnerability reporting. See SECURITY.md.

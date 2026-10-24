@@ -1,0 +1,53 @@
+{
+  "name": "walletwallrus-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WalletWall Copilot plugin, local MCP engine and WWEP 0.1 draft (private, pre-release).",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "gen:content": "node scripts/gen-content.ts",
+    "gen:manifest": "node scripts/gen-manifest.ts",
+    "gen:canvas": "node scripts/gen-canvas-fixtures.ts",
+    "gen:canvas-brand": "node scripts/gen-canvas-brand.ts",
+    "gen:plugin-manifest": "node scripts/gen-plugin-manifest.ts",
+    "gen:plugin-artifact": "node scripts/pack-plugin.ts --write-hash",
+    "pack:plugin": "node scripts/pack-plugin.ts --out",
+    "gen:notices": "node scripts/gen-notices.ts",
+    "build:bundle": "node scripts/build-bundle.ts",
+    "verify:content": "node scripts/gen-content.ts --check",
+    "verify:manifest": "node scripts/gen-manifest.ts --check",
+    "verify:canvas": "node scripts/gen-canvas-fixtures.ts --check",
+    "verify:canvas-brand": "node scripts/gen-canvas-brand.ts --check",
+    "verify:plugin-manifest": "node scripts/gen-plugin-manifest.ts --check",
+    "verify:plugin-artifact": "node scripts/pack-plugin.ts --check",
+    "verify:notices": "node scripts/gen-notices.ts --check",
+    "verify:bundle": "node scripts/build-bundle.ts --check",
+    "verify:plugin": "node scripts/verify-plugin.ts",
+    "verify:conformance": "node scripts/gen-conformance.ts --check",
+    "test:sandbox": "node --test --test-reporter=spec \"packages/mcp/test/sandbox/*.test.ts\"",
+    "test:privacy": "node --test --test-reporter=spec \"packages/mcp/test/privacy/*.test.ts\" \"packages/mcp/test/canvas/plugin-path.test.ts\"",
+    "test:canvas": "node --test --test-reporter=spec \"packages/mcp/test/canvas/*.test.ts\"",
+    "test": "node --test --test-reporter=spec \"packages/mcp/test/**/*.test.ts\"",
+    "eval:agent": "node evals/run-agent-evals.ts",
+    "conformance:report": "node scripts/conformance-report.ts",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "verify": "npm run typecheck && npm run lint && npm run verify:content && npm run verify:conformance && npm run verify:manifest && npm run verify:bundle && npm run verify:notices && npm run verify:canvas && npm run verify:canvas-brand && npm run verify:plugin && npm run verify:plugin-manifest && npm run verify:plugin-artifact && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0"
+  }
+}

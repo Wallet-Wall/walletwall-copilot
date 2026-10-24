@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# CI on standard GitHub-hosted runners only. No deploy, no publish, no release, no marketplace submission, no cloud
+# infrastructure and no secrets.
+#
+# Fork-safe by construction (enforced by packages/mcp/test/repo/workflows.test.ts): the only triggers are `push` to main
+# and `pull_request`, never `pull_request_target` or `workflow_run`, so code from a fork PR runs with a read-only token and
+# without secrets. Every action is pinned to a full commit SHA. No expression from PR metadata is interpolated into a
+# shell step. No self-hosted runner, no artifact upload, no write permission.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install from lockfile
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Generated files are current
+        run: |
+          npm run verify:content
+          npm run verify:conformance
+      - name: Tool manifest verification
+        run: npm run verify:manifest
+      - name: Shipped bundle is reproducible
+        run: npm run verify:bundle
+      - name: Third-party notices are current
+        run: npm run verify:notices
+      - name: Canvas fixtures are current
+        run: npm run verify:canvas
+      - name: Plugin structure
+        run: npm run verify:plugin
+      - name: Plugin manifest digest
+        run: npm run verify:plugin-manifest
+      - name: Plugin release artifact is byte-identical to the recorded hash (Linux)
+        run: npm run verify:plugin-artifact
+      - name: Unit, WWEP conformance, adversarial, mutation and privacy suites
+        run: npm test
+      - name: Conformance by claim category
+        run: npm run conformance:report
+      - name: Production dependency audit
+        run: npm run audit:prod
+
+  # The product target is Windows, so the whole suite also runs natively on a standard GitHub-hosted Windows runner:
+  # stdio MCP (source and bundle), WWEP conformance, adversarial, mutation, privacy (including the OS socket-table reader),
+  # the owned-temp cleanup regression tests and the WalletWall canvas. No paid or larger runner, no secrets.
+  verify-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install from lockfile
+        run: npm ci
+      - name: Typecheck and lint
+        run: |
+          npm run typecheck
+          npm run lint
+      - name: Generated files, manifests and the shipped bundle are reproducible on Windows
+        run: |
+          npm run verify:content
+          npm run verify:conformance
+          npm run verify:manifest
+          npm run verify:bundle
+          npm run verify:notices
+          npm run verify:canvas
+          npm run verify:plugin
+          npm run verify:plugin-manifest
+      - name: Plugin release artifact is byte-identical to the recorded hash (Windows)
+        run: |
+          git config --show-origin --get-all core.autocrlf
+          npm run verify:plugin-artifact
+      - name: Unit, WWEP conformance, adversarial, mutation, privacy, temp-cleanup and canvas suites
+        run: npm test
+
+  # Re-runs the pure suites (no temp files, no network) inside a container with no network and a read-only
+  # root filesystem and a read-only source mount, so the offline and read-only claims are exercised by the OS.
+  offline-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pull the Node image used for the sandbox
+        run: docker pull node:24-slim
+      - name: Sandbox control - network is really unreachable
+        run: >
+          docker run --rm --network none node:24-slim
+          node -e "fetch('https://example.com').then(() => process.exit(1), () => process.exit(0))"
+      - name: Sandbox control - filesystem is really read-only
+        run: >
+          docker run --rm --read-only -v "$PWD:/repo:ro" -w /repo node:24-slim
+          node -e "try { require('fs').writeFileSync('/repo/x', 'x'); process.exit(1) } catch { try { require('fs').writeFileSync('/x', 'x'); process.exit(1) } catch { process.exit(0) } }"
+      - name: Offline, read-only run of the pure suites (conformance, adversarial, mutation, MCP over stdio, WalletWall canvas over loopback)
+        run: >
+          docker run --rm --network none --read-only --user "$(id -u):$(id -g)"
+          -v "$PWD:/repo:ro" -w /repo node:24-slim
+          node --test --test-reporter=spec "packages/mcp/test/sandbox/*.test.ts" "packages/mcp/test/canvas/explorer.test.ts"

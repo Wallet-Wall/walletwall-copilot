@@ -1,0 +1,10 @@
+{
+  "registryVersion": "0.2.0",
+  "status": "VERIFIED_POINT_IN_TIME",
+  "note": "Chain IDs were observed with eth_chainId from a public RPC endpoint on the verification date (a provider observation, not an authority attestation). The finality model is a descriptive WalletWall label, not a verified fact. Verification is a point-in-time check; it does not establish that anything is safe or unchanged since that date.",
+  "chains": [
+    { "chainId": "1", "name": "Ethereum Mainnet", "finalityModel": "ethereum-proof-of-stake-finalized-checkpoint", "verification": { "status": "CHAIN_OBSERVED", "verifiedAt": "2026-10-24", "method": "eth_chainId", "observedValue": "1" } },
+    { "chainId": "8453", "name": "Base", "finalityModel": "l2-derived-from-l1-finality", "verification": { "status": "CHAIN_OBSERVED", "verifiedAt": "2026-10-24", "method": "eth_chainId", "observedValue": "8453" } },
+    { "chainId": "42161", "name": "Arbitrum One", "finalityModel": "l2-derived-from-l1-finality", "verification": { "status": "CHAIN_OBSERVED", "verifiedAt": "2026-10-24", "method": "eth_chainId", "observedValue": "42161" } }
+  ]
+}
