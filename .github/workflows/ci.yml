@@ -55,6 +55,8 @@ jobs:
         run: npm run verify:plugin-manifest
       - name: Plugin release artifact is byte-identical to the recorded hash (Linux)
         run: npm run verify:plugin-artifact
+      - name: MCPB package is byte-identical to the recorded hash (Linux)
+        run: npm run verify:mcpb
       - name: Unit, WWEP conformance, adversarial, mutation and privacy suites
         run: npm test
       - name: Conformance by claim category
@@ -96,6 +98,7 @@ jobs:
         run: |
           git config --show-origin --get-all core.autocrlf
           npm run verify:plugin-artifact
+          npm run verify:mcpb
       - name: Unit, WWEP conformance, adversarial, mutation, privacy, temp-cleanup and canvas suites
         run: npm test
 

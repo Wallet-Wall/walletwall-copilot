@@ -1,0 +1,44 @@
+{
+  "manifest_version": "0.3",
+  "name": "walletwall",
+  "display_name": "WalletWall",
+  "version": "0.2.0",
+  "description": "Stablecoin intelligence and vault readiness through WalletWall MCP.",
+  "long_description": "WalletWall MCP is a local, offline, read-only stdio server for inspecting stablecoin identity, source lineage, conflicts and vault technical readiness over structured WWEP 0.1 evidence that you supply. It makes no network calls, keeps no query history, holds no keys, does not sign, does not custody and does not execute transactions. It does not provide investment advice or certify regulatory compliance.",
+  "author": {
+    "name": "WalletWall",
+    "url": "https://github.com/Wallet-Wall"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wallet-Wall/walletwallrus-copilot.git"
+  },
+  "homepage": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+  "documentation": "https://github.com/Wallet-Wall/walletwallrus-copilot/blob/main/README.md",
+  "support": "https://github.com/Wallet-Wall/walletwallrus-copilot/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "server/walletwall-mcp.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/walletwall-mcp.mjs"]
+    }
+  },
+  "tools": [
+    { "name": "assess_vault_readiness", "description": "Evaluate published vault technical-readiness rules over an identity and a balance assertion." },
+    { "name": "check_invariants", "description": "Check a WWEP 0.1 evidence bundle against the mandatory evidence invariants." },
+    { "name": "inspect_evidence", "description": "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies." },
+    { "name": "normalize_observation", "description": "Normalize a balance-at-block observation draft into a canonical WWEP observation." },
+    { "name": "resolve_asset", "description": "Look up a stablecoin deployment in the bundled registry by chain ID and address, or list candidates for a symbol." },
+    { "name": "trace_provenance", "description": "Return a provenance graph for one assertion and all of its ancestors." }
+  ],
+  "tools_generated": false,
+  "keywords": ["walletwall", "stablecoin", "evidence", "provenance", "vault-readiness", "offline", "read-only"],
+  "license": "Apache-2.0",
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=22.18.0"
+    }
+  }
+}
