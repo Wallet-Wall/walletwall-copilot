@@ -56,10 +56,12 @@ The pre-update review explicitly checked for the following release hazards:
 4. **Premature release claims.** Root README continues to point at the actually published v0.2.0 release until v0.3.0 exists; no dead v0.3.0 release link is introduced in the release PR.
 5. **Generated-hash bypass.** Rejected. Plugin manifest and artifact hashes must match the repository generators; CI is not weakened and no hash is invented merely to make checks green.
 6. **Scope creep.** Rejected. No Canvas redesign, new backend, telemetry, auth, custody, signing, trading, arbitrary network/database access or unrelated refactor belongs in the release lane.
+7. **Cross-domain test coupling.** Found and corrected. MCPB and official MCP Registry tests now validate the MCP package's own version domain instead of assuming it must equal the Agent Plugin release version.
+8. **Historical-audit coupling.** Found and corrected. Current release-candidate artifact hashes belong in this v0.3.0 release record; the v0.2.0 public-release audit remains historical evidence rather than a mutable current-release ledger.
 
 ## Generated artifacts
 
-The plugin manifest changes because the plugin version and active plugin README change. The following semantic/MCP hashes are expected to remain unchanged unless an unexpected diff is found:
+The plugin manifest changes because the plugin version and active plugin README change. The following semantic/MCP hashes remain unchanged in this release lane:
 
 - tool manifest;
 - MCP server bundle;
@@ -68,13 +70,23 @@ The plugin manifest changes because the plugin version and active plugin README 
 - registry data;
 - authority policy and rules.
 
-The release candidate must regenerate and verify:
+The release candidate regenerated and verifies:
 
 ```text
 security/plugin-manifest.json
 security/plugin-manifest.sha256
 security/plugin-artifact.sha256
 ```
+
+Current release-candidate hashes:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Plugin manifest (`security/plugin-manifest.json`, RFC 8785 canonical form) | `a94428e47b89b2fefc20aab9bfc3478bb6747de39e47a50329c8916d6762a8b6` |
+| Plugin artifact (`walletwall-plugin.tar`, deterministic ustar) | `cc759a1c52c699a747e1fdcd97473c44b674adb0d7992623f9f996677783ec6d` |
+| Tool manifest | `2d2f857c2b0c8ef824a3bc59d52baef6895db0209f16830d4a5025800ca815ec` |
+| MCP server bundle | `3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1` |
+| MCPB package | `39f9ecd25f07c5aa354f19c8401e682a88f4bd4344e97d54ab5781f4d000bc03` |
 
 The deterministic release artifact is:
 
@@ -171,6 +183,8 @@ REGISTRY_VERSION: 0.2.0 / unchanged
 RULES_VERSION: 0.1.0-draft / unchanged
 POLICIES_VERSION: 0.1.0-draft / unchanged
 MCP_REGISTRY_PACKAGE: 0.2.0 / unchanged
+PLUGIN_MANIFEST_SHA256: a94428e47b89b2fefc20aab9bfc3478bb6747de39e47a50329c8916d6762a8b6
+PLUGIN_ARTIFACT_SHA256: cc759a1c52c699a747e1fdcd97473c44b674adb0d7992623f9f996677783ec6d
 TAG: NOT_CREATED
 GITHUB_RELEASE: NOT_CREATED
 COPILOT_CATALOG: NOT_SUBMITTED
