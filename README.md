@@ -66,6 +66,16 @@ The marketplace and the plugin are both named `walletwall`. Verified with GitHub
 
 In the GitHub Copilot app: **Customize → Plugins → marketplace settings → add this repository → Install**. A new session then has the six WalletWall MCP tools, the skill and the WalletWall canvas. What was verified on Windows and what was not: `docs/DESKTOP_INSTALL_PROOF.md`. Requires `node` on `PATH`.
 
+### Claude Managed Agent (optional)
+
+The shipped Copilot MCP remains stdio-only. For a user-owned Claude Managed Agent, a separate opt-in loopback Streamable HTTP adapter is available from a source checkout:
+
+```text
+node scripts/claude-mcp-http.ts --port 8787
+```
+
+It exposes `http://127.0.0.1:8787/mcp` for connection through the user's own Anthropic MCP tunnel. The adapter lives outside the `packages/mcp` publish surface, is not part of the bundled Copilot runtime, does not create a WalletWall-hosted endpoint, and does not change the six-tool WalletWall MCP contract. See `docs/CLAUDE_MANAGED_AGENT.md`.
+
 ## Develop
 
 Requires Node.js 22.18 or newer (tested on 24).
@@ -79,7 +89,7 @@ Generated files are committed and verified in CI on Linux and Windows. See `CONT
 
 ## Documents
 
-`CONTRIBUTING.md` · `SECURITY.md` · `PRIVACY.md` · `BOUNDARIES.md` · `THREAT_MODEL.md` · `DATA_SOURCES.md` · `docs/REGISTRY_SOURCES.md` · `docs/DEPENDENCY_POLICY.md` · `docs/PUBLIC_RELEASE_AUDIT.md` · `docs/PUBLIC_DISCOVERY_READINESS.md` · `TRADEMARKS.md` · `LICENSE`
+`CONTRIBUTING.md` · `SECURITY.md` · `PRIVACY.md` · `BOUNDARIES.md` · `THREAT_MODEL.md` · `DATA_SOURCES.md` · `docs/REGISTRY_SOURCES.md` · `docs/DEPENDENCY_POLICY.md` · `docs/PUBLIC_RELEASE_AUDIT.md` · `docs/PUBLIC_DISCOVERY_READINESS.md` · `docs/CLAUDE_MANAGED_AGENT.md` · `TRADEMARKS.md` · `LICENSE`
 
 Layout: `plugin/` (the plugin), `packages/mcp/` (engine, registry, authority policies, tests), `spec/` (WWEP 0.1 draft), `conformance/` (conformance and adversarial corpus), `security/` (manifests and hashes), `evals/` (Copilot agent evals, separate from conformance), `docs/`.
 
