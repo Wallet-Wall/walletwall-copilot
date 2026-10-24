@@ -35,13 +35,13 @@ async function fragment(name: string): Promise<string> {
   return fragments.get(name) as string;
 }
 const attrs = (s: string): Record<string, string> => Object.fromEntries([...s.matchAll(/([\w-]+)="([^"]*)"/g)].map((a) => [a[1] as string, a[2] as string]));
-/** Each piece of The Wall: its attributes and the markup of its compact (portrait) face. */
-const pieces = (html: string): { a: Record<string, string>; compact: string }[] => {
+/** Each piece of The Wall: its attributes and its markup (one face, used by both layouts). */
+const pieces = (html: string): { a: Record<string, string>; face: string }[] => {
   const svg = /<svg class="ww-wall-svg"[\s\S]*?<\/svg>/.exec(html)?.[0] ?? "";
   return svg
     .split(/(?=<g class="ww-node[ "])/)
     .slice(1)
-    .map((chunk) => ({ a: attrs(/^<g ([^>]*)>/.exec(chunk)?.[1] ?? ""), compact: /<g data-face="compact">([\s\S]*?)<\/g>/.exec(chunk)?.[1] ?? "" }))
+    .map((chunk) => ({ a: attrs(/^<g ([^>]*)>/.exec(chunk)?.[1] ?? ""), face: chunk }))
     .filter((p) => p.a["data-node-id"] !== undefined);
 };
 const section = (css: string, query: string): string => {
@@ -73,24 +73,26 @@ describe("portrait Wall: the same pieces, read top to bottom", () => {
         const b = p[j]!;
         assert.ok(!(Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2), `${a.id} overlaps ${b.id}`);
       }
-      assert.ok(box[2] <= 380, "the portrait frame is a phone's width, not the wide layout's");
+      assert.ok(box[2] < box[3] && box[2] <= 440, "the portrait frame is phone-shaped (taller than wide) and about a phone's width, not the wide layout's");
     });
   }
 
-  test("bands run in the agreed order: authorities and sources, observations, claims, Wallmark, readiness, foundation", async () => {
-    const html = await fragment("usdc-established");
-    const titles = [...(/<g data-face="compact" class="ww-bands">([\s\S]*?)<\/g>/.exec(html)?.[1] ?? "").matchAll(/>([^<]+)<\/text>/g)].map((m) => m[1]);
-    assert.deepEqual(titles, ["AUTHORITIES · SOURCES", "OBSERVATIONS", "CLAIMS · DERIVATION", "WALLMARK", "VAULT READINESS", "FOUNDATION · SUBJECTS"]);
-    const y = (type: string): number => Math.min(...pieces(html).filter(({ a }) => a["data-type"] === type).map(({ a }) => Number(a["data-py"])));
-    const order = ["source", "observation", "assertion", "wallmark", "readiness", "contract"].map(y);
-    assert.deepEqual([...order].sort((a, b) => a - b), order, "each band sits below the one before it");
+  test("the portrait Wall reads top to bottom in the agreed order: sources, observations, claims, readiness; no bands or boxes are drawn", async () => {
+    for (const name of ["usdc-established", "conflicting-balances", "stale-identity"]) {
+      const html = await fragment(name);
+      const y = (types: string[]): number => Math.min(...pieces(html).filter(({ a }) => types.includes(a["data-type"] ?? "")).map(({ a }) => Number(a["data-py"])));
+      const order = [["source"], ["observation"], ["assertion", "wallmark"], ["readiness"]].map(y);
+      assert.deepEqual([...order].sort((a, b) => a - b), order, `${name}: each rank sits below the one before it`);
+      assert.ok(!/ww-bands|ww-chamber|data-face=/.test(html), `${name}: no band titles, no chamber box, one face per piece`);
+    }
   });
 
-  test("a portrait face carries short words and the state: never an assertion ID, never a full address", async () => {
+  test("a piece carries short words and the state: never an assertion ID, never a full address", async () => {
     for (const name of Object.keys(FIXTURES)) {
-      for (const { a, compact } of pieces(await fragment(name))) {
-        const text = [...compact.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]).join(" | ");
-        assert.ok(text.length > 0, `${name} ${a["data-node-id"]}: the compact face has words`);
+      for (const { a, face } of pieces(await fragment(name))) {
+        const text = [...face.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]).join(" | ");
+        assert.ok(text.length > 0, `${name} ${a["data-node-id"]}: the piece has words`);
+        for (const t of [...face.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1] as string)) assert.ok(t.length <= 18, `${name} ${a["data-node-id"]}: "${t}" is a short label`);
         assert.ok(!/0x[0-9a-fA-F]{40}/.test(text), `${name} ${a["data-node-id"]}: no full address on a piece`);
         if (a["data-assertion-id"]) assert.ok(!text.includes(a["data-assertion-id"]), `${name} ${a["data-node-id"]}: no assertion ID on a piece`);
         if (a["data-state"] && a["data-state"] !== "NONE" && a["data-state"] !== "UNRECOGNISED") assert.ok(text.includes(a["data-state"]), `${name} ${a["data-node-id"]}: the returned state stays on the face`);
@@ -130,8 +132,12 @@ describe("phone composition: header, state strip, sheet, controls, list", () => 
   test("one compact Wall control group: Fit, zoom, and a menu with exactly the panel's own controls", async () => {
     const html = await fragment("usdc-established");
     const menu = /<div class="ww-wall-menu" id="wall-menu" hidden>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
-    assert.deepEqual([...menu.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]), ["Trace", "Hide Guide", "Reset layout", "Reduce motion", "List view"]);
-    assert.ok(html.includes('data-wall-menu-toggle aria-expanded="false" aria-controls="wall-menu" aria-label="Wall options"'));
+    assert.deepEqual([...menu.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]), ["Trace", "Hide Guide", "Zoom in", "Zoom out", "Reset layout", "Reduce motion", "List view", "About this panel"]);
+    assert.ok(html.includes('data-wall-menu-toggle aria-expanded="false" aria-controls="wall-menu" aria-label="More options">More</button>'));
+    // The visible group is Overview, Trace, Fit, the guide and More (a phone shows zoom in, Fit and More); everything
+    // else, including the lenses that are not live yet, is one step away.
+    const tools = (/<div class="ww-wall-tools"[^>]*>([\s\S]*?)<div class="ww-wall-menu"/.exec(html)?.[1] ?? "").replace(/<div class="ww-modes"[^>]*>|<\/div>/g, "");
+    assert.deepEqual([...tools.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]), ["Overview", "Trace", "+", "Fit", "Hide Guide", "More"]);
     assert.ok(html.includes('<button type="button" class="ww-back" data-back-overview>Back to Overview</button>'));
   });
 
@@ -173,8 +179,8 @@ describe("the stylesheet's compositions", () => {
 
   test("breakpoints: phone below 768 px, tablet 768 to 1023 px, the wide composition from 1024 px", () => {
     assert.ok(/@media \(min-width:768px\) and \(max-width:1023px\)\{\s*\.ww-stage\{grid-template-columns:minmax\(0,2fr\) minmax\(240px,1fr\)\}/.test(css));
-    assert.ok(/\.ww-wall-svg\[data-layout="portrait"\]\{height:clamp\(360px,70vh,620px\)/.test(css), "the portrait stage uses the viewport, within 360 to 620 px");
-    assert.ok(compact.includes(".ww-rail-facts{display:none}") && compact.includes(".ww-strip{display:flex"), "below 1024 px: compact header and state strip");
+    assert.ok(render.CLIENT_JS.includes('svg.style.aspectRatio = wall.box.w + " / " + wall.box.h'), "the stage takes the drawing's own proportions in either layout, so it has no blank band");
+    assert.ok(compact.includes(".ww-strip{display:flex"), "below 1024 px: the critical state strip joins the header");
   });
 
   test("on a phone only the detail sheet stays on screen: no sticky header, strip or toolbar", () => {
@@ -187,7 +193,7 @@ describe("the stylesheet's compositions", () => {
   });
 
   test("touch targets on a phone are at least 44 px; no grey or blue tap flash", () => {
-    for (const [block, sel] of [[compact, ".ww-strip-item{"], [phone, ".ww-zoom button{"], [phone, ".ww-wall-menu button{"], [phone, ".ww-sheet-actions button{"], [phone, ".ww-filters button{"], [phone, ".ww-search{"], [phone, ".ww-receipt-row{"], [phone, ".ww-why-more summary{"]] as const) {
+    for (const [block, sel] of [[compact, ".ww-strip-item{"], [phone, ".ww-wall-tools>button{"], [phone, ".ww-wall-menu button{"], [phone, ".ww-sheet-actions button{"], [phone, ".ww-filters button{"], [phone, ".ww-search{"], [phone, ".ww-receipt-row{"], [phone, ".ww-why-more summary{"]] as const) {
       const rule = block.slice(block.indexOf(sel), block.indexOf("}", block.indexOf(sel)));
       assert.ok(block.includes(sel) && /min-height:(4[4-9]|5\d)px/.test(rule), `${sel} has a 44 px target`);
     }
@@ -249,7 +255,8 @@ describe("the page script in a phone's portrait viewport", () => {
     assert.equal(s.svg.dataset["zoom"], "1");
     assert.equal(s.svg.attributes["viewBox"], s.svg.attributes["data-portrait-viewbox"]);
     for (const n of s.nodes) assert.equal(n.attributes["transform"], `translate(${n.dataset["px"]} ${n.dataset["py"]})`, `${n.dataset["nodeId"]} at its portrait place`);
-    assert.equal(s.svg.style["aspectRatio"], "", "the stage is not sized from the wide layout's proportions");
+    const tall = (s.svg.attributes["data-portrait-viewbox"] ?? "").split(" ").map(Number);
+    assert.equal(s.svg.style["aspectRatio"], `${tall[2]} / ${tall[3]}`, "the stage takes the portrait drawing's proportions, not the wide layout's");
   });
 
   test("with motion allowed the pieces settle once into their rows and then stop: no simulation, nothing perpetual", async () => {

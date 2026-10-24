@@ -2,7 +2,7 @@
 
 The visual and interaction rules of the WalletWall canvas (`plugin/com.github.copilot/extensions/walletwall-evidence-explorer/`). The canvas contract (what it may and may not show or do) is in `canvas/README.md`; this document is about how it looks and moves, and why.
 
-The design goal is *architectural blueprint + masonry system + vault instrumentation*: a cream field, charcoal structure, terracotta for the selected path only, and pieces whose shape says what they are.
+The design goal is *the WalletWall Coinstellation as an evidence instrument*: one warm stage where every source, observation, claim, WalletWall derivation and the readiness keystone is a node of one circular family; charcoal and deep slate for structure; terracotta for focus; and states drawn with rings, lines, fills and words, never colour alone. The Wall is a projection of the authoritative view the explorer builds from the WalletWall MCP results; it creates, strengthens or replaces no evidence state.
 
 ## Brand sources
 
@@ -25,22 +25,23 @@ The page makes no font, image, stylesheet or script request. Its CSP is `default
 
 ## Colour tokens
 
+Surfaces separate by value, not by hue alone (each pair of neighbouring large surfaces is at least 1.2:1 in relative luminance; tested), and the page no longer reads as cream on cream.
+
 | Token | Value | Role on the canvas |
 | --- | --- | --- |
-| `--ww-bg` | `#F2ECDF` | Paper: the page field |
-| `--ww-surface` | `#F8F2E4` | Panels, piece fills |
-| `--ww-cream` | `#F5F1E8` | Measurement tiles, address plates, text on dark pieces |
-| `--ww-charcoal` | `#2B2B2E` | Structure: piece outlines, rails, chain anchors, active mode |
-| `--ww-charcoal-rail` / `-border` | `rgba(43,43,46,0.28)` / `0.22` | Connections, chip outlines, dividers |
-| `--ww-accent` | `#BF4E32` (terracotta) | **Selection only**: the selected piece, its dependency path, focus rings |
-| `--ww-accent-dark` | `#8B3120` | Conflict seams, attention outlines, eyebrows |
-| `--ww-stone` / `-low` | `#e9d3ad` / `#b99568` | Authority plates, wallet bricks, readiness keystone |
-| `--ww-mortar` | `#f5ead4` | Mortar between Wallprint and assembly courses |
-| `--ww-brick` | `#b94a31` | Stablecoin brick |
-| `--ww-warm-stone` | `#D8D3C8` | Recessed (stale) pieces |
-| `--ww-ink` / `--ww-muted-text` | `rgba(30,26,20,0.88)` / `0.66` | Text |
+| `--ww-page` | `#D8D3C8` (warm stone) | The workspace |
+| `--ww-stage` | `#BBB0A0` (warm stone deepened with stone-low and deep slate) | The Coinstellation stage; the list (another lens on the same pieces) |
+| `--ww-rail` | `#F5F1E8` (cream) | The detail rail and sheet, the readiness and About panels |
+| `--ww-charcoal` | `#2B2B2E` | The summary header, the control bar, the readiness keystone, piece outlines, connectors (at 72 %) |
+| `--ww-deep-slate` | `#3A3D41` | The Wallprint band, quiet piece outlines and glyphs |
+| `--ww-accent` | `#BF4E32` (terracotta) | Focus: the Wallmark's fill, the selection halo, the header's rule |
+| `--ww-accent-dark` | `#8B3120` | The detail head (what is in focus), the active mode, focus outlines |
+| `--ww-brick-low` | `#76281D` (from the Coinstellation's brick material) | Conflict and staleness rings, the selected or traced path, attention chips |
+| `--ww-node` / `--ww-node-quiet` | `#F5F1E8` / `#E6E2D8` | Piece fills: primary and secondary, then tertiary (sources, derivation, subjects) |
+| `--ww-stone-low` | `#b99568` | The filled half of a PARTIAL piece |
+| `--ww-ink` / `--ww-muted-text` | `rgba(30,26,20,0.9)` / `0.7` | Text on light surfaces |
 
-No new hue is introduced. There is no green "good" and no red "bad": terracotta never means approval or alarm.
+The canonical app tokens (`--ww-bg`, `--ww-surface`, `--ww-cream`, `--ww-charcoal`, `--ww-accent`, `--ww-accent-dark`) keep their values. No neon, purple or generic green is introduced, and no colour means good or bad: terracotta marks focus and attention, never approval or alarm.
 
 ## Typography
 
@@ -50,117 +51,94 @@ No new hue is introduced. There is no green "good" and no red "bad": terracotta 
 | UI | Manrope Variable (500 to 700) | Body, labels, piece names, controls |
 | Mono | IBM Plex Mono (400, 500) | Addresses, hashes, IDs, block numbers, reason codes |
 
-Eyebrows: 10.5 px, 700, 0.16 em tracking, uppercase, `--ww-accent-dark`. Layer labels on The Wall: 9 px, 700, 0.18 em tracking.
+Eyebrows: 10.5 px, 700, 0.16 em tracking, uppercase, `--ww-brick-low` on light surfaces. Piece labels on The Wall: 11.5 px, 700, with a stage-coloured halo so a connector never runs through a word; state chips: 8.5 px, 800.
 
 ## Geometry
 
-1 px hairline borders; radii 1 px (controls, chips) and 2 px (panels); masonry bricks (stablecoin, wallet) use 6 px as the texture layer. A faint 24 px blueprint grid sits under The Wall only.
+Radii: 4 px for panels and the control bar, 999 px for chips. Full-perimeter borders are rare: surfaces separate by value and rows by dividers, so the first view at 1280 px has five boxes (header, control bar, detail rail and its head, Wallprint), down from twelve, and nests at most two deep. A faint 28 px grid sits under The Wall only, at about 1.13:1 against the stage: felt, not read.
 
 ## The Wall
 
-The centre of the panel: a deterministic force-directed graph of one bundle.
+The centre of the panel, drawn as a Coinstellation. The node language is adapted from `Wallet-Wall/walletwall-coinstellation` (commit `3ff0942`): compact circular nodes, straight connectors with a small arrow, a selection ring, highlighting of the directly connected nodes and muting of the rest, an anomaly-style ring for conflict, and keyboard operation (Tab, Enter, Space, Escape). Its demo taxonomy (wallet, token, defi, nft, counterparty), demo data, five node colours and fixed 780 by 560 frame are not used; the React component is not shipped. The renderer was ported to the canvas's own string SVG and page script, which keeps the plugin free of a build step, a framework and any change to the CSP.
 
 ```mermaid
 flowchart LR
-  A[Authority] --> S[Source] --> O[Observation] --> C[Claim] --> D[Derivation] --> K[Readiness keystone]
-  K -.-> P[Snapshot slot, reserved]
-  F1[Chain] --> F2[Contract / Wallet] --> C
-  C --> ST[Stablecoin]
+  A[Authority] --> S[Source] --> O[Observation] --> C[Claim] --> D[WalletWall derivation] --> K[Readiness keystone]
+  W[Contract, wallet, chain, stablecoin] -.-> C
 ```
 
-Columns are semantic: authorities, sources, observations, claims, derivation, then the **vault readiness chamber** (a framed area holding the keystone and the reserved snapshot slot). The subjects of the claims form the **foundation course** below. Edges point from what a piece rests on to the piece resting on it.
+**Layers.** `explorer.mjs` builds the authoritative view (the bundle joined with the MCP results). `coinstellation-model.mjs` projects it into a visual model, `buildCoinstellation(view, presentation)`: nodes and edges only from relationships the bundle or the MCP results state, every evaluated state copied verbatim, and Trace emphasis from `trace_provenance` only; it reads no clock, randomness, storage or network and never mutates the view. `wall.mjs` draws that model; `client.mjs` adds local interaction. Subjects are grouped only by exactly equal values, never by fuzzy matching.
 
-### Node taxonomy
+### Node family
 
-| Piece | Drawn as | From |
+One circular node for every piece; the readiness keystone is the one other shape. Kinds differ by a small glyph, a label, a chip and the weight of the ring, not by silhouette.
+
+| Piece | Glyph and treatment | From |
 | --- | --- | --- |
-| Issuer or protocol authority | Chamfered seal plate (stone) | A source's `authorityId`, or the issuer an identity claim names (dashed: "named, no source") |
-| Source | Plate with a charcoal top rail | `sources[]`, labelled by kind and transport |
-| Observation | Measurement tile with ruler ticks | `observations[]`; a `NO_RESULT` or `ERROR` result is hatched and dashed |
-| **Wallmark** | Plate with the round brick seal of the mark | The `ASSET_IDENTITY` claim |
-| Claim | Fitted piece (tab on the right, socket on the left) | Other assertions |
-| WalletWall derivation | Hinge plate | `derivations[]` |
-| Vault readiness | Keystone, seated on a line | The `VAULT_TECHNICAL_READINESS` claim |
-| Conflict | Split seam (two charcoal-red halves) | An evaluation's `conflictsWith` |
-| Missing piece | Empty hatched slot | A referenced record the bundle lacks |
-| Snapshot slot | Dashed reserved slot | Always, next to a keystone; nothing fills it yet |
-| Stablecoin | Terracotta brick | The symbol an identity claim presents ("as presented") |
-| Contract | Monospace address plate | Identity `address`, claim `token` |
-| Wallet | Stone address brick | Balance `holder` |
-| Chain | Charcoal anchor | `chainId` |
+| Wallmark | terracotta node, brick glyph, the largest node | The `ASSET_IDENTITY` claim and its evaluation |
+| Assertion | cream node, brick glyph, state chip | Every other claim |
+| Readiness keystone | charcoal keystone, its classification and support as chips | `assess_vault_readiness` (`view.readiness`), never recomputed |
+| Authority | cream node, column glyph | `source.authorityId` or the identity's `issuerAuthorityId`; never a transport |
+| Source / observation | quiet node, signal glyph / cream node, measurement glyph | The bundle |
+| WalletWall derivation | quiet node, merge glyph, "WalletWall rule" | `derivations` |
+| Conflict | rust node, fracture glyph, a double ring that breathes | An evaluation's `conflictsWith` |
+| Missing piece / snapshot slot | open dashed node | A reference the bundle lacks / always next to a keystone; nothing fills it |
+| Chain, contract, wallet, stablecoin | quiet nodes with a link, document, wallet or coin glyph | The claims' exact subject values |
 
-### Edge taxonomy
+Labels are short (Issuer, Chain state, Issuer source, Provider, Identity obs, Balance obs, Price obs, Balance, Price, Wallmark, Readiness, Wallet, Contract, Chain) and at most two lines: label and chip. A piece never shows an assertion ID, a full or shortened address, a hash or an authority ID; the exact value is in its accessible name, its tooltip, the detail surface and Copy.
 
-| Edge | Line | Part of "Why" path |
-| --- | --- | --- |
-| speaks through, observed, supports, is an input to, generates | charcoal, arrow | yes |
-| is missing for | dashed | yes |
-| conflicts at | terracotta-dark, split in the middle | yes |
-| is superseded by | dotted | yes |
-| subject, anchors, names, issuer | faint | no |
-| reserves (keystone to snapshot slot) | dashed, no arrow | no |
+### Layout
 
-### Layout and interaction
+Two deterministic coordinate sets from the topology alone, computed on the server: **wide** (reads left to right, for desktop and landscape) and **tall** (top to bottom, for phones and portrait tablets). Pieces are ranked by what they rest on; within a rank they are ordered to reduce crossings (barycentric sweeps from several fixed starting orders, then a local search on the real geometry that also moves one-to-one source, observation and claim chains together); a crowded rank in the tall layout is staggered in two offset rows; subjects sit in the free room from the claims' rank on and stay near what they belong to. A connector that would pass through a piece or its label bends around it. The frame takes the drawing's own proportions with about 8 % margin, so the whole wall fits without a blank band. No simulation runs, here or in the page; the same view always gives the same picture (tested). For `conflicting-balances` the wide layout has 1 crossing (3 before) and the tall one 5 (11 before).
 
-- One deterministic simulation (`forceLayout` in `wall.mjs`): link springs, column and band anchors, rectangle collision, fixed tick count, no randomness, no clock. The server runs it to place the pieces; the page replays the identical function so The Wall *assembles* into exactly those positions (tested).
-- A second, portrait layout (`portraitLayout` in `wall.mjs`) for phones and portrait tablets: the same pieces and connections read top to bottom in bands (authorities and sources, observations, claims and derivation, Wallmark, vault readiness, foundation). It is computed once on the server without simulation: each band packs its pieces into centred rows, ordered by where the force layout put them. Each piece carries a compact face for it, slightly smaller and with short words (Issuer, Balance, Price, Wallet, Chain, Readiness); the state or classification stays on the face, and an assertion ID or a full address never does (a contract or wallet face shows a shortened address; the full value is in the piece's accessible name and detail). Nothing is dropped to fit (tested).
-- Pieces never overlap at rest (tested). The Wall fits its frame: the server's view box covers every piece, so the whole graph, readiness keystone included, is visible at load without scrolling (tested for every fixture). **Zoom** (−, +, Fit; 150 %, 200 %, 300 %) narrows the view box inside the same frame, and dragging the background pans; a piece reached by keyboard or by a link is brought into view. A dragged piece stays inside the frame.
-- Click, Enter or Space selects. A claim piece selects that assertion (the agent's `get_view` follows); any other piece opens its own detail. Arrow keys move between pieces spatially; Escape clears. Drag pins a piece where it is dropped while its neighbours relax and stop; **Reset layout** restores every position.
-- **Overview** shows everything, with the selected path in terracotta. **Trace** dims everything off the selected piece's evidence path and brings Source lineage up. **Compare** is disabled.
+### Interaction
 
-## Puzzle and masonry
+- **Overview** shows the whole state, calm: nothing is muted until someone acts. The dominant story (a fixed precedence over returned states: conflict, then an invariant violation on a focal claim, then staleness, then a weak focal claim, then an established Wallmark) gets its emphasis: the conflict path in rust, a stale piece receding inside a dashed ring, or the Wallmark-to-readiness path.
+- **Hover or keyboard focus** previews a piece: its direct connections stay, the rest steps back a little, and one tooltip appears (after 350 ms on hover, at once on focus).
+- **Selecting** a claim is the shared assertion selection: the page shows it at once, then `POST /select` makes it the explorer's `selectedId`, the same state the agent's `select_assertion` sets, and the server re-renders through the events stream. Selecting any other piece is **visual focus** only: its connections and facts are shown, and it never becomes an assertion selection or a provenance request. The detail head says which it is. Either way the focused piece and its direct connections stay; everything else drops to 45 %, with labels kept readable. A conflict marker only joins two claims, so selecting either side keeps the marker, the other claim and both conflict connectors at full strength. Escape or a tap on empty space returns to the whole wall.
+- **Trace** keeps every piece where it is and emphasises the provenance `trace_provenance` returned for the selected assertion; everything else recedes, the traced connectors are drawn solid and heavier, and a glint pulses along them from the sources toward the claim. There is no separate lineage diagram.
+- **Zoom** (the More menu, `+` and `−` keys, pinch) narrows the view box inside the same frame; Fit returns to the whole wall. A mouse can drag a piece to pin it; Reset layout returns it.
 
-Pieces are architectural, not toy jigsaw pieces: claims carry a tab and socket; the keystone sits on a seat line. In the **Readiness assembly** the six `assess_vault_readiness` criteria are a course of pieces under the keystone:
+## Readiness
 
-| Outcome | Piece |
-| --- | --- |
-| `MET` | in place, solid |
-| `INDETERMINATE` | loose: dropped 5 px, dashed |
-| `NOT_MET` | missing: hatched gap, dashed terracotta-dark |
-
-The keystone seats only when the engine's classification is `CRITERIA_MET`; otherwise it is lifted off its seat, which is dashed. The canvas does not decide this; it draws the returned classification.
+The six `assess_vault_readiness` criteria are a checklist beside the keystone (✓ in place, ! not met or indeterminate, ? not recognised). The keystone seats only when the engine's classification is `CRITERIA_MET`; otherwise it is lifted off a dashed seat. The canvas does not decide this; it draws the returned classification.
 
 ## State visualisation
 
-Never colour alone: every state combines shape, line, fill and its name in text and in the accessible name.
+Never colour alone: every state has at least two encodings, and all of them stay under reduced motion.
 
-| State | Piece |
+| State | On The Wall |
 | --- | --- |
-| `ESTABLISHED` | solid, heavier outline |
-| `SUPPORTED` | solid, light outline |
-| `PARTIAL` | half-filled |
-| `CONFLICTING` | dashed terracotta-dark outline, joined to a split seam |
-| `STALE` | recessed: warm-stone fill, faded, dotted |
-| `SUPERSEDED` | faint, with a ghost outline behind it, dotted link to its replacement |
-| `UNKNOWN` | empty hatched slot: a missing brick, never zero or false |
-| `NOT_ESTABLISHED` | outline only |
-| not in the WWEP enumerations | "not recognised", dash-dot outline |
+| `ESTABLISHED` | solid node with a firm ring |
+| `SUPPORTED` | solid node with a lighter ring |
+| `PARTIAL` | half-filled node |
+| `CONFLICTING` | double rust ring, broken rust connector, a conflict node between the claims, the chip |
+| `STALE` | receded node inside a dashed ring, dashed outline, the chip |
+| `SUPERSEDED` | faint node with a historical outline behind it, a dotted connector to its replacement |
+| `UNKNOWN` / `NOT_ESTABLISHED` / no evaluation | open dashed node and the chip: an empty slot, not a zero or false |
+| `NO_RESULT` observation | open dashed node, "no result" chip |
 
 ## Motion
 
-Nothing moves unless the bundle changed or the user acted. Durations follow the app's tokens (140, 180, 280 ms) with a decisive ease-out and no bounce.
-
-| Event | Motion |
+| When | What moves |
 | --- | --- |
-| First load | The Wall assembles: the force simulation plays from its starting positions and stops (about 40 frames). The portrait layout has no simulation: its pieces settle once into their rows (18 frames) |
-| State change | Each piece moves from where it was to where it now belongs; the keystone resolves last |
-| Conflict, unknown, stale, superseded | Static geometry (split seam, gap, recess, ghost); nothing pulses |
-| Selection | The dependency path changes colour; nothing moves |
-| Drag | The dragged piece follows the pointer; neighbours relax and stop |
+| The bundle changes | The pieces settle once into their places (14 frames, about 240 ms); the keystone's chips resolve last |
+| Selection, hover, Trace, the sheet | Opacity, ring and connector transitions of 140 to 280 ms |
+| Always, while relevant | Restrained loops on transform and opacity only: the conflict ring breathes, the selection halo breathes, a stale node recedes slowly, a light glint pulses along the traced connectors from the sources toward the claim (opacity only; the connector itself stays solid), WalletWallaby idles |
 
-Reduced motion (the system setting or the panel's **Reduce motion** toggle) disables all of it: pieces are drawn at rest, the guide appears without a peek. Meaning is unchanged.
+Nothing drifts after the settle: base positions are fixed until someone drags a piece. Reduced motion (the system setting or **Reduce motion**) stops every loop and transition; the static rings, lines, fills and chips carry the same meaning.
 
 ## Wallmark
 
-WalletWall's canonical stablecoin identity record: the identity claim drawn with the round brick seal taken from the mark. It shows the symbol as presented, the assertion ID and the support state the engine returned. The identity rail repeats asset, chain, full contract address, issuer or protocol authority, Wallmark state, freshness and registry version. The word "verified" and "safe" are never used for a Wallmark.
+WalletWall's canonical stablecoin identity record: the identity claim, drawn as the largest node in terracotta with the brick glyph, its symbol as presented and the support state the engine returned. Its detail holds the full contract address, the issuer or protocol authority and the rest. The words "verified" and "safe" are never used for a Wallmark.
 
 ## Wallprint
 
-WalletWall's profile of the asset context, laid as three running-bond courses of bricks: Wallmark and Vault readiness; Sources, Chain and Wallet; Freshness, Conflicts, Dependencies and Limitations. Each brick repeats a result already shown elsewhere (counts are counts, chips are returned states); a brick with something needing attention has a dashed outline. It is not a score.
+A deep-slate band under The Wall: Wallmark, Readiness, Freshness (the Wallmark's), Conflicts, Sources, Chain, Wallet, and Invariants when there are violations. Each item is one label and one value (a returned chip or a count); each one with a piece behind it focuses that piece. It is not a score and computes no combined state.
 
 ## WalletWallaby
 
-The optional guide, using the WalletWallaby renders. It appears at most once per change, with one short sentence tied to what the bundle shows (a split seam, a missing brick, a keystone that does not seat, a recessed or superseded piece, or a piece that moved and why), and outlines the piece it explains. It peeks in once, then holds still; **Got it** retracts it. The toolbar control and the guide's own button read exactly **Hide Guide** while the guide is on and **Show Guide** while it is off; Show Guide brings WalletWallaby back with its last cue. It is never required to understand the panel. On a phone the guide is a small card docked under The Wall, so it never covers a piece or the detail sheet. WalletWallrus is the builder identity and does not appear on the canvas; the product mark stays the WalletWall mark.
+The optional guide, using the WalletWallaby renders, on the stage beside the controls (under The Wall on a phone), so it never covers a piece. Every cue is about one concrete piece and marks it with a four-tick reticle (deliberately unlike the dashed ring that means STALE): on load, the dominant story's piece (the conflict in `conflicting-balances`, the stale Wallmark in `stale-identity`, the Wallmark and the keystone it feeds in `usdc-established`), at most 20 words; on selection, that piece, at most 24 words. Cues repeat returned states only. The one control reads exactly **Hide Guide** while the guide is on and **Show Guide** while it is off. It is never required to operate the panel. WalletWallrus is the builder identity and does not appear on the canvas.
 
 ## Observed, Replay, Scenario
 
@@ -176,41 +154,40 @@ The Receipt area has **Copy receipt**, **Verify** and **QR**, all disabled with 
 
 ## Accessibility
 
-- Every piece is a focusable `role="button"` with a full accessible name (type, full address or label, assertion ID, chain, state in words).
-- The Wall has a text version ("The Wall as a list") with one row per piece, its state and what it rests on, and a legend.
-- Focus is always visible (2 px terracotta outline plus ring). Tooltips are not used for meaning; disabled controls state their reason as visible text.
+- Every piece is a focusable `role="button"` with a full accessible name (type, label or full address, assertion ID, chain, support, freshness and readiness in words) and a touch target of at least 44 px that never overlaps another.
+- The Wall has two text alternatives: the list (search, filter chips, one row per piece with its state and type) and "The Wall as a list" (a table of every piece, its state, the selected assertion and what it rests on), and a legend.
+- Focus is always visible. Tooltips never hold the only copy of a fact; disabled controls state their reason as visible text.
 - Status changes are announced in a polite live region; copying announces the result without repeating the address.
-- Contrast: ink on paper and muted text on paper exceed WCAG AA for body text.
+- Contrast: body text at least 4.5:1 on its surface, piece labels 6.6:1 on the stage, controls and state indicators at least 3:1, connectors 3.7:1, the selected and traced path and conflict connectors 4.7:1 (measured in Chromium on the stage colour). The decorative grid stays at 1.11:1.
+- Touch: on a coarse pointer, at any width, the toolbar, menu items, Back to Overview, folded sections and the "Why?" toggles take at least 44 by 44 CSS px; the phone sheet's grip draws a 24 px bar and takes 44 px, the extra reaching invisibly over the sheet's head.
 
 ## Responsive behaviour
 
-The page never scrolls horizontally and nothing is hidden to prevent it (no `overflow-x: hidden`); long values such as addresses wrap, and so do their copy controls. Three compositions:
+The page never scrolls horizontally and nothing is hidden to prevent it (no `overflow-x: hidden`). Three compositions:
 
 | Width | Composition |
 | --- | --- |
-| 1024 px and wider | The identity rail, toolbar and boundary note on top; The Wall and the detail rail (280 to 340 px) side by side, the rail sticky; Readiness assembly, Source lineage, Wallprint and the rest beneath. The Wall uses the wide layout and scales to its column. |
-| 768 to 1023 px | A compact header (mark, asset as presented, chain ID, a menu that folds the boundary note, toolbar and versions) and the critical state strip; The Wall about two thirds of the width (portrait layout when the panel is upright) with the detail rail beside it; Wallprint and readiness beneath. |
-| Below 768 px | A focused instrument: the compact header, the state strip, then The Wall as the stage (portrait layout, between 360 and 620 px tall and never taller than the wall needs), then Wallprint, readiness, the list, Source lineage and the Receipt row. No long explanation stands before The Wall; explanations fold behind "Why?". |
+| 1024 px and wider | The summary header; The Wall (about 70 % of the width, wide layout) and the detail rail (280 to 340 px) side by side, the rail sticky; the Wallprint band beneath, then readiness, the list, the criteria, the legend, the Receipt row and the text version. |
+| 768 to 1023 px | The summary header with the critical state strip; The Wall about two thirds of the width (tall layout when upright) with the guide above it and the detail rail beside it; Wallprint and readiness beneath. |
+| Below 768 px | The summary header and strip, then The Wall as the stage (tall layout), the guide under it, then Wallprint, readiness and the list; the detail is a bottom sheet. |
 
-**State strip.** Wallmark, freshness and readiness exactly as returned, plus a conflict chip only when there is a split seam and an invariant chip only when there are violations. Each chip leads to its piece.
+**State strip.** Below 1024 px: Wallmark, freshness and readiness exactly as returned, led by a conflict chip when the engine reported one, and an invariant chip only when there are violations. It scrolls sideways inside itself on a phone. Each chip leads to its piece.
 
-**Controls on a phone.** One compact group on the stage's top edge: −, +, Fit and a menu (Trace, Show/Hide Guide, Reset layout, Reduce motion, List view). Observed stays implicit; Replay, Scenario and Compare stay in the header menu with their reasons. In Trace, a "Back to Overview" control appears on the stage.
+**Controls.** One charcoal bar on the stage's top edge: Overview, Trace, Fit, Hide Guide and More on wider panels; zoom in, Fit and More on a phone. More holds Trace and the guide (on a phone), zoom in and out, Reset layout, Reduce motion, List view and About this panel (the boundary note, versions, the lenses that are not live yet with their reasons, and invariant violations). In Trace on a phone, where Overview sits in More, "Back to Overview" appears on the stage; wider panels keep Overview in the bar.
 
-**Detail sheet.** On a phone the detail rail is a bottom sheet with three states: peek (about 84 px: the selected piece, its state and one line of meaning), half (about 54 % of the screen: support, freshness, finality, authority, conflicts, limitations, sources) and full (the exact subject and value, the lineage, every limitation and the copy controls). A grip, a short swipe, the summary or More change state; Escape folds it one step; a half-open sheet folds to its peek when the reader scrolls the page on. The Wall stays behind it with its selection. Only the sheet stays on screen while scrolling: the header, strip and controls are not sticky.
+**Detail.** At most six facts first (support, freshness, finality, authority, conflicts when there are any, and the limitation count), with "Why?" beside each state; Provenance, Details (the exact subject and value with Copy, the authority class, corroboration, supersession, policy), Limitations and Sources one step away. On a phone it is a bottom sheet: peek (the piece, its state and one line of meaning), half and full; a grip, a swipe, the summary or More change state, Escape folds it one step. Only the sheet stays on screen while scrolling.
 
-**Touch.** Tap a piece to select it, emphasise its path and open the sheet; tap empty space to clear the emphasis and fold the sheet; pinch to zoom; drag to pan once zoomed in. Nothing depends on a long press. A finger never drags a piece (a mouse still can, to pin it). Touch targets are at least 44 px.
+**Copy.** Copy and Copy chain + address appear on hover or keyboard focus without moving anything, and are always there on touch; Copied shows for 1.5 s; the copied text is exactly the full value shown.
 
-**List view.** A search field, filter chips (All, Claims, Sources, Observations, Conflicts, Readiness, Missing) and one row per piece with its state; a row leads back to its piece on The Wall. It replaces the wide table on a phone.
+**Touch.** Tap to select or focus, tap empty space to clear, pinch to zoom, drag to pan once zoomed. Nothing depends on a long press; a finger never drags a piece.
 
-**Turning the device.** The page recomputes the composition when the panel turns or resizes. A phone on its side gets the wide layout, the strip folds away, and the detail sheet becomes a right-hand panel of about 40 %.
+**Turning the device.** The page recomputes the composition when the panel turns or resizes. A phone on its side gets the wide layout and a right-hand detail panel of about 40 %.
 
-Scrollbars that remain (the page, the detail rail when it is taller than the panel, wide tables) are narrow: a cream track with a deep-slate thumb that turns terracotta while engaged, from the brand tokens only. The Wall itself has no scrollbar.
-
-The page's favicon is the WalletWall brick-wallet mark, the same embedded file as the identity rail (`<link rel="icon">` with a `data:` URI), so no icon is fetched.
+Scrollbars that remain are narrow: a cream track with a deep-slate thumb that turns terracotta while engaged. The page's favicon is the WalletWall brick-wallet mark, embedded, so no icon is fetched.
 
 ## Rendering stack
 
-SVG for The Wall, DOM for text, controls and accessibility, and a small deterministic force simulation (about 70 lines in `wall.mjs`) instead of a graphics library. Three.js is not used: the graph is moderate in size and 2D, and WebGL would add weight, a GPU dependency and an accessibility gap without improving what the panel communicates.
+SVG for The Wall, DOM for text, controls and accessibility, and a deterministic layout in `coinstellation-model.mjs` instead of a graphics library or a framework. The reference Coinstellation is a React component; porting its renderer to plain SVG strings keeps the plugin deterministic, dependency-free and inside the existing nonce CSP. Optional browser features (View Transitions, anchor positioning) are not needed: CSS transitions settle within 280 ms and the tooltip is positioned by the page script, so nothing depends on a feature the host WebView may lack. Three.js and WebGL are not used.
 
 ## Deferred
 

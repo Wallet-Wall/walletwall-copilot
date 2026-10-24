@@ -1,12 +1,19 @@
-// The Wall: WalletWall's relationship graph for one evaluated bundle. Pure functions: the panel's view (the WalletWall MCP
-// results plus the bundle as presented) in, a node and edge model, a deterministic force layout and escaped SVG out.
+// The Wall, drawn as a Coinstellation: SVG for the visual model that coinstellation-model.mjs projects from the
+// authoritative Canvas view. This file only draws; it reads states from the model, which copied them verbatim.
 //
 // Rules this file must keep:
-//  - It never computes, upgrades or downgrades a support, freshness, finality, authority, conflict or readiness state. A
-//    piece carries exactly the state the WalletWall MCP server returned for it, or no state.
-//  - Geometry is never the only carrier of meaning: every piece has a text label, an accessible name and a row in the
-//    text version of The Wall.
-//  - The layout is deterministic (no randomness, no clock): the same view always produces the same picture.
+//  - It never computes, upgrades or downgrades a support, freshness, finality, authority, conflict or readiness state.
+//  - Geometry and colour are never the only carrier of meaning: every piece has a text label, a state chip where it has
+//    a state, an accessible name, and a row in the text version of The Wall.
+//  - Output is deterministic: the same model always produces the same markup.
+//
+// The node language is adapted from walletwall-coinstellation (Wallet-Wall/walletwall-coinstellation@3ff0942, MIT,
+// Copyright (c) 2024 Wallet-Wall): one circular node family with a small glyph, straight connectors with a small arrow,
+// a selection ring, and an anomaly-style ring for conflict. Its five demo node colours are replaced by one restrained
+// family plus state treatments; the readiness keystone is the one other silhouette.
+import { EDGE_KINDS, HIT, KEYSTONE, KNOWN_CLASSES, KNOWN_STATES, NODE_R, NODE_TYPES, chipWidth, short, stateText, classText } from "./coinstellation-model.mjs";
+
+export { NODE_TYPES, EDGE_KINDS, short };
 
 export function esc(value) {
   return String(value ?? "")
@@ -17,661 +24,197 @@ export function esc(value) {
     .replaceAll("'", "&#39;");
 }
 
-export const short = (s, n = 18) => {
-  const t = String(s ?? "");
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+/** Small glyphs, one per kind of piece, drawn in a 16-unit box around the piece's centre. */
+const GLYPH = {
+  authority: "M-6 -2.5h12M-4.5 -2.5v6M-1.5 -2.5v6M1.5 -2.5v6M4.5 -2.5v6M-6.5 4.5h13M-6 -3.5l6 -4l6 4",
+  source: "M-5.5 -1.5a7.5 7.5 0 0 1 11 0M-3 1.5a4 4 0 0 1 6 0M0 4.6v0.1",
+  observation: "M-2.6 0a2.6 2.6 0 1 0 5.2 0a2.6 2.6 0 1 0 -5.2 0M-6.5 0h2.5M4 0h2.5M0 -6.5v2.5M0 4v2.5",
+  assertion: "M-6.5 -4.5h13v9h-13zM-6.5 0h13M-1.5 -4.5v4.5M2.5 0v4.5",
+  wallmark: "M-7 -5h14v10h-14zM-7 0h14M-2.5 -5v5M3 -5v5M0.5 0v5M-5 0v5M5.5 0v5",
+  derivation: "M-6.5 -5c3.5 0 4 5 7 5M-6.5 5c3.5 0 4 -5 7 -5M0.5 0h6M4 -2.5l2.5 2.5l-2.5 2.5",
+  conflict: "M-1.5 -7.5l3.5 5.5l-3.5 2.5l3.5 7",
+  gap: "M-2.6 -2.6a2.6 2.6 0 1 1 3.6 2.4c-0.8 0.4 -1 0.9 -1 1.8M0 4.4v0.1",
+  snapshot: "M-4.5 -4.5h9v9h-9z",
+  chain: "M-1 -3.2h-2.6a3.2 3.2 0 0 0 0 6.4h2.6M1 -3.2h2.6a3.2 3.2 0 0 1 0 6.4h-2.6M-2.5 0h5",
+  contract: "M-4.5 -6.5h5.5l3.5 3.5v10h-9zM1 -6.5v3.5h3.5M-2 0.5h4M-2 3.5h4",
+  wallet: "M-6.5 -4.5h11.5a1.5 1.5 0 0 1 1.5 1.5v7.5h-13zM6.5 -1h-3.5a1.6 1.6 0 0 0 0 3.2h3.5",
+  stablecoin: "M-5.5 0a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0 -11 0M-2.6 0a2.6 2.6 0 1 0 5.2 0a2.6 2.6 0 1 0 -5.2 0",
 };
 
-/** A shortened address for a piece's face only. The full value is in the piece's accessible name and in its detail. */
-export const shortAddress = (a) => {
-  const t = String(a ?? "");
-  return t.length > 14 ? `${t.slice(0, 6)}…${t.slice(-4)}` : t;
-};
+const r1 = (v) => (Math.round(v * 10) / 10).toString();
 
-const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-const list = (v) => (Array.isArray(v) ? v : []);
-
-export const ASSERTION_LABELS = {
-  ASSET_IDENTITY: "Asset identity",
-  TOKEN_BALANCE_AT_BLOCK: "Balance at block",
-  TOKEN_USD_PRICE: "USD price",
-  TOKEN_USD_VALUE: "USD value",
-  VAULT_TECHNICAL_READINESS: "Vault readiness",
-};
-
-export const SOURCE_KIND_LABELS = {
-  CHAIN_STATE: "Chain state",
-  ISSUER_PUBLICATION: "Issuer publication",
-  PROVIDER_ENDPOINT: "Provider endpoint",
-  USER_INPUT: "User input",
-  WALLETWALL_RULES: "WalletWall rules",
-};
-
-/** The node taxonomy: what each kind of piece is and the architectural shape it is drawn as. */
-export const NODE_TYPES = {
-  authority: { name: "Issuer or protocol authority", shape: "seal plate", w: 144, h: 40 },
-  source: { name: "Source", shape: "source plate", w: 132, h: 38 },
-  observation: { name: "Observation", shape: "measurement tile", w: 132, h: 36 },
-  wallmark: { name: "Wallmark", shape: "stamped identity seal", w: 164, h: 52 },
-  assertion: { name: "Assertion", shape: "fitted piece", w: 156, h: 44 },
-  derivation: { name: "WalletWall derivation", shape: "hinge plate", w: 132, h: 30 },
-  readiness: { name: "Vault readiness", shape: "keystone", w: 176, h: 62 },
-  conflict: { name: "Conflict", shape: "split seam", w: 76, h: 30 },
-  gap: { name: "Missing piece", shape: "empty slot", w: 140, h: 36 },
-  snapshot: { name: "Snapshot slot", shape: "reserved slot", w: 136, h: 34 },
-  stablecoin: { name: "Stablecoin", shape: "brick", w: 124, h: 40 },
-  contract: { name: "Contract", shape: "address plate", w: 168, h: 30 },
-  wallet: { name: "Wallet", shape: "address brick", w: 168, h: 32 },
-  chain: { name: "Chain", shape: "structural anchor", w: 108, h: 32 },
-};
+/** The keystone outline: wider at the top, seated on its course. */
+const keystonePath = (w, h) => `M${r1(-w / 2)} ${r1(-h / 2)}H${r1(w / 2)}L${r1(w / 2 - 12)} ${r1(h / 2)}H${r1(-w / 2 + 12)}Z`;
 
 /**
- * The edge taxonomy. Every edge points from the thing a piece rests on to the piece resting on it. `why` marks the
- * evidence path (source, observation, assertion, derivation, readiness) that "Why WalletWall says this" traces.
+ * The path of one connection, clipped to the two pieces' outlines (a circle, or the keystone's box). With a bend it is a
+ * gentle curve around a piece it would otherwise cross; a conflict connection is drawn broken in the middle.
+ * Self-contained: the page embeds this function's source.
  */
-export const EDGE_KINDS = {
-  speaks: { name: "speaks through", why: true, len: 170 },
-  observed: { name: "observed", why: true, len: 170 },
-  supports: { name: "supports", why: true, len: 170 },
-  input: { name: "is an input to", why: true, len: 170 },
-  generates: { name: "generates", why: true, len: 170 },
-  missing: { name: "is missing for", why: true, len: 150 },
-  conflict: { name: "conflicts at", why: true, len: 70 },
-  supersedes: { name: "is superseded by", why: true, len: 90 },
-  names: { name: "names", why: false, len: 110 },
-  issuer: { name: "is named as issuer by", why: false, len: 150 },
-  subject: { name: "is the subject of", why: false, len: 120 },
-  anchors: { name: "anchors", why: false, len: 90 },
-  reserved: { name: "reserves", why: false, len: 90 },
-};
-
-const COL = 188;
-const FINALITY_SHORT = { FINALIZED: "finalized", UNFINALIZED: "unfinalized", UNKNOWN_FINALITY: "finality unknown" };
-const COLUMN = { authority: 0, source: 1, observation: 2, wallmark: 3, assertion: 3, conflict: 3.62, derivation: 4, readiness: 5, snapshot: 5 };
-
-/** Builds the pieces and connections of The Wall from the panel view. */
-export function buildWall(view) {
-  const nodes = new Map();
-  const edges = [];
-  const edgeKeys = new Set();
-  const add = (id, type, fields) => {
-    if (!nodes.has(id)) nodes.set(id, { id, type, w: NODE_TYPES[type].w, h: NODE_TYPES[type].h, ...fields });
-    return nodes.get(id);
-  };
-  const link = (from, to, kind) => {
-    const key = `${from}\u0000${to}\u0000${kind}`;
-    if (from === to || edgeKeys.has(key) || !nodes.has(from) || !nodes.has(to)) return;
-    edgeKeys.add(key);
-    edges.push({ from, to, kind });
-  };
-
-  const sources = list(view.sources).filter(isObject);
-  const observations = list(view.observations).filter(isObject);
-  const assertions = list(view.assertions).filter(isObject);
-  const derivations = list(view.derivations).filter(isObject);
-  const sourceById = new Map(sources.map((s) => [s.id, s]));
-  const obsById = new Map(observations.map((o) => [o.id, o]));
-
-  // Authorities and sources.
-  for (const s of sources) {
-    if (typeof s.authorityId === "string" && s.authorityId !== "") add(`auth:${s.authorityId}`, "authority", { label: s.authorityId, sub: "authority", data: { authorityId: s.authorityId } });
-    add(`src:${s.id}`, "source", { label: SOURCE_KIND_LABELS[s.kind] ?? String(s.kind ?? "source"), sub: s.transport?.retrievedVia ? `via ${s.transport.retrievedVia}` : s.authorityId ? String(s.authorityId) : String(s.id), data: s });
-    if (typeof s.authorityId === "string" && s.authorityId !== "") link(`auth:${s.authorityId}`, `src:${s.id}`, "speaks");
-  }
-
-  // Observations. A source an observation names but the bundle lacks is drawn as a missing piece, never filled in.
-  for (const o of observations) {
-    add(`obs:${o.id}`, "observation", { label: String(o.id), sub: `${o.result === "VALUE" ? "value" : String(o.result ?? "?").toLowerCase().replace("_", " ")} · ${FINALITY_SHORT[o.finality] ?? "finality ?"}`, missing: o.result !== "VALUE", data: o });
-    if (sourceById.has(o.sourceId)) link(`src:${o.sourceId}`, `obs:${o.id}`, "observed");
-    else {
-      add(`gap:src:${o.sourceId}`, "gap", { label: `Source ${short(o.sourceId, 14)}`, sub: "not in the bundle", missing: true, gapFor: "source", column: 1, data: { id: o.sourceId } });
-      link(`gap:src:${o.sourceId}`, `obs:${o.id}`, "missing");
-    }
-  }
-
-  // Assertions, each carrying the state the MCP server returned.
-  for (const a of assertions) {
-    const e = a.evaluation ?? null;
-    const type = a.claimType === "ASSET_IDENTITY" ? "wallmark" : a.claimType === "VAULT_TECHNICAL_READINESS" ? "readiness" : "assertion";
-    add(`as:${a.id}`, type, {
-      label: type === "wallmark" ? "Wallmark" : ASSERTION_LABELS[a.claimType] ?? String(a.claimType),
-      sub: String(a.id),
-      state: e ? e.supportState : null,
-      freshness: e ? e.freshnessState : null,
-      assertionId: a.id,
-      superseded: Boolean(e?.supersededBy),
-      symbol: type === "wallmark" && isObject(a.value) ? a.value.symbol : undefined,
-      data: a,
-    });
-  }
-  for (const a of assertions) {
-    const deps = a.evaluation?.dependencies;
-    for (const id of list(deps?.observationIds)) {
-      if (obsById.has(id)) link(`obs:${id}`, `as:${a.id}`, "supports");
-      else {
-        add(`gap:obs:${id}`, "gap", { label: `Observation ${short(id, 12)}`, sub: "not in the bundle", missing: true, gapFor: "observation", column: 2, data: { id } });
-        link(`gap:obs:${id}`, `as:${a.id}`, "missing");
-      }
-    }
-  }
-
-  // WalletWall derivations: inputs into the hinge, the hinge into the assertion it generated.
-  const assertionIds = new Set(assertions.map((a) => a.id));
-  for (const d of derivations) {
-    add(`drv:${d.id}`, "derivation", { label: "Derivation", sub: `${d.ruleId ?? "?"}`, data: d });
-    for (const id of list(d.inputAssertionIds)) {
-      if (assertionIds.has(id)) link(`as:${id}`, `drv:${d.id}`, "input");
-      else {
-        add(`gap:as:${id}`, "gap", { label: `Input ${short(id, 14)}`, sub: "not in the bundle", missing: true, gapFor: "assertion", column: 3, data: { id } });
-        link(`gap:as:${id}`, `drv:${d.id}`, "missing");
-      }
-    }
-    if (assertionIds.has(d.outputAssertionId)) link(`drv:${d.id}`, `as:${d.outputAssertionId}`, "generates");
-  }
-  // Input assertions named by an evaluation but not reached through a derivation record.
-  for (const a of assertions) {
-    for (const id of list(a.evaluation?.dependencies?.assertionIds)) {
-      const viaDerivation = derivations.some((d) => d.outputAssertionId === a.id && list(d.inputAssertionIds).includes(id));
-      if (!viaDerivation && assertionIds.has(id)) link(`as:${id}`, `as:${a.id}`, "input");
-    }
-  }
-
-  // Conflicts as returned by the MCP server: a split seam between the two pieces.
-  for (const a of assertions) {
-    for (const other of list(a.evaluation?.conflictsWith)) {
-      if (!assertionIds.has(other)) continue;
-      const [x, y] = [a.id, other].sort();
-      const id = `conflict:${x}|${y}`;
-      add(id, "conflict", { label: "Conflict", sub: `${short(x, 10)} / ${short(y, 10)}`, data: { between: [x, y] } });
-      link(`as:${x}`, id, "conflict");
-      link(`as:${y}`, id, "conflict");
-    }
-  }
-
-  // Supersession: the earlier piece stays as a faint historical layer next to the one that replaced it.
-  for (const a of assertions) {
-    const by = a.evaluation?.supersededBy;
-    if (typeof by === "string" && assertionIds.has(by)) link(`as:${a.id}`, `as:${by}`, "supersedes");
-  }
-
-  // Readiness that could not be assessed because a required input is missing: a visible gap, not a filled one.
-  const readiness = view.readiness;
-  if (isObject(readiness) && typeof readiness.errorCode === "string" && nodes.has(`as:${readiness.assertionId}`)) {
-    add("gap:readiness-input", "gap", { label: "Required input", sub: "missing", missing: true, gapFor: "readiness", column: 4, data: { code: readiness.errorCode } });
-    link("gap:readiness-input", `as:${readiness.assertionId}`, "missing");
-  }
-  for (const n of nodes.values()) {
-    if (n.type === "readiness") {
-      if (isObject(readiness) && readiness.assertionId === n.assertionId && isObject(readiness.result)) n.classification = readiness.result.classification;
-      add("snapshot:reserved", "snapshot", { label: "Snapshot slot", sub: "reserved, not available", data: {} });
-      link(n.id, "snapshot:reserved", "reserved");
-    }
-  }
-
-  // The foundation course: the subjects the claims are about (chain, contract, wallet) and the stablecoin a Wallmark names.
-  for (const a of assertions) {
-    const s = isObject(a.subject) ? a.subject : {};
-    const chain = typeof s.chainId === "string" ? s.chainId : null;
-    const chainNode = chain === null ? null : add(`chain:${chain}`, "chain", { label: `Chain ${chain}`, sub: "chain ID", data: { chainId: chain } }).id;
-    const contract = a.claimType === "ASSET_IDENTITY" ? s.address : a.claimType === "VAULT_TECHNICAL_READINESS" ? undefined : s.token;
-    if (typeof contract === "string") {
-      const id = `contract:${chain ?? "?"}|${contract}`;
-      add(id, "contract", { label: shortAddress(contract), address: contract, chainId: chain, sub: "contract", data: { address: contract, chainId: chain } });
-      if (chainNode) link(chainNode, id, "anchors");
-      link(id, `as:${a.id}`, "subject");
-    }
-    if (a.claimType === "TOKEN_BALANCE_AT_BLOCK" && typeof s.holder === "string") {
-      const id = `wallet:${chain ?? "?"}|${s.holder}`;
-      add(id, "wallet", { label: shortAddress(s.holder), address: s.holder, chainId: chain, sub: "wallet", data: { address: s.holder, chainId: chain } });
-      if (chainNode) link(chainNode, id, "anchors");
-      link(id, `as:${a.id}`, "subject");
-    }
-    if (a.claimType === "ASSET_IDENTITY" && isObject(a.value)) {
-      if (typeof a.value.symbol === "string") {
-        const id = `asset:${chain ?? "?"}|${String(s.address ?? "")}|${a.value.symbol}`;
-        add(id, "stablecoin", { label: a.value.symbol, sub: "as presented", data: { symbol: a.value.symbol, decimals: a.value.decimals, chainId: chain, address: s.address } });
-        link(`as:${a.id}`, id, "names");
-      }
-      if (typeof a.value.issuerAuthorityId === "string") {
-        const id = `auth:${a.value.issuerAuthorityId}`;
-        if (!nodes.has(id)) add(id, "authority", { label: a.value.issuerAuthorityId, sub: "named, no source", unattested: true, data: { authorityId: a.value.issuerAuthorityId } });
-        link(id, `as:${a.id}`, "issuer");
-      }
-    }
-  }
-
-  return { nodes: [...nodes.values()], edges };
-}
-
-/**
- * A small deterministic force simulation: link springs, column and band anchors, and rectangle collision. It is used
- * twice with identical inputs: on the server to place the pieces, and in the page to play the assembly when the state
- * changes. It is self-contained on purpose (the page embeds its source), so it must not refer to anything outside itself.
- */
-export function forceLayout(nodes, edges, ticks) {
-  const byId = new Map();
-  for (const n of nodes) {
-    byId.set(n.id, n);
-    n.vx = 0;
-    n.vy = 0;
-  }
-  const links = [];
-  for (const e of edges) {
-    const s = byId.get(e.from);
-    const t = byId.get(e.to);
-    if (s && t) links.push({ s, t, len: e.len, k: e.k });
-  }
-  let alpha = 1;
-  const decay = 1 - Math.pow(0.001, 1 / ticks);
-  let done = 0;
-  function step() {
-    if (done >= ticks) return false;
-    for (const l of links) {
-      const dx = l.t.x - l.s.x;
-      const dy = l.t.y - l.s.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const f = ((d - l.len) / d) * l.k * alpha;
-      l.s.vx += dx * f;
-      l.s.vy += dy * f;
-      l.t.vx -= dx * f;
-      l.t.vy -= dy * f;
-    }
-    for (const n of nodes) {
-      if (n.ax !== null) n.vx += (n.ax - n.x) * n.kx;
-      if (n.ay !== null) n.vy += (n.ay - n.y) * n.ky;
-    }
-    for (const n of nodes) {
-      if (n.fixed) {
-        n.vx = 0;
-        n.vy = 0;
-        continue;
-      }
-      n.vx *= 0.58;
-      n.vy *= 0.58;
-      n.x += n.vx;
-      n.y += n.vy;
-    }
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        const minX = (a.w + b.w) / 2 + 22;
-        const minY = (a.h + b.h) / 2 + 16;
-        if (Math.abs(dx) >= minX || Math.abs(dy) >= minY) continue;
-        if (dx === 0 && dy === 0) dy = 1;
-        const px = minX - Math.abs(dx);
-        const py = minY - Math.abs(dy);
-        const wa = a.fixed ? 0 : b.fixed ? 1 : 0.5;
-        const wb = 1 - wa - (a.fixed && b.fixed ? 1 : 0);
-        if (px < py) {
-          const sx = dx < 0 ? -1 : 1;
-          a.x -= sx * px * wa;
-          b.x += sx * px * wb;
-        } else {
-          const sy = dy < 0 ? -1 : 1;
-          a.y -= sy * py * wa;
-          b.y += sy * py * wb;
-        }
-      }
-    }
-    alpha -= alpha * decay;
-    done++;
-    return true;
-  }
-  return { step, ticks };
-}
-
-/** The path of one connection, clipped to the two pieces' outlines. A conflict seam is drawn split in the middle. */
-export function edgePath(a, b, kind) {
+export function edgePath(a, b, kind, bend) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  const clip = (n) => Math.min(ux === 0 ? Infinity : (n.w / 2 + 4) / Math.abs(ux), uy === 0 ? Infinity : (n.h / 2 + 4) / Math.abs(uy), len / 2 - 1);
-  const s = clip(a);
-  const t = clip(b);
-  const x1 = a.x + ux * s;
-  const y1 = a.y + uy * s;
-  const x2 = b.x - ux * t;
-  const y2 = b.y - uy * t;
+  const k = Number(bend) || 0;
+  const c = k ? { x: (a.x + b.x) / 2 - uy * 2 * k, y: (a.y + b.y) / 2 + ux * 2 * k } : null;
+  const dir = (p, q) => {
+    const l = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    return { x: (q.x - p.x) / l, y: (q.y - p.y) / l };
+  };
+  const clip = (n, d) => (n.kw ? Math.min(d.x === 0 ? Infinity : (n.kw / 2 + 3) / Math.abs(d.x), d.y === 0 ? Infinity : (n.kh / 2 + 3) / Math.abs(d.y)) : n.r + 3);
+  const ds = c ? dir(a, c) : { x: ux, y: uy };
+  const de = c ? dir(c, b) : { x: ux, y: uy };
+  const s = Math.min(clip(a, ds), len / 2 - 1);
+  const t = Math.min(clip(b, de), len / 2 - 1);
+  const x1 = a.x + ds.x * s;
+  const y1 = a.y + ds.y * s;
+  const x2 = b.x - de.x * t;
+  const y2 = b.y - de.y * t;
   const f = (v) => (Math.round(v * 10) / 10).toString();
+  if (c) return `M${f(x1)} ${f(y1)}Q${f(c.x)} ${f(c.y)} ${f(x2)} ${f(y2)}`;
   if (kind === "conflict") {
     const mx = (x1 + x2) / 2;
     const my = (y1 + y2) / 2;
-    const g = 6;
-    const nx = -uy * 4;
-    const ny = ux * 4;
-    return `M${f(x1)} ${f(y1)}L${f(mx - ux * g + nx)} ${f(my - uy * g + ny)}M${f(mx + ux * g - nx)} ${f(my + uy * g - ny)}L${f(x2)} ${f(y2)}`;
+    const g = 4;
+    return `M${f(x1)} ${f(y1)}L${f(mx - ux * g)} ${f(my - uy * g)}M${f(mx + ux * g)} ${f(my + uy * g)}L${f(x2)} ${f(y2)}`;
   }
   return `M${f(x1)} ${f(y1)}L${f(x2)} ${f(y2)}`;
 }
 
-/** Sets each piece's anchors and deterministic starting position, then runs the layout to rest. */
-export const LAYOUT_TICKS = 160;
-export function layoutWall(model) {
-  const { nodes, edges } = model;
-  const columnOf = (n) => (n.type === "gap" ? n.column : COLUMN[n.type]);
-  const columns = new Map();
-  for (const n of nodes) {
-    const c = columnOf(n);
-    if (c === undefined) continue;
-    if (!columns.has(c)) columns.set(c, []);
-    columns.get(c).push(n);
-  }
-  let half = 0;
-  for (const [c, members] of columns) {
-    const step = 76;
-    members.forEach((n, i) => {
-      n.ax = c * COL;
-      n.kx = 0.3;
-      n.ay = 0;
-      n.ky = 0.006;
-      n.x0 = c * COL;
-      n.y0 = (i - (members.length - 1) / 2) * step;
-      half = Math.max(half, Math.abs(n.y0) + n.h);
-    });
-  }
-  const band = half + 72;
-  const foundation = nodes.filter((n) => columnOf(n) === undefined);
-  foundation.forEach((n, i) => {
-    n.ax = null;
-    n.kx = 0;
-    n.ay = n.type === "chain" ? band + 84 : band;
-    n.ky = 0.3;
-    n.x0 = COL * 1.5 + ((i + 0.5) * (COL * 3)) / Math.max(1, foundation.length);
-    n.y0 = n.ay;
-  });
-  for (const n of nodes) {
-    n.x = n.x0;
-    n.y = n.y0;
-    n.fixed = false;
-  }
-  const FOUNDATION_EDGES = new Set(["subject", "anchors", "names", "issuer"]);
-  const springs = edges.map((e) => ({ from: e.from, to: e.to, len: EDGE_KINDS[e.kind]?.len ?? 150, k: e.kind === "conflict" || e.kind === "supersedes" ? 0.08 : FOUNDATION_EDGES.has(e.kind) ? 0.015 : 0.035 }));
-  const sim = forceLayout(nodes, springs, LAYOUT_TICKS);
-  while (sim.step());
-  for (const n of nodes) {
-    n.x = Math.round(n.x * 10) / 10;
-    n.y = Math.round(n.y * 10) / 10;
-  }
-  model.springs = springs;
-  model.portrait = portraitLayout(model);
-  return model;
-}
-
-/**
- * The portrait layout, for phones and portrait tablets: the same pieces and connections, read top to bottom in bands
- * (authorities and sources, observations, claims, Wallmark, readiness, foundation) instead of left to right. Positions are
- * computed once, without simulation: each band packs its pieces into centred rows, ordered by where the force layout put
- * them so related pieces stay near each other. Pieces are a little smaller and carry shorter words; nothing is dropped.
- */
-export const PORTRAIT_WIDTH = 352;
-const PORTRAIT_SIZE = {
-  authority: [88, 36], source: [80, 34], observation: [80, 34], wallmark: [144, 48], assertion: [108, 46], derivation: [92, 34], readiness: [136, 50],
-  conflict: [56, 34], gap: [92, 34], snapshot: [92, 34], stablecoin: [80, 36], contract: [96, 34], wallet: [96, 34], chain: [56, 34],
-};
-/** Bands top to bottom. Each band's groups are laid in order in one flow of rows; the chamber band gets a frame. */
-const PORTRAIT_BANDS = [
-  { title: "AUTHORITIES · SOURCES", groups: [(n) => n.type === "authority", (n) => n.type === "source" || (n.type === "gap" && n.gapFor === "source")] },
-  { title: "OBSERVATIONS", groups: [(n) => n.type === "observation" || (n.type === "gap" && n.gapFor === "observation")] },
-  { title: "CLAIMS · DERIVATION", groups: [(n) => n.type === "assertion" || n.type === "conflict" || (n.type === "gap" && n.gapFor === "assertion"), (n) => n.type === "derivation"] },
-  { title: "WALLMARK", groups: [(n) => n.type === "wallmark"] },
-  { title: "VAULT READINESS", groups: [inChamberPiece], chamber: true },
-  { title: "FOUNDATION · SUBJECTS", groups: [(n) => n.type === "stablecoin" || n.type === "contract" || n.type === "wallet" || n.type === "chain"], byX: true },
-];
-function inChamberPiece(n) {
-  return n.type === "readiness" || n.type === "snapshot" || (n.type === "gap" && n.gapFor === "readiness");
-}
-
-export function portraitLayout(model) {
-  const { nodes } = model;
-  const GAP_X = 8;
-  const GAP_Y = 6;
-  const titles = [];
-  const placed = new Set();
-  let y = 0;
-  const pack = (flow) => {
-    let row = [];
-    const flush = () => {
-      const rowH = Math.max(...row.map((n) => n.ph));
-      const total = row.reduce((s, n) => s + n.pw, 0) + GAP_X * (row.length - 1);
-      let x = (PORTRAIT_WIDTH - total) / 2;
-      for (const n of row) {
-        n.px = Math.round((x + n.pw / 2) * 10) / 10;
-        n.py = Math.round((y + rowH / 2) * 10) / 10;
-        x += n.pw + GAP_X;
+/** How far a connection bends so that it passes no other piece: 0 if a straight line is clear. */
+function bendFor(a, b, others) {
+  const near = (k) => {
+    const c = k ? { x: (a.x + b.x) / 2 - ((b.y - a.y) / (Math.hypot(b.x - a.x, b.y - a.y) || 1)) * 2 * k, y: (a.y + b.y) / 2 + ((b.x - a.x) / (Math.hypot(b.x - a.x, b.y - a.y) || 1)) * 2 * k } : null;
+    let hits = 0;
+    for (let i = 1; i < 16; i++) {
+      const s = i / 16;
+      const p = c ? { x: (1 - s) * (1 - s) * a.x + 2 * (1 - s) * s * c.x + s * s * b.x, y: (1 - s) * (1 - s) * a.y + 2 * (1 - s) * s * c.y + s * s * b.y } : { x: a.x + (b.x - a.x) * s, y: a.y + (b.y - a.y) * s };
+      for (const o of others) {
+        if (Math.hypot(p.x - o.x, p.y - o.y) < o.r + 9) hits++;
+        // and the piece's label under it
+        if (o.lw && Math.abs(p.x - o.x) < o.lw / 2 + 4 && Math.abs(p.y - (o.y + o.r + 11)) < 9) hits++;
       }
-      y += rowH + GAP_Y;
-      row = [];
-    };
-    for (const n of flow) {
-      [n.pw, n.ph] = PORTRAIT_SIZE[n.type] ?? [n.w, n.h];
-      placed.add(n);
-      if (row.length > 0 && row.reduce((s, m) => s + m.pw + GAP_X, 0) + n.pw > PORTRAIT_WIDTH) flush();
-      row.push(n);
     }
-    if (row.length) flush();
+    return hits;
   };
-  for (const band of PORTRAIT_BANDS) {
-    const flow = band.groups.flatMap((g) => nodes.filter((n) => !placed.has(n) && g(n)).sort((a, b) => (band.byX ? a.x - b.x : a.y - b.y) || (a.id < b.id ? -1 : 1)));
-    if (flow.length === 0) continue;
-    titles.push({ text: band.title, y: y + 9 });
-    y += band.chamber ? 18 : 13;
-    pack(flow);
-    y += band.chamber ? 10 : 4;
+  if (near(0) === 0) return 0;
+  let best = { k: 0, h: near(0) };
+  for (const k of [18, -18, 30, -30, 44, -44, 60, -60]) {
+    const h = near(k);
+    if (h < best.h) best = { k, h };
+    if (h === 0) break;
   }
-  // Anything no band claims (a future piece type) still gets a place in a last band: never dropped.
-  const rest = nodes.filter((n) => !placed.has(n));
-  if (rest.length) {
-    titles.push({ text: "OTHER", y: y + 9 });
-    y += 14;
-    pack(rest);
-    y += 6;
-  }
-  const pad = 8;
-  return { titles, box: { x: -pad, y: -pad, w: PORTRAIT_WIDTH + pad * 2, h: Math.ceil(y + pad) } };
+  return best.k;
 }
 
-const SOURCE_SHORT = { CHAIN_STATE: "Chain state", ISSUER_PUBLICATION: "Issuer pub.", PROVIDER_ENDPOINT: "Provider", USER_INPUT: "User input", WALLETWALL_RULES: "Rules" };
-const CLAIM_SHORT = { ASSET_IDENTITY: "Identity", TOKEN_BALANCE_AT_BLOCK: "Balance", TOKEN_USD_PRICE: "Price", TOKEN_USD_VALUE: "USD value", VAULT_TECHNICAL_READINESS: "Readiness" };
-const RESULT_SHORT = { VALUE: "Observed", NO_RESULT: "No result", ERROR: "Error" };
-const FINALITY_COMPACT = { FINALIZED: "finalized", UNFINALIZED: "unfinalized", UNKNOWN_FINALITY: "finality ?" };
-const GAP_SHORT = { source: "source", observation: "observation", assertion: "input claim", readiness: "required input" };
+const t = (x, y, cls, text) => `<text x="${r1(x)}" y="${r1(y)}" text-anchor="middle" class="${cls}">${esc(text)}</text>`;
+function chip(text, attention, y, x = 0, cls = "") {
+  const w = chipWidth(text);
+  return `<g class="ww-chip${cls}" transform="translate(${r1(x)} ${r1(y)})"${attention ? ' data-attention="true"' : ""}><rect x="${r1(-w / 2)}" y="-6.5" width="${r1(w)}" height="13" rx="6.5"/>${t(0, 3, "ww-chip-text", text)}</g>`;
+}
 
-/** The words on a portrait piece: a short name and qualifier. Never an assertion ID, never a full address. */
-function compactWords(n, model) {
-  switch (n.type) {
-    case "authority":
-      return [model.edges.some((e) => e.from === n.id && e.kind === "issuer") ? "Issuer" : "Authority", n.unattested ? "no source" : "authority"];
-    case "source":
-      return [SOURCE_SHORT[n.data?.kind] ?? "Source", "source"];
-    case "observation":
-      return [RESULT_SHORT[n.data?.result] ?? "Result ?", FINALITY_COMPACT[n.data?.finality] ?? "finality ?"];
-    case "assertion":
-      return [CLAIM_SHORT[n.data?.claimType] ?? "Claim", ""];
-    case "derivation":
-      return ["Derived", "by WalletWall"];
-    case "readiness":
-      return ["Readiness", ""];
-    case "gap":
-      return ["Missing", GAP_SHORT[n.gapFor] ?? "piece"];
-    case "snapshot":
-      return ["Snapshot", "reserved"];
-    case "stablecoin":
-      return [short(n.label, 10), "as presented"];
-    case "contract":
-      return ["Contract", shortAddress(n.address)];
-    case "wallet":
-      return ["Wallet", shortAddress(n.address)];
-    case "chain":
-      return [short(n.data?.chainId ?? n.label, 8), "chain ID"];
-    default:
-      return [short(n.label, 12), ""];
+/** The minimum touch target of a piece, in drawing units. */
+function baseHit(n) {
+  if (n.type === "readiness") return { w: Math.max(HIT, KEYSTONE.w + 4), h: Math.max(HIT, KEYSTONE.h + 4) };
+  const side = Math.max(HIT, 2 * (NODE_R[n.type] ?? 14) + 8);
+  return { w: side, h: side };
+}
+
+// Touch targets grow from the minimum into the free space around each piece, up to HIT_MAX, keeping HIT_GAP clear of a
+// neighbour's target and staying inside the frame: a phone-sized frame drawn below 1:1 still gives every piece 44 CSS
+// pixels. Squares centred d apart (d the larger of the two axis distances) keep the gap when each half-side is at most
+// (d - gap) / 2 and at most d - gap minus the other's minimum half-side; the keystone keeps its minimum.
+const HIT_MAX = 60;
+const HIT_GAP = 10;
+function hitSizes(nodes, key, box) {
+  const base = nodes.map(baseHit);
+  return new Map(nodes.map((n, i) => {
+    if (n.type === "readiness") return [n.id, base[i]];
+    const p = n[key];
+    let half = Math.min(HIT_MAX / 2, p.x - box.x, box.x + box.w - p.x, p.y - box.y, box.y + box.h - p.y);
+    nodes.forEach((m, j) => {
+      if (j === i) return;
+      const dx = Math.abs(p.x - m[key].x), dy = Math.abs(p.y - m[key].y);
+      if (m.type === "readiness") half = Math.min(half, Math.max(dx - base[j].w / 2, dy - base[j].h / 2) - HIT_GAP);
+      else { const d = Math.max(dx, dy) - HIT_GAP; half = Math.min(half, d / 2, d - base[j].w / 2); }
+    });
+    const side = Math.max(base[i].w, Math.floor(half * 2));
+    return [n.id, { w: side, h: side }];
+  }));
+}
+
+/** One piece: an invisible touch target, the shape (circle or keystone) with its glyph and state rings, label and chip. */
+function piece(n, selectedId, wideHit, tallHit) {
+  const keystone = n.type === "readiness";
+  const r = keystone ? KEYSTONE.h / 2 : NODE_R[n.type] ?? 14;
+  const hitW = wideHit.w;
+  const hitH = wideHit.h;
+  const rings = [];
+  if (n.superseded) rings.push(keystone ? "" : `<circle class="ghost" cx="5" cy="-5" r="${r}"/>`);
+  if (!keystone && (n.type === "conflict" || n.wwepState === "CONFLICTING")) rings.push(`<circle class="ww-ring ww-ring-conflict" r="${r + 5}"/><circle class="ww-ring ww-ring-conflict ww-ring-outer" r="${r + 9}"/>`);
+  if (!keystone && (n.wwepState === "STALE" || (n.freshness === "STALE" && n.wwepState !== "CONFLICTING"))) rings.push(`<circle class="ww-ring ww-ring-stale" r="${r + 5}"/>`);
+  const body = keystone ? `<path class="body" d="${keystonePath(KEYSTONE.w, KEYSTONE.h)}"/><line class="seat" x1="${-KEYSTONE.w / 2 + 12}" y1="${KEYSTONE.h / 2 + 5}" x2="${KEYSTONE.w / 2 - 12}" y2="${KEYSTONE.h / 2 + 5}"/>` : `<circle class="body" r="${r}"/>`;
+  const half = !keystone && n.wwepState === "PARTIAL" ? `<path class="half" d="M0 ${-r}A${r} ${r} 0 0 0 0 ${r}Z"/>` : "";
+  const scale = keystone ? 1 : Math.max(0.9, r / 14);
+  const glyph = keystone ? t(0, 4, "ww-key-text", "READINESS") : `<path class="ww-glyph" transform="scale(${r1(scale)})" d="${GLYPH[n.type] ?? GLYPH.assertion}"/>`;
+  // pathLength makes the guide's pointer (four ticks, see styles) the same on every size of piece.
+  const halo = keystone ? `<rect class="ww-halo" x="${-KEYSTONE.w / 2 - 8}" y="${-KEYSTONE.h / 2 - 8}" width="${KEYSTONE.w + 16}" height="${KEYSTONE.h + 16}" rx="10" pathLength="100"/>` : `<circle class="ww-halo" r="${r + 10}" pathLength="100"/>`;
+  let words;
+  if (keystone) {
+    // Two chips side by side under the keystone: the readiness classification, then the support of the claim.
+    const c = n.chip;
+    const a = chipWidth(c.text);
+    const b = chipWidth(c.second);
+    const y = KEYSTONE.h / 2 + 19;
+    words = `${chip(c.text, c.attention, y, -(b + 4) / 2, " ww-chip-class")}${chip(c.second, !["ESTABLISHED", "SUPPORTED"].includes(n.wwepState), y, (a + 4) / 2)}`;
+  } else {
+    words = `${t(0, r + 15, "ww-label", n.label)}${n.chip ? chip(n.chip.text, n.chip.attention, r + 29) : ""}`;
   }
+  const state = n.wwepState === undefined ? "" : ` data-state="${n.wwepState === null ? "NONE" : KNOWN_STATES.includes(n.wwepState) ? esc(n.wwepState) : "UNRECOGNISED"}"`;
+  const flags = [n.superseded ? "superseded" : "", n.missing ? "missing" : "", n.unattested ? "unattested" : ""].filter(Boolean).join(" ");
+  const cls = n.classification !== undefined ? ` data-classification="${KNOWN_CLASSES.includes(n.classification) ? esc(n.classification) : "UNRECOGNISED"}"` : "";
+  const shape = keystone ? ` data-kw="${KEYSTONE.w}" data-kh="${KEYSTONE.h}"` : ` data-r="${r}"`;
+  const selected = n.assertionId !== undefined && n.assertionId === selectedId;
+  const where = `data-w="${hitW}" data-h="${hitH}" data-px="${n.tall.x}" data-py="${n.tall.y}" data-pw="${tallHit.w}" data-ph="${tallHit.h}"${shape}`;
+  return `<g class="ww-node${selected ? " is-selected" : ""}" tabindex="0" role="button" aria-pressed="${selected}" aria-label="${esc(n.accessibleLabel)}" data-node-id="${esc(n.id)}" data-type="${esc(n.type)}" data-entity="${esc(n.entityType)}"${state} data-visual="${esc(n.state)}"${flags ? ` data-flags="${flags}"` : ""}${n.assertionId !== undefined ? ` data-assertion-id="${esc(n.assertionId)}"` : ""}${cls}${n.primary ? ' data-primary="true"' : ""}${n.onTrace ? ' data-trace="true"' : ""} ${where} transform="translate(${n.wide.x} ${n.wide.y})"><rect class="ww-hit" x="${-hitW / 2}" y="${-hitH / 2}" width="${hitW}" height="${hitH}"/><g class="ww-node-art">${halo}${rings.join("")}${body}${half}${glyph}</g>${words}</g>`;
 }
 
-function bounds(nodes, pad) {
-  let x0 = Infinity;
-  let y0 = Infinity;
-  let x1 = -Infinity;
-  let y1 = -Infinity;
-  for (const n of nodes) {
-    x0 = Math.min(x0, n.x - n.w / 2);
-    y0 = Math.min(y0, n.y - n.h / 2);
-    x1 = Math.max(x1, n.x + n.w / 2);
-    y1 = Math.max(y1, n.y + n.h / 2);
-  }
-  return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2 };
-}
-
-/** The pieces that sit inside the vault readiness chamber. */
-export const inChamber = (n) => n.type === "readiness" || n.type === "snapshot" || (n.type === "gap" && n.gapFor === "readiness");
-
-const t2 = (x, y, cls, text) => `<text x="${x}" y="${y}" text-anchor="middle" class="${cls}">${esc(text)}</text>`;
-
-/**
- * A portrait piece: the same architectural shape at its portrait size, with the short words of compactWords. The state
- * (or readiness classification) stays on the face in words, exactly as returned.
- */
-function compactShape(n, words) {
-  const [name, qualifier] = words;
-  const geometry = shape({ ...n, w: n.pw, h: n.ph }).replace(/<text[\s\S]*$/, "");
-  const hh = n.ph / 2;
-  const mono = n.type === "contract" || n.type === "wallet";
-  const onDark = n.type === "chain" || n.type === "stablecoin" || n.type === "conflict" ? " on-dark" : "";
-  const dx = n.type === "wallmark" ? 16 : 0;
-  const lines = [];
-  if (n.type === "conflict") lines.push(["c1 on-dark", "split"]);
-  else {
-    lines.push([`c1${onDark}`, n.type === "wallmark" ? `Wallmark${n.symbol ? ` · ${short(n.symbol, 8)}` : ""}` : name]);
-    if (n.type === "readiness") lines.push(["c3 classification", classText(n.classification)]);
-    else if (qualifier) lines.push([`c2${mono ? " mono" : ""}${onDark}`, qualifier]);
-    if (n.state !== undefined) lines.push(["c3 state", stateText(n.state)]);
-  }
-  const step = 11;
-  const top = -((lines.length - 1) * step) / 2 + 4;
-  return `${geometry}${lines.map(([cls, text], i) => t2(dx, Math.min(top + i * step, hh - 3), cls, text)).join("")}`;
-}
-
-/** The architectural shape of each kind of piece, centred on 0,0. */
-function shape(n) {
-  const w = n.w;
-  const h = n.h;
-  const hw = w / 2;
-  const hh = h / 2;
-  const lines = (a, b, mono = false) => `${t2(0, b === undefined ? 4 : -2, mono ? "t1 mono" : "t1", a)}${b === undefined ? "" : t2(0, 12, "t2", b)}`;
-  switch (n.type) {
-    case "authority": {
-      const c = 8;
-      return `<polygon class="body" points="${-hw + c},${-hh} ${hw - c},${-hh} ${hw},${-hh + c} ${hw},${hh - c} ${hw - c},${hh} ${-hw + c},${hh} ${-hw},${hh - c} ${-hw},${-hh + c}"/><polygon class="inner" points="${-hw + c + 3},${-hh + 3} ${hw - c - 3},${-hh + 3} ${hw - 3},${-hh + c + 3} ${hw - 3},${hh - c - 3} ${hw - c - 3},${hh - 3} ${-hw + c + 3},${hh - 3} ${-hw + 3},${hh - c - 3} ${-hw + 3},${-hh + c + 3}"/>${lines(short(n.label, 20), n.sub)}`;
-    }
-    case "source":
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="1"/><line class="rail" x1="${-hw}" y1="${-hh + 2}" x2="${hw}" y2="${-hh + 2}"/>${lines(n.label, short(n.sub, 22))}`;
-    case "observation": {
-      const ticks = [0.2, 0.35, 0.5, 0.65, 0.8].map((p) => `<line class="tick" x1="${(-hw + w * p).toFixed(1)}" y1="${-hh}" x2="${(-hw + w * p).toFixed(1)}" y2="${-hh + (p === 0.5 ? 6 : 4)}"/>`).join("");
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="2"/>${ticks}${lines(short(n.label, 18), short(n.sub, 26))}`;
-    }
-    case "wallmark": {
-      const cx = -hw + 24;
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="3"/><circle class="seal" cx="${cx}" cy="0" r="17"/><circle class="seal-ring" cx="${cx}" cy="0" r="12.5"/><path class="seal-bricks" d="M${cx - 9} -3.5H${cx + 9}M${cx - 9} 3.5H${cx + 9}M${cx - 2} -10V-3.5M${cx + 4} -3.5V3.5M${cx - 5} -3.5V3.5M${cx + 1} 3.5V10"/>${t2(18, -6, "t1", `Wallmark${n.symbol ? ` · ${short(n.symbol, 10)}` : ""}`)}${t2(18, 7, "t2", short(n.sub, 20))}${t2(18, 19, "t3 state", stateText(n.state))}`;
-    }
-    case "assertion":
-      return `<path class="body" d="M${-hw} ${-hh}H${hw}V-7h7v14h-7V${hh}H${-hw}V7h7v-14h-7Z"/>${t2(0, -6, "t1", short(n.label, 22))}${t2(0, 6, "t2", short(n.sub, 22))}${t2(0, 17, "t3 state", stateText(n.state))}`;
-    case "derivation":
-      return `<polygon class="body" points="${-hw + 10},${-hh} ${hw - 10},${-hh} ${hw},0 ${hw - 10},${hh} ${-hw + 10},${hh} ${-hw},0"/>${lines(n.label, short(n.sub, 22))}`;
-    case "readiness":
-      return `<polygon class="body" points="${-hw},${-hh} ${hw},${-hh} ${hw - 18},${hh} ${-hw + 18},${hh}"/><line class="seat" x1="${-hw + 18}" y1="${hh + 5}" x2="${hw - 18}" y2="${hh + 5}"/>${t2(0, -12, "t1", "Vault readiness")}${t2(0, 1, "t3 classification", classText(n.classification))}${t2(0, 14, "t3 state", stateText(n.state))}`;
-    case "conflict":
-      return `<polygon class="body half" points="${-hw},${-hh} -3,${-hh} -9,-3 -1,4 -7,${hh} ${-hw},${hh}"/><polygon class="body half" points="5,${-hh} ${hw},${-hh} ${hw},${hh} 1,${hh} 7,4 -1,-3"/>${t2(0, 4, "t1 on-dark", "split")}`;
-    case "gap":
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="1"/>${lines(short(n.label, 20), n.sub)}`;
-    case "snapshot":
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="1"/>${lines(n.label, n.sub)}`;
-    case "stablecoin":
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="6"/><line class="hi" x1="${-hw + 6}" y1="${-hh + 3}" x2="${hw - 6}" y2="${-hh + 3}"/>${t2(0, -2, "t1 on-dark", short(n.label, 14))}${t2(0, 12, "t2 on-dark", "stablecoin, as presented")}`;
-    case "contract":
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="1"/>${t2(0, 4, "t1 mono", `contract ${n.label}`)}`;
-    case "wallet":
-      return `<rect class="body" x="${-hw}" y="${-hh}" width="${w}" height="${h}" rx="6"/><line class="mortar" x1="${-hw + 34}" y1="${-hh}" x2="${-hw + 34}" y2="${hh}"/>${t2(16, 4, "t1 mono", `wallet ${n.label}`)}`;
-    case "chain":
-      return `<polygon class="body" points="${-hw + 12},${-hh} ${hw - 12},${-hh} ${hw},${hh} ${-hw},${hh}"/>${t2(0, 4, "t1 on-dark", n.label)}`;
-    default:
-      return "";
-  }
-}
-
-/** The accessible name of a piece: what it is, what it says, and its state in words. Addresses are given in full. */
-export function nodeName(n) {
-  const type = NODE_TYPES[n.type]?.name ?? n.type;
-  const parts = [`${type}: ${n.address ?? n.label}`];
-  if (n.type === "wallmark" || n.type === "assertion" || n.type === "readiness") parts.push(`assertion ${n.assertionId}`);
-  if (n.chainId) parts.push(`chain ID ${n.chainId}`);
-  if (n.classification) parts.push(`readiness ${classText(n.classification)}`);
-  if (n.state !== undefined) parts.push(n.state === null ? "no evaluation returned" : `support ${stateText(n.state)}`);
-  if (n.superseded) parts.push("superseded");
-  if (n.missing) parts.push(n.type === "observation" ? `result ${n.data?.result ?? "unknown"}, not a value` : "missing");
-  if (n.unattested) parts.push("named by the claim, no source in the bundle");
-  if (n.type === "snapshot") parts.push("reserved for immutable snapshots, not available yet");
-  return parts.join(", ");
-}
-
-const KNOWN_STATES = ["ESTABLISHED", "SUPPORTED", "PARTIAL", "CONFLICTING", "STALE", "SUPERSEDED", "UNKNOWN", "NOT_ESTABLISHED"];
-const KNOWN_CLASSES = ["CRITERIA_MET", "CRITERIA_NOT_MET", "NOT_ESTABLISHED"];
-/** A state as printed on a piece's face: a WWEP value, or "not recognised"; never an unknown string passed through. */
-const stateText = (s) => (s === null || s === undefined ? "no evaluation" : KNOWN_STATES.includes(s) ? s : "not recognised");
-const classText = (c) => (c === undefined ? "not assessed" : KNOWN_CLASSES.includes(c) ? c : "not recognised");
-
-/** The Wall as SVG. Positions come from layoutWall; the page script animates and drags from the same data. */
-export function renderWall(model, { selectedNodeId, digest }) {
-  const { nodes, edges, springs } = model;
+/** The Wall as SVG: connectors under pieces. Positions come from the model; the page animates and pins from the same data. */
+export function renderWall(model, { digest }) {
+  const { nodes, edges } = model;
   if (nodes.length === 0) return '<p class="muted">The bundle has no pieces to place.</p>';
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const chamberNodes = nodes.filter(inChamber);
-  const all = bounds(nodes, 30);
-  const vb = { x: Math.floor(all.x), y: Math.floor(all.y - 26), w: Math.ceil(all.w), h: Math.ceil(all.h + 26) };
-  const chamber = chamberNodes.length ? bounds(chamberNodes, 20) : null;
+  const geom = (n, key = "wide") => (n.type === "readiness" ? { x: n[key].x, y: n[key].y, kw: KEYSTONE.w, kh: KEYSTONE.h, r: KEYSTONE.w / 2 } : { x: n[key].x, y: n[key].y, r: NODE_R[n.type] ?? 14 });
+  const obstacle = (n, key) => ({ ...geom(n, key), lw: n.type === "readiness" ? 0 : String(n.label).length * 6.9 });
+  const bends = (key) => edges.map((e) => bendFor(geom(byId.get(e.from), key), geom(byId.get(e.to), key), nodes.filter((n) => n.id !== e.from && n.id !== e.to).map((n) => obstacle(n, key))));
+  const wideBend = bends("wide");
+  const tallBend = bends("tall");
+  const story = new Set(model.storyPath ?? []);
   const edgeMarkup = edges
     .map((e, i) => {
       const a = byId.get(e.from);
       const b = byId.get(e.to);
       const kind = EDGE_KINDS[e.kind];
-      const spring = springs[i];
-      return `<path class="ww-edge" data-kind="${esc(e.kind)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" data-len="${spring.len}" data-k="${spring.k}"${kind.why ? ' data-evidence="true"' : ""} d="${edgePath(a, b, e.kind)}"${e.kind === "conflict" || e.kind === "reserved" ? "" : ' marker-end="url(#ww-arrow)"'}><title>${esc(`${a.label} ${kind.name} ${b.label}`)}</title></path>`;
+      const inStory = model.dominantStory === "conflict" ? e.kind === "conflict" : story.has(e.from) && story.has(e.to);
+      return `<path class="ww-edge" data-kind="${esc(e.kind)}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" data-rel="${esc(e.relationship)}"${kind.why ? ' data-evidence="true"' : ""}${e.activeTrace ? ' data-trace="true"' : ""}${inStory ? ' data-story="true"' : ""} data-bend="${wideBend[i]}" data-pbend="${tallBend[i]}" d="${edgePath(geom(a), geom(b), e.kind, wideBend[i])}"${e.kind === "conflict" || e.kind === "reserved" ? "" : ' marker-end="url(#ww-arrow)"'}><title>${esc(`${a.label} ${kind.name} ${b.label}`)}</title></path>`;
     })
     .join("");
-  const nodeMarkup = nodes
-    .map((n) => {
-      const state = n.state === undefined ? "" : ` data-state="${n.state === null ? "NONE" : KNOWN_STATES.includes(n.state) ? esc(n.state) : "UNRECOGNISED"}"`;
-      const flags = [n.superseded ? "superseded" : "", n.missing ? "missing" : "", n.unattested ? "unattested" : ""].filter(Boolean).join(" ");
-      const portrait = n.px === undefined ? "" : ` data-px="${n.px}" data-py="${n.py}" data-pw="${n.pw}" data-ph="${n.ph}"`;
-      const anchors = `data-x0="${n.x0}" data-y0="${n.y0}" data-ax="${n.ax ?? ""}" data-ay="${n.ay ?? ""}" data-kx="${n.kx}" data-ky="${n.ky}" data-w="${n.w}" data-h="${n.h}"${portrait}`;
-      const ghost = (w, h) => (n.superseded ? `<rect class="ghost" x="${-w / 2 + 5}" y="${-h / 2 - 5}" width="${w}" height="${h}" rx="2"/>` : "");
-      const faces = n.px === undefined ? `${ghost(n.w, n.h)}${shape(n)}` : `<g data-face="wide">${ghost(n.w, n.h)}${shape(n)}</g><g data-face="compact">${ghost(n.pw, n.ph)}${compactShape(n, compactWords(n, model))}</g>`;
-      return `<g class="ww-node${n.id === selectedNodeId ? " is-selected" : ""}" tabindex="0" role="button" aria-pressed="${n.id === selectedNodeId}" aria-label="${esc(nodeName(n))}" data-node-id="${esc(n.id)}" data-type="${esc(n.type)}"${state}${flags ? ` data-flags="${flags}"` : ""}${n.assertionId ? ` data-assertion-id="${esc(n.assertionId)}"` : ""}${n.classification ? ` data-classification="${KNOWN_CLASSES.includes(n.classification) ? esc(n.classification) : "UNRECOGNISED"}"` : ""} ${anchors} transform="translate(${n.x} ${n.y})">${faces}</g>`;
-    })
-    .join("");
-  const chamberMarkup = chamber
-    ? `<g class="ww-chamber" aria-hidden="true"><rect x="${chamber.x.toFixed(1)}" y="${chamber.y.toFixed(1)}" width="${chamber.w.toFixed(1)}" height="${chamber.h.toFixed(1)}"/><rect class="inner" x="${(chamber.x + 4).toFixed(1)}" y="${(chamber.y + 4).toFixed(1)}" width="${(chamber.w - 8).toFixed(1)}" height="${(chamber.h - 8).toFixed(1)}"/><text x="${(chamber.x + 8).toFixed(1)}" y="${(chamber.y - 7).toFixed(1)}" class="layer">VAULT READINESS CHAMBER</text></g>`
-    : "";
-  const columnTitles = [
-    [0, "AUTHORITIES"],
-    [1, "SOURCES"],
-    [2, "OBSERVATIONS"],
-    [3, "CLAIMS"],
-    [4, "DERIVATION"],
-  ]
-    .filter(([c]) => nodes.some((n) => n.ax === c * COL || (n.type === "gap" && n.column === c)))
-    .map(([c, t]) => `<text x="${c * COL}" y="${vb.y + 14}" text-anchor="middle" class="layer">${t}</text>`)
-    .join("");
-  const foundation = nodes.some((n) => n.ax === null) ? `<text x="${vb.x + 8}" y="${Math.max(...nodes.filter((n) => n.ax === null).map((n) => n.y + n.h / 2)) + 18}" class="layer">FOUNDATION · SUBJECTS OF THE CLAIMS</text>` : "";
-  const foundationH = foundation ? 20 : 0;
-  const p = model.portrait;
-  const portraitAttr = p ? ` data-portrait-viewbox="${p.box.x} ${p.box.y} ${p.box.w} ${p.box.h}"` : "";
-  const portraitTitles = p ? `<g data-face="compact" class="ww-bands">${p.titles.map((t) => `<text x="0" y="${t.y}" class="layer">${esc(t.text)}</text>`).join("")}</g>` : "";
-  return `<svg class="ww-wall-svg" viewBox="${vb.x} ${vb.y} ${vb.w} ${vb.h + foundationH}" width="${vb.w}" height="${vb.h + foundationH}" data-digest="${esc(digest)}" data-ticks="${LAYOUT_TICKS}"${portraitAttr} role="group" aria-label="The Wall: ${nodes.length} pieces and ${edges.length} connections. The same information is listed in the text version below.">
-<defs><marker id="ww-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><pattern id="ww-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6"/></pattern><pattern id="ww-half" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="4" height="8"/></pattern></defs>
-<g data-face="wide">${columnTitles}${foundation}</g>${portraitTitles}${chamberMarkup}<g class="ww-edges">${edgeMarkup}</g><g class="ww-nodes">${nodeMarkup}</g></svg>`;
+  // Trace glints: a light overlay on each connector of the provenance trace whose opacity pulses from the sources toward
+  // the claim (step = how many trace connectors lead into it). Only opacity animates; the connector itself stays solid.
+  const traced = edges.filter((e) => e.activeTrace);
+  const depth = new Map();
+  for (let pass = 0; pass < traced.length; pass++) for (const e of traced) depth.set(e.to, Math.max(depth.get(e.to) ?? 0, (depth.get(e.from) ?? 0) + 1));
+  const glints = traced.map((e) => `<path class="ww-glint" data-from="${esc(e.from)}" data-to="${esc(e.to)}" data-kind="${esc(e.kind)}" data-step="${Math.min(depth.get(e.from) ?? 0, 5)}" d="${edgePath(geom(byId.get(e.from)), geom(byId.get(e.to)), e.kind, wideBend[edges.indexOf(e)])}"/>`).join("");
+  const w = model.box.wide;
+  const p = model.box.tall;
+  const wideHits = hitSizes(nodes, "wide", w);
+  const tallHits = hitSizes(nodes, "tall", p);
+  const nodeMarkup = nodes.map((n) => piece(n, model.authoritativeSelectedAssertionId, wideHits.get(n.id), tallHits.get(n.id))).join("");
+  return `<svg class="ww-wall-svg" viewBox="${w.x} ${w.y} ${w.w} ${w.h}" width="${w.w}" height="${w.h}" data-digest="${esc(digest)}" data-portrait-viewbox="${p.x} ${p.y} ${p.w} ${p.h}" data-story="${esc(model.dominantStory ?? "none")}"${model.storyTarget ? ` data-story-target="${esc(model.storyTarget)}"` : ""} data-view-version="${esc(model.coinstellationViewVersion)}" role="group" aria-label="The Wall: ${nodes.length} pieces and ${edges.length} connections. The same information is listed in the text version and the list below.">
+<defs><marker id="ww-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs>
+<g class="ww-edges">${edgeMarkup}</g>${glints ? `<g class="ww-glints" aria-hidden="true">${glints}</g>` : ""}<g class="ww-nodes">${nodeMarkup}</g></svg>`;
 }
+
+export { stateText, classText };

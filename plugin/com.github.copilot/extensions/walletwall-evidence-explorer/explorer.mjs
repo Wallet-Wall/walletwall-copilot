@@ -8,6 +8,13 @@
 //    Nothing is written to disk, nothing is sent anywhere, no identifier is generated for the user or the device.
 //  - The only random value is the per-instance URL token / CSP nonce, which exists to stop other local web pages from
 //    reading the panel. It is never persisted or transmitted.
+//
+// The WalletWall Canvas visualizes an authoritative MCP-evaluated view. Fixtures provide input, `explorer.mjs` owns Canvas
+// state, and Coinstellation is a deterministic presentation projection. No renderer, layout, interaction, motion, or
+// browser-time calculation may create, strengthen, or replace WalletWall evidence state. Here: normalizeInput() validates
+// and copies the input and evaluates nothing; the WalletWall MCP server evaluates; buildView() joins the bundle with the
+// MCP results into the authoritative Canvas view (empty, error or ready), which render.mjs projects into the page.
+// view.selectedId is the one assertion selection, shared by the person (POST select) and the agent (select_assertion).
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { callTools } from "./mcp-client.mjs";
@@ -22,6 +29,13 @@ export class ExplorerInputError extends Error {
 }
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const deepFreeze = (v) => {
+  if (v !== null && typeof v === "object" && !Object.isFrozen(v)) {
+    Object.freeze(v);
+    for (const x of Object.values(v)) deepFreeze(x);
+  }
+  return v;
+};
 const PREFERRED_DEFAULT = ["ASSET_IDENTITY"];
 
 /** Chooses what to show first. This is a layout decision only; it does not rank evidence. */
@@ -261,6 +275,12 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
       const inst = instances.get(instanceId);
       if (!inst) throw new ExplorerInputError("The canvas instance is not open.");
       return summary(inst);
+    },
+    /** The authoritative Canvas view the page is rendered from, as a frozen copy. Read-only; not an agent action. */
+    canvasView(instanceId) {
+      const inst = instances.get(instanceId);
+      if (!inst) throw new ExplorerInputError("The canvas instance is not open.");
+      return deepFreeze(structuredClone(buildView(inst)));
     },
     async close(instanceId) {
       const inst = instances.get(instanceId);

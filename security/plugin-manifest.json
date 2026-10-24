@@ -53,8 +53,13 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/client.mjs",
-      "sha256": "5e223dbdfc0d85ddde5baa0029d4633884e1980c62a9786af2d24ec9d4afcded",
-      "bytes": 42216
+      "sha256": "525d51bf12472f59e04ad6803cf80a47ecf112ba3d9f129770c9c718ba09f3a7",
+      "bytes": 43339
+    },
+    {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/coinstellation-model.mjs",
+      "sha256": "bdb42124aa220773c6b73fb2be391ecc7c65e603459b7d3565f8bb69a8c6d1d9",
+      "bytes": 52691
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/copilot-extension.json",
@@ -63,8 +68,8 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/explorer.mjs",
-      "sha256": "aa011e7f89da9a7f53985779ea427d2e92f7aaf22dfb9c7c145ab164c036463f",
-      "bytes": 14617
+      "sha256": "90d4965c085a7b017ad4a058ce0cc9049b725969c64daf8f7cf2d25dda237ec9",
+      "bytes": 15875
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/extension.mjs",
@@ -83,18 +88,18 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/render.mjs",
-      "sha256": "0e229695343bfb6a9063d21f5b7a74ca53a5d3353d66bd62a8b42779b1373eb1",
-      "bytes": 58699
+      "sha256": "cc26d5531f617bfc36a51077e312de1f917b5edbe87dd4ed89d2046e764df70f",
+      "bytes": 60892
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/styles.mjs",
-      "sha256": "16de1acb983b7171f0f5a89ef13335c53f402d673bb088338087685b36e1c0ba",
-      "bytes": 36380
+      "sha256": "2f10ba7653aca97967a1065b8b340b07613b389307f386eac0a4e8eed405403e",
+      "bytes": 41408
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wall.mjs",
-      "sha256": "7edd07d951f251959663c2aff966b827a9ac082efa4854974e210766962da7e0",
-      "bytes": 36641
+      "sha256": "7c1ebdb8bc41c2b01d33f6feed2882dd95921f55d399606df8291e7a5c3c1e32",
+      "bytes": 15393
     },
     {
       "path": "plugin/mcp.json",
