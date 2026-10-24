@@ -71,10 +71,10 @@ In the GitHub Copilot app: **Customize → Plugins → marketplace settings → 
 The shipped Copilot MCP remains stdio-only. For a user-owned Claude Managed Agent, a separate opt-in loopback Streamable HTTP adapter is available from a source checkout:
 
 ```text
-node packages/mcp/transport/http.ts --port 8787
+node scripts/claude-mcp-http.ts --port 8787
 ```
 
-It exposes `http://127.0.0.1:8787/mcp` for connection through the user's own Anthropic MCP tunnel. It is not part of the bundled Copilot runtime, does not create a WalletWall-hosted endpoint, and does not change the six-tool WalletWall MCP contract. See `docs/CLAUDE_MANAGED_AGENT.md`.
+It exposes `http://127.0.0.1:8787/mcp` for connection through the user's own Anthropic MCP tunnel. The adapter lives outside the `packages/mcp` publish surface, is not part of the bundled Copilot runtime, does not create a WalletWall-hosted endpoint, and does not change the six-tool WalletWall MCP contract. See `docs/CLAUDE_MANAGED_AGENT.md`.
 
 ## Develop
 
