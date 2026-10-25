@@ -1,0 +1,44 @@
+# WalletWall MCP on Cloud Run
+
+This deployment is an optional remote transport for the existing WalletWall MCP evidence engine. It does not replace the shipped Copilot stdio runtime.
+
+## Boundary
+
+- `packages/mcp/src/server.ts` remains the single six-tool / six-resource contract.
+- Local execution still defaults to `127.0.0.1` and stdio remains the shipped Copilot transport.
+- Cloud Run opts into a network listener explicitly with `--host 0.0.0.0`.
+- The remote transport adds no BigQuery access, provider credentials, writes, signing, custody or transaction broadcast.
+- `/health` is a fixed, no-store readiness endpoint. `/mcp` remains the only MCP route.
+- The application does not implement its own bearer-token store. Authentication must be enforced by the GCP ingress layer before production exposure.
+
+## Build
+
+```text
+gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp -f Dockerfile.mcp .
+```
+
+## Deploy
+
+Create a dedicated Cloud Run service and keep it non-public until an authenticated ingress path is configured:
+
+```text
+gcloud run deploy walletwall-mcp \
+  --image REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp \
+  --region REGION \
+  --no-allow-unauthenticated
+```
+
+Cloud Run supplies `PORT`; `Dockerfile.mcp` starts the bridge on `0.0.0.0:$PORT`.
+
+## Endpoints
+
+```text
+GET  /health
+POST /mcp
+```
+
+The first deployment should be tested on the generated `run.app` hostname before adding a custom domain. After the authenticated ingress is proven, `mcp.walletwall.org` can point at that GCP frontend while Vercel continues to host DNS for `walletwall.org`.
+
+## Deliberately deferred
+
+BigQuery-backed tools, rate limiting, public-client auth, custom-domain ingress and registry `remotes` metadata are separate lanes. Keeping them separate makes it possible to prove that this change only adds a deployable transport around the existing evidence contract.
