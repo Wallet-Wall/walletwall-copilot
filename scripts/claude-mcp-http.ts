@@ -4,7 +4,8 @@ import { createServer as createMcpServer } from "../packages/mcp/src/server.ts";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8787;
-const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_BODY_BYTES = 512 * 1024;
+const MAX_URL_LENGTH = 256;
 
 class RequestRejected extends Error {
   readonly statusCode: number;
@@ -20,9 +21,16 @@ function fatal(): never {
   process.exit(1);
 }
 
-function parseArgs(argv: readonly string[]): { host: string; port: number } {
+function parsePort(raw: string): number {
+  if (!/^\d{1,5}$/.test(raw)) throw new Error("invalid port");
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0 || value > 65535) throw new Error("invalid port");
+  return value;
+}
+
+function parseArgs(argv: readonly string[], envPort: string | undefined): { host: string; port: number } {
   let host = DEFAULT_HOST;
-  let port = DEFAULT_PORT;
+  let port: number | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -55,12 +63,10 @@ function parseArgs(argv: readonly string[]): { host: string; port: number } {
       continue;
     }
 
-    if (!/^\d{1,5}$/.test(raw)) throw new Error("invalid port");
-    const value = Number(raw);
-    if (!Number.isInteger(value) || value < 0 || value > 65535) throw new Error("invalid port");
-    port = value;
+    port = parsePort(raw);
   }
 
+  if (port === undefined) port = envPort === undefined ? DEFAULT_PORT : parsePort(envPort);
   return { host, port };
 }
 
@@ -71,6 +77,7 @@ function sendFixed(res: ServerResponse, statusCode: number): void {
     statusCode === 404 ? "not found" :
     statusCode === 405 ? "method not allowed" :
     statusCode === 413 ? "payload too large" :
+    statusCode === 414 ? "uri too long" :
     statusCode === 415 ? "unsupported media type" :
     "internal server error";
 
@@ -78,6 +85,7 @@ function sendFixed(res: ServerResponse, statusCode: number): void {
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("referrer-policy", "no-referrer");
   res.end(JSON.stringify({ error: message }));
 }
 
@@ -105,8 +113,10 @@ function allowedOrigin(value: string | undefined, host: string, port: number): b
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const declared = req.headers["content-length"];
-  if (typeof declared === "string" && /^\d+$/.test(declared) && Number(declared) > MAX_BODY_BYTES) {
-    throw new RequestRejected(413);
+  if (Array.isArray(declared)) throw new RequestRejected(400);
+  if (typeof declared === "string") {
+    if (!/^\d+$/.test(declared)) throw new RequestRejected(400);
+    if (Number(declared) > MAX_BODY_BYTES) throw new RequestRejected(413);
   }
 
   const chunks: Uint8Array[] = [];
@@ -126,11 +136,17 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 }
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse, host: string, port: number): Promise<void> {
+  if (req.url === undefined || req.url.length > MAX_URL_LENGTH) {
+    sendFixed(res, req.url === undefined ? 400 : 414);
+    return;
+  }
+
   if (req.url === "/health" && (req.method === "GET" || req.method === "HEAD")) {
     res.statusCode = 200;
     res.setHeader("content-type", "application/json; charset=utf-8");
     res.setHeader("cache-control", "no-store");
     res.setHeader("x-content-type-options", "nosniff");
+    res.setHeader("referrer-policy", "no-referrer");
     res.end(req.method === "HEAD" ? undefined : JSON.stringify({ status: "ok" }));
     return;
   }
@@ -157,8 +173,12 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, host: st
   const body = await readJsonBody(req);
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("referrer-policy", "no-referrer");
 
   const mcp = createMcpServer();
+  // In the pinned SDK, omitting sessionIdGenerator leaves it undefined: stateless mode.
+  // A fresh MCP server and transport are created for every POST, so no client session
+  // state can be shared between requests.
   const transport = new StreamableHTTPServerTransport({ enableJsonResponse: true });
 
   try {
@@ -172,7 +192,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, host: st
 let requestedHost: string;
 let requestedPort: number;
 try {
-  ({ host: requestedHost, port: requestedPort } = parseArgs(process.argv.slice(2)));
+  ({ host: requestedHost, port: requestedPort } = parseArgs(process.argv.slice(2), process.env.PORT));
 } catch {
   fatal();
 }
@@ -188,10 +208,11 @@ const httpServer = createHttpServer((req, res) => {
   });
 });
 
-httpServer.maxHeadersCount = 64;
-httpServer.requestTimeout = 30_000;
-httpServer.headersTimeout = 10_000;
+httpServer.maxHeadersCount = 48;
+httpServer.requestTimeout = 20_000;
+httpServer.headersTimeout = 5_000;
 httpServer.keepAliveTimeout = 5_000;
+httpServer.maxRequestsPerSocket = 100;
 httpServer.on("clientError", (_error, socket) => {
   if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
 });
@@ -201,6 +222,7 @@ process.on("unhandledRejection", fatal);
 
 function shutdown(): void {
   httpServer.close(() => process.exit(0));
+  httpServer.closeIdleConnections();
 }
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
