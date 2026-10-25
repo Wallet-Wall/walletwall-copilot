@@ -9,13 +9,21 @@ This deployment is an optional remote transport for the existing WalletWall MCP 
 - Cloud Run opts into a network listener explicitly with `--host 0.0.0.0`.
 - The remote transport adds no BigQuery access, provider credentials, writes, signing, custody or transaction broadcast.
 - `/health` is a fixed, no-store readiness endpoint. `/mcp` remains the only MCP route.
-- The application does not implement its own bearer-token store. Authentication must be enforced by the GCP ingress layer before production exposure.
+- The application does not implement its own bearer-token store. Authentication must be enforced before production exposure.
+- Cloud deployment artifacts live under `scripts/cloud-run/`; the repository root stays reserved for stable project-level contracts and manifests.
 
 ## Build
 
+Build from the repository root so the Docker context can include the MCP workspace while deployment-specific files remain namespaced:
+
 ```text
-gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp -f Dockerfile.mcp .
+gcloud builds submit \
+  --tag REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp \
+  --file scripts/cloud-run/Dockerfile \
+  .
 ```
+
+The Dockerfile-specific ignore file is `scripts/cloud-run/Dockerfile.dockerignore`, keeping unrelated plugin, docs, eval and conformance content out of the container build context where supported by the builder.
 
 ## Deploy
 
@@ -28,7 +36,7 @@ gcloud run deploy walletwall-mcp \
   --no-allow-unauthenticated
 ```
 
-Cloud Run supplies `PORT`; `Dockerfile.mcp` starts the bridge on `0.0.0.0:$PORT`.
+Cloud Run supplies `PORT`; the container starts the bridge on `0.0.0.0:$PORT`.
 
 ## Endpoints
 
