@@ -21,9 +21,10 @@ function oneServer(value: unknown): [string, Record<string, unknown>] {
 
 test("Claude plugin manifest is intentionally minimal and versioned", () => {
   const manifest = readJson(".claude-plugin/plugin.json");
-  assert.deepEqual(Object.keys(manifest).sort(), ["author", "description", "name", "version"]);
+  assert.deepEqual(Object.keys(manifest).sort(), ["author", "description", "displayName", "name", "version"]);
   assert.equal(manifest["name"], "walletwall");
-  assert.equal(manifest["version"], "0.3.0");
+  assert.equal(manifest["displayName"], "WalletWall Vault Readiness");
+  assert.equal(manifest["version"], "0.3.1");
   assert.deepEqual(manifest["author"], { name: "WalletWall" });
   assert.match(String(manifest["description"]), /vault technical-readiness/i);
 });
