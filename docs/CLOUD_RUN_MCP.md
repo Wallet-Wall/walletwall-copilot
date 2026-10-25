@@ -2,6 +2,16 @@
 
 This deployment is an optional remote transport for the existing WalletWall MCP evidence engine. It does not replace the shipped Copilot stdio runtime.
 
+## Initial hosted product scope: WalletWall Vault
+
+The first hosted consumer is **WalletWall Vault**, specifically the Vault Guardian / migration-readiness workflow. The hosted MCP is infrastructure for Vault, not a new general-purpose blockchain API or a separate WalletWall product.
+
+- The shared MCP core remains transport-neutral and reusable.
+- The first hosted tool/data profile is Vault-oriented: readiness, blockers, asset identity, evidence quality, invariants and provenance.
+- Future BigQuery integration must use purpose-built Vault read models/views rather than arbitrary SQL or broad dataset access.
+- The hosted path must remain read-only: no signing, custody, transaction construction/broadcast, swaps, trading or wallet mutation.
+- Other WalletWall products may reuse the shared core later, but they do not broaden the initial hosted authority or data-access boundary.
+
 ## Boundary
 
 - `packages/mcp/src/server.ts` remains the single six-tool / six-resource contract.
@@ -49,4 +59,4 @@ The first deployment should be tested on the generated `run.app` hostname before
 
 ## Deliberately deferred
 
-BigQuery-backed tools, rate limiting, public-client auth, custom-domain ingress and registry `remotes` metadata are separate lanes. Keeping them separate makes it possible to prove that this change only adds a deployable transport around the existing evidence contract.
+Vault-specific BigQuery-backed read tools/views, rate limiting, WalletWall Vault Guardian auth, public-client OAuth, custom-domain ingress and registry `remotes` metadata are separate lanes. Keeping them separate makes it possible to prove that this change only adds a deployable transport around the existing evidence contract.
