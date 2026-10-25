@@ -9,7 +9,3 @@ steps:
       - .
 images:
   - ${_IMAGE}
-substitutions:
-  _IMAGE: us-docker.pkg.dev/$PROJECT_ID/walletwall/walletwall-mcp:dev
-options:
-  logging: CLOUD_LOGGING_ONLY
