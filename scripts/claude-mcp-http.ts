@@ -2,7 +2,7 @@ import { createServer as createHttpServer, type IncomingMessage, type ServerResp
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer as createMcpServer } from "../packages/mcp/src/server.ts";
 
-const HOST = "127.0.0.1";
+const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8787;
 const MAX_BODY_BYTES = 1024 * 1024;
 
@@ -20,30 +20,48 @@ function fatal(): never {
   process.exit(1);
 }
 
-function parsePort(argv: readonly string[]): number {
+function parseArgs(argv: readonly string[]): { host: string; port: number } {
+  let host = DEFAULT_HOST;
   let port = DEFAULT_PORT;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === undefined) throw new Error("invalid argument");
 
+    let key: "host" | "port";
     let raw: string | undefined;
     if (arg === "--port") {
+      key = "port";
       raw = argv[i + 1];
       i += 1;
     } else if (arg.startsWith("--port=")) {
+      key = "port";
       raw = arg.slice("--port=".length);
+    } else if (arg === "--host") {
+      key = "host";
+      raw = argv[i + 1];
+      i += 1;
+    } else if (arg.startsWith("--host=")) {
+      key = "host";
+      raw = arg.slice("--host=".length);
     } else {
       throw new Error("unsupported argument");
     }
 
-    if (raw === undefined || !/^\d{1,5}$/.test(raw)) throw new Error("invalid port");
+    if (raw === undefined) throw new Error("missing value");
+    if (key === "host") {
+      if (raw !== "127.0.0.1" && raw !== "0.0.0.0") throw new Error("invalid host");
+      host = raw;
+      continue;
+    }
+
+    if (!/^\d{1,5}$/.test(raw)) throw new Error("invalid port");
     const value = Number(raw);
     if (!Number.isInteger(value) || value < 0 || value > 65535) throw new Error("invalid port");
     port = value;
   }
 
-  return port;
+  return { host, port };
 }
 
 function sendFixed(res: ServerResponse, statusCode: number): void {
@@ -63,8 +81,9 @@ function sendFixed(res: ServerResponse, statusCode: number): void {
   res.end(JSON.stringify({ error: message }));
 }
 
-function allowedOrigin(value: string | undefined, port: number): boolean {
+function allowedOrigin(value: string | undefined, host: string, port: number): boolean {
   if (value === undefined) return true;
+  if (host !== "127.0.0.1") return false;
 
   try {
     const origin = new URL(value);
@@ -106,7 +125,15 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-async function handleRequest(req: IncomingMessage, res: ServerResponse, port: number): Promise<void> {
+async function handleRequest(req: IncomingMessage, res: ServerResponse, host: string, port: number): Promise<void> {
+  if (req.url === "/health" && (req.method === "GET" || req.method === "HEAD")) {
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.setHeader("cache-control", "no-store");
+    res.setHeader("x-content-type-options", "nosniff");
+    res.end(req.method === "HEAD" ? undefined : JSON.stringify({ status: "ok" }));
+    return;
+  }
   if (req.url !== "/mcp") {
     sendFixed(res, 404);
     return;
@@ -116,7 +143,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, port: nu
     sendFixed(res, 405);
     return;
   }
-  if (!allowedOrigin(req.headers.origin, port)) {
+  if (!allowedOrigin(req.headers.origin, host, port)) {
     sendFixed(res, 403);
     return;
   }
@@ -142,16 +169,17 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse, port: nu
   }
 }
 
+let requestedHost: string;
 let requestedPort: number;
 try {
-  requestedPort = parsePort(process.argv.slice(2));
+  ({ host: requestedHost, port: requestedPort } = parseArgs(process.argv.slice(2)));
 } catch {
   fatal();
 }
 
 let boundPort = requestedPort;
 const httpServer = createHttpServer((req, res) => {
-  void handleRequest(req, res, boundPort).catch((error: unknown) => {
+  void handleRequest(req, res, requestedHost, boundPort).catch((error: unknown) => {
     if (res.headersSent) {
       res.destroy();
       return;
@@ -177,9 +205,9 @@ function shutdown(): void {
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 
-httpServer.listen(requestedPort, HOST, () => {
+httpServer.listen(requestedPort, requestedHost, () => {
   const address = httpServer.address();
   if (address === null || typeof address === "string") fatal();
   boundPort = address.port;
-  process.stderr.write(`walletwall-mcp-http: streamable-http http://${HOST}:${boundPort}/mcp\n`);
+  process.stderr.write(`walletwall-mcp-http: streamable-http http://${requestedHost}:${boundPort}/mcp\n`);
 });
