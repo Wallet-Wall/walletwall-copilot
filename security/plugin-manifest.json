@@ -36,8 +36,8 @@
   "files": [
     {
       "path": "plugin/.claude-plugin/plugin.json",
-      "sha512": "afa2a0d23c3f36f3af5aceeef6a4faa07b4e4946eed37054d3955a5c2dc904c76dd79de9acb475095cf7c5f6e384a8ccfcd80b6790293083886a37c1ece2f51f",
-      "bytes": 203
+      "sha512": "3acd7388cde07b5881fbb42c4780e8115aa8234d294dc5bfd4f6e94f4be2235201889c644076b889a3408086793da26b15b82ce8264dd077acfe5d522080cbee",
+      "bytes": 293
     },
     {
       "path": "plugin/.mcp.json",
