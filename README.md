@@ -30,7 +30,9 @@ WalletWall does not sign, custody, trade, broadcast transactions, provide invest
 | `trace_provenance` | W3C PROV-JSON-shaped source lineage for one assertion |
 | `assess_vault_readiness` | `VAULT_TECHNICAL_READINESS` rules 0.1.0-draft |
 
-![WalletWall canvas showing a conflict](docs/img/walletwall-canvas-conflict.png)
+![WalletWall Vault-first readiness visual](docs/img/walletwall-readiness-current.png)
+
+_Current WalletWall product visual for the Vault-first readiness direction. This is a product/brand visual, not a live Copilot Canvas screenshot._
 
 ## What it will not say
 
