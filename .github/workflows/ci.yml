@@ -53,6 +53,8 @@ jobs:
         run: npm run verify:canvas
       - name: Plugin structure
         run: npm run verify:plugin
+      - name: Claude Directory package structure and size limits
+        run: npm run verify:claude-directory
       - name: Plugin manifest digest
         run: npm run verify:plugin-manifest
       - name: Plugin release artifact is byte-identical to the recorded hash (Linux)
@@ -94,6 +96,7 @@ jobs:
           npm run verify:notices
           npm run verify:canvas
           npm run verify:plugin
+          npm run verify:claude-directory
           npm run verify:plugin-manifest
       - name: Plugin release artifact is byte-identical to the recorded hash (Windows)
         run: |

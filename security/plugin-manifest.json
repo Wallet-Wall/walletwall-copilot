@@ -26,11 +26,24 @@
     "walletwall-evidence-explorer"
   ],
   "skills": [
-    "walletwall-evidence"
+    "vault-readiness",
+    "walletwall-authority",
+    "walletwall-evidence",
+    "walletwall-evidence-audit"
   ],
   "toolManifestSha512": "e3eaba89803bdf1ed7d30fabbbc4236fe5b0bf28e41be43524f1e50b54c776b43be795c9d0e8e5118a7f8af1921954ec47b053d5ca57ce0877d32534fd051aa0",
   "serverBundleSha512": "8945dc8d3ad2df5e096bbd47f6754c457ed0d871e2867ed9fdb8ac00e77c58c53bb94db94e5efc6d3b45917423d36c678bdb3a256875b8977145486176691504",
   "files": [
+    {
+      "path": "plugin/.claude-plugin/plugin.json",
+      "sha512": "afa2a0d23c3f36f3af5aceeef6a4faa07b4e4946eed37054d3955a5c2dc904c76dd79de9acb475095cf7c5f6e384a8ccfcd80b6790293083886a37c1ece2f51f",
+      "bytes": 203
+    },
+    {
+      "path": "plugin/.mcp.json",
+      "sha512": "9b4101d99a20fe4ab0a2bb708ef922c65bb62739dbc86a8d63798d2bb8ee6dddf6d3789a9a0dc437f66b17bdde5e6b33952c6cca922119cfd5976235099c4f18",
+      "bytes": 113
+    },
     {
       "path": "plugin/LICENSE",
       "sha512": "98f6b79b778f7b0a15415bd750c3a8a097d650511cb4ec8115188e115c47053fe700f578895c097051c9bc3dfb6197c2b13a15de203273e1a3218884f86e90e8",
@@ -117,9 +130,24 @@
       "bytes": 971608
     },
     {
+      "path": "plugin/skills/vault-readiness/SKILL.md",
+      "sha512": "1351a34d708043ceaac983052039384a9057750d9162d50d68276891b5992add690142829a6cfb46f670c42ff90de9419882bbadbee42137522495b4c2f5304f",
+      "bytes": 2333
+    },
+    {
+      "path": "plugin/skills/walletwall-authority/SKILL.md",
+      "sha512": "bb4d6e2c1d2bca62a225f5e90c72d6d53b0bc173aa9a67570e7e0bd167b08c5a85d8e2acd5697949be30b785620aa08c20832f5449be9b635a0d64a3a412ec08",
+      "bytes": 1962
+    },
+    {
       "path": "plugin/skills/walletwall-evidence/SKILL.md",
       "sha512": "32dbbeb0a83827959f37f41a411502ea41db12113ce7991299aa7ab46e70750ca13f76c23f872c97342e84c04afeeedd8ae3947cd9f1d30bcfb7a671e1411a69",
       "bytes": 4835
+    },
+    {
+      "path": "plugin/skills/walletwall-evidence-audit/SKILL.md",
+      "sha512": "249dd84402d86306923b7ae47ee6e36c81f9a52e39415eaccd565f82979247c31894034e0fbfb62106821c3cceab9cbc736314798b52e480c735a054471e4db8",
+      "bytes": 2149
     }
   ]
 }
