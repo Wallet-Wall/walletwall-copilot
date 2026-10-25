@@ -1,0 +1,11 @@
+{
+  "name": "walletwall",
+  "version": "0.1.0",
+  "description": "Vault-first readiness analysis with WalletWall skills and the local, offline, read-only WalletWall MCP engine.",
+  "author": {
+    "name": "WalletWall"
+  },
+  "homepage": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+  "repository": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+  "license": "Apache-2.0"
+}
