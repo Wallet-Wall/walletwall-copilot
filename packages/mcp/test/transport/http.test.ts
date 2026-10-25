@@ -88,4 +88,16 @@ describe("optional Streamable HTTP MCP bridge", () => {
       await stopBridge(child);
     }
   });
+
+  test("exposes a no-store health check without widening the MCP route", async () => {
+    const { child, url } = await startBridge();
+    try {
+      const response = await fetch(new URL("/health", url));
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.deepEqual(await response.json(), { status: "ok" });
+    } finally {
+      await stopBridge(child);
+    }
+  });
 });
