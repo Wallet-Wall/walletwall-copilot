@@ -5,7 +5,8 @@ The WalletWall MCP server is also packaged as an MCPB (MCP Bundle) so the offici
 | Item | Value |
 | --- | --- |
 | Package | `walletwall.mcpb`, a deterministic stored ZIP built by `scripts/pack-mcpb.ts` |
-| Recorded hash | `security/mcpb.sha256` (checked by `npm run verify:mcpb` and CI on Linux and Windows) |
+| WalletWall integrity fingerprint | `security/mcpb.sha512` (checked by `npm run verify:mcpb` and CI on Linux and Windows) |
+| MCP Registry compatibility digest | `security/mcpb.sha256`, retained only for the Registry `fileSha256` field |
 | Manifest | `mcpb/manifest.json` (MCPB manifest 0.3) |
 | Registry metadata | `server.json` (schema 2025-12-11), name `io.github.Wallet-Wall/walletwall` |
 | Transport | stdio only; no remote URL, no environment variable, no credential |
@@ -26,11 +27,11 @@ No canvas, skill, evals, documents, `.git`, `node_modules` or development files.
 ## Reproduce
 
 ```text
-npm run verify:mcpb                                       # recorded hash, cross-checked against Git objects at HEAD
+npm run verify:mcpb                                       # verifies both digests and cross-checks Git objects at HEAD
 node scripts/pack-mcpb.ts --out walletwall.mcpb --ref <commit>
 ```
 
-Entries are stored (not compressed), sorted by path, with a fixed timestamp and mode, so the bytes do not depend on the machine, operating system, zlib version or checkout settings. `server.json` carries the same SHA-256 as `fileSha256`; the repository tests fail if they disagree.
+Entries are stored (not compressed), sorted by path, with a fixed timestamp and mode, so the bytes do not depend on the machine, operating system, zlib version or checkout settings. Both recorded digests are computed from those exact same deterministic bytes. WalletWall treats SHA-512 as its current integrity fingerprint; `server.json` carries the SHA-256 value as `fileSha256` because that field is defined by the external Registry schema. Repository tests fail if either value drifts or if `server.json` disagrees with the compatibility digest.
 
 ## Registry listing
 

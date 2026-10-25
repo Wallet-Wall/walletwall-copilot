@@ -37,6 +37,8 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Integrity policy and SHA-256 exception boundary
+        run: npm run verify:integrity-policy
       - name: Generated files are current
         run: |
           npm run verify:content
@@ -64,9 +66,6 @@ jobs:
       - name: Production dependency audit
         run: npm run audit:prod
 
-  # The product target is Windows, so the whole suite also runs natively on a standard GitHub-hosted Windows runner:
-  # stdio MCP (source and bundle), WWEP conformance, adversarial, mutation, privacy (including the OS socket-table reader),
-  # the owned-temp cleanup regression tests and the WalletWall canvas. No paid or larger runner, no secrets.
   verify-windows:
     runs-on: windows-latest
     timeout-minutes: 20
@@ -84,6 +83,8 @@ jobs:
         run: |
           npm run typecheck
           npm run lint
+      - name: Integrity policy and SHA-256 exception boundary
+        run: npm run verify:integrity-policy
       - name: Generated files, manifests and the shipped bundle are reproducible on Windows
         run: |
           npm run verify:content

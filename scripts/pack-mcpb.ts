@@ -4,34 +4,20 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32 } from "node:zlib";
+import { INTEGRITY_POLICY, recordedDigest } from "./integrity-policy.ts";
 
 /**
  * Builds the WalletWall MCPB (MCP Bundle) for the official MCP Registry: a ZIP of exactly four files for the existing
- * local stdio server. Nothing else is packaged: no canvas, no skill, no evals, no documents, no .git, no node_modules.
- *
- *   manifest.json              from mcpb/manifest.json
- *   server/walletwall-mcp.mjs  the shipped single-file bundle, byte-identical to plugin/server/walletwall-mcp.mjs
- *   LICENSE                    Apache-2.0
- *   THIRD_PARTY_NOTICES.md     notices for the packages bundled into the server file (the plugin's canvas font section is removed)
- *
- * The bytes do not depend on the machine, the operating system, the zlib version or Git checkout settings:
- * entries are STORED (no compression), ordered by path (byte order), with a fixed timestamp (2026-01-01 00:00:00), a fixed
- * "made by" and mode 0644, no extra fields, no comments, no directory entries. A release build (--out) reads every file
- * from the Git object database at a commit. --check and --write-hash read the working tree, normalising text exactly as
- * Git stores it (CRLF to LF), and --check also builds from the Git objects at HEAD when the inputs are unmodified.
- *
- *   node scripts/pack-mcpb.ts --check                  verify security/mcpb.sha256
- *   node scripts/pack-mcpb.ts --write-hash             regenerate security/mcpb.sha256
- *   node scripts/pack-mcpb.ts --out <file> [--ref R]   write the release artifact from commit R (default HEAD)
- *   node scripts/pack-mcpb.ts --out <file> --from-tree  write it from the working tree (tests only; not a release build)
+ * local stdio server. The MCP Registry requires fileSha256, so SHA-256 remains only for that upstream compatibility
+ * boundary. WalletWall additionally records the policy-selected current integrity digest.
  */
 const root = fileURLToPath(new URL("..", import.meta.url));
-const SHA_FILE = "security/mcpb.sha256";
+const SHA256_FILE = INTEGRITY_POLICY.sha256Exceptions.compatibility.mcpRegistryArtifact;
+const SHA512_FILE = INTEGRITY_POLICY.current.mcpb;
 const ARTIFACT_NAME = "walletwall.mcpb";
 const DOS_TIME = 0;
 const DOS_DATE = ((2026 - 1980) << 9) | (1 << 5) | 1;
 
-/** Archive path -> repository path. */
 const SOURCES: readonly (readonly [string, string])[] = [
   ["LICENSE", "LICENSE"],
   ["THIRD_PARTY_NOTICES.md", "plugin/THIRD_PARTY_NOTICES.md"],
@@ -45,17 +31,14 @@ interface Member {
 }
 
 const git = (args: string[]): Buffer => execFileSync("git", ["-C", root, ...args], { maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "pipe"] });
-const sha256 = (b: Buffer): string => createHash("sha256").update(b).digest("hex");
+const digest = (algorithm: "sha256" | "sha512", b: Buffer): string => createHash(algorithm).update(b).digest("hex");
 
 function fail(message: string): never {
   console.error(message);
   process.exit(1);
 }
 
-/** Text as Git stores it under `* text=auto eol=lf`: CRLF becomes LF. */
 const normalise = (b: Buffer): Buffer => Buffer.from(b.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
-
-/** The notices file is generated for the plugin: its font section belongs to the canvas, which this package does not contain. */
 const CANVAS_NOTICES = "\n# Fonts embedded in the WalletWall canvas";
 function forPackage(m: Member): Member {
   if (m.path !== "THIRD_PARTY_NOTICES.md") return m;
@@ -119,34 +102,43 @@ function archive(members: Member[]): Buffer {
 }
 
 const shaLine = (hex: string, count: number): string => `${hex}  ${ARTIFACT_NAME} (deterministic stored ZIP of ${count} files; scripts/pack-mcpb.ts)\n`;
-const recorded = (text: string): string => text.split(/\s+/)[0] ?? "";
 const arg = (name: string): string | undefined => {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 
+function hashes(zip: Buffer): { sha256: string; sha512: string } {
+  return { sha256: digest("sha256", zip), sha512: digest(INTEGRITY_POLICY.currentAlgorithm, zip) };
+}
+
 if (process.argv.includes("--check")) {
   const members = fromWorkingTree();
-  const hex = sha256(archive(members));
-  let current = "";
+  const zip = archive(members);
+  const hex = hashes(zip);
+  let current256 = "";
+  let current512 = "";
   try {
-    current = readFileSync(join(root, SHA_FILE), "utf8");
+    current256 = readFileSync(join(root, SHA256_FILE), "utf8");
+    current512 = readFileSync(join(root, SHA512_FILE), "utf8");
   } catch {
     // reported below
   }
-  if (current.replace(/\r\n/g, "\n") !== shaLine(hex, members.length)) fail(`MCPB changed: ${SHA_FILE} records ${recorded(current) || "nothing"}, the inputs pack to ${hex}.\nReview the diff, then run: npm run gen:mcpb`);
+  if (current256.replace(/\r\n/g, "\n") !== shaLine(hex.sha256, members.length)) fail(`MCP Registry SHA-256 changed: ${SHA256_FILE} records ${recordedDigest(current256) || "nothing"}, the inputs pack to ${hex.sha256}.\nReview the diff, then run: npm run gen:mcpb`);
+  if (current512.replace(/\r\n/g, "\n") !== shaLine(hex.sha512, members.length)) fail(`WalletWall ${INTEGRITY_POLICY.currentAlgorithm.toUpperCase()} changed: ${SHA512_FILE} records ${recordedDigest(current512) || "nothing"}, the inputs pack to ${hex.sha512}.\nReview the diff, then run: npm run gen:mcpb`);
   const inputs = SOURCES.map(([, source]) => source);
   const clean = git(["status", "--porcelain", "--untracked-files=all", "--", ...inputs]).length === 0;
   if (clean) {
-    const fromObjects = sha256(archive(fromGit("HEAD")));
-    if (fromObjects !== hex) fail(`The working tree packs to ${hex} but the Git objects at HEAD pack to ${fromObjects}: the checkout converted input bytes.`);
+    const objectHashes = hashes(archive(fromGit("HEAD")));
+    if (objectHashes.sha256 !== hex.sha256 || objectHashes.sha512 !== hex.sha512) fail("The working tree and Git objects at HEAD produce different MCPB bytes.");
   }
-  console.log(`mcpb verified: sha256 ${hex} (${members.length} files${clean ? "; equal to the build from Git objects at HEAD" : "; inputs have uncommitted changes, Git-object cross-check skipped"})`);
+  console.log(`mcpb verified: registry sha256 ${hex.sha256}; WalletWall ${INTEGRITY_POLICY.currentAlgorithm} ${hex.sha512} (${members.length} files${clean ? "; equal to the build from Git objects at HEAD" : "; inputs have uncommitted changes, Git-object cross-check skipped"})`);
 } else if (process.argv.includes("--write-hash")) {
   const members = fromWorkingTree();
-  const hex = sha256(archive(members));
-  writeFileSync(join(root, SHA_FILE), shaLine(hex, members.length));
-  console.log(`wrote ${SHA_FILE}: sha256 ${hex} (${members.length} files)`);
+  const hex = hashes(archive(members));
+  writeFileSync(join(root, SHA256_FILE), shaLine(hex.sha256, members.length));
+  writeFileSync(join(root, SHA512_FILE), shaLine(hex.sha512, members.length));
+  console.log(`wrote ${SHA256_FILE}: sha256 ${hex.sha256}`);
+  console.log(`wrote ${SHA512_FILE}: ${INTEGRITY_POLICY.currentAlgorithm} ${hex.sha512}`);
 } else {
   const out = arg("--out");
   if (!out) fail("Usage: node scripts/pack-mcpb.ts --check | --write-hash | --out <file> [--ref <commit>]");
@@ -154,14 +146,19 @@ if (process.argv.includes("--check")) {
   const fromTree = process.argv.includes("--from-tree");
   const members = fromTree ? fromWorkingTree() : fromGit(ref);
   const zip = archive(members);
-  const hex = sha256(zip);
-  let expected = "";
+  const hex = hashes(zip);
+  let expected256 = "";
+  let expected512 = "";
   try {
-    expected = fromTree ? "" : recorded(git(["show", `${ref}:${SHA_FILE}`]).toString("utf8"));
+    if (!fromTree) {
+      expected256 = recordedDigest(git(["show", `${ref}:${SHA256_FILE}`]).toString("utf8"));
+      expected512 = recordedDigest(git(["show", `${ref}:${SHA512_FILE}`]).toString("utf8"));
+    }
   } catch {
-    // a commit from before this script existed records no hash
+    // older commits may not record both hashes
   }
   writeFileSync(out, zip);
-  console.log(`${hex}  ${out} (${members.length} files from ${ref})`);
-  if (expected && expected !== hex) fail(`This does not match ${SHA_FILE} at ${ref} (${expected}).`);
+  console.log(`registry sha256 ${hex.sha256}; WalletWall ${INTEGRITY_POLICY.currentAlgorithm} ${hex.sha512}  ${out} (${members.length} files from ${ref})`);
+  if (expected256 && expected256 !== hex.sha256) fail(`This does not match ${SHA256_FILE} at ${ref} (${expected256}).`);
+  if (expected512 && expected512 !== hex.sha512) fail(`This does not match ${SHA512_FILE} at ${ref} (${expected512}).`);
 }

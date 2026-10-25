@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { basename, join, relative } from "node:path";
 import { describe, test } from "node:test";
+import { INTEGRITY_POLICY, SHA256_HEX, SHA512_HEX, recordedDigest } from "../../../../scripts/integrity-policy.ts";
 import { ROOT } from "../support/harness.ts";
 import { PROHIBITED_CLAIM_PATTERNS } from "../support/claims.ts";
 
@@ -284,19 +285,24 @@ describe("contribution and security governance", () => {
     assert.ok(existsSync(`${ROOT}docs/PUBLIC_RELEASE_AUDIT.md`));
   });
 
-  test("the plugin release artifact is built by the deterministic packer, recorded by the current release record, and checked on Linux and Windows", () => {
+  test("current plugin artifact integrity and historical v0.3.0 provenance are separate contracts", () => {
     const audit = read("docs/PUBLIC_RELEASE_AUDIT.md");
     const commands = [...audit.matchAll(/```text\n([\s\S]*?)```/g)].map((m) => m[1] as string).join("\n");
     assert.ok(commands.includes("node scripts/pack-plugin.ts --check") && commands.includes("npm run pack:plugin"), "the reproduction commands use scripts/pack-plugin.ts");
     assert.ok(!/git archive/.test(commands), "no release command uses git archive (it is not host-independent for a subtree)");
-    const recorded = read("security/plugin-artifact.sha256").split(/\s+/)[0] ?? "";
-    assert.match(recorded, /^[0-9a-f]{64}$/);
+
+    const current = recordedDigest(read(INTEGRITY_POLICY.current.pluginArtifact));
+    assert.match(current, SHA512_HEX, "current plugin artifact follows the policy-selected SHA-512 record");
+
+    const historical = recordedDigest(read(INTEGRITY_POLICY.sha256Exceptions.historical.pluginV030));
+    assert.match(historical, SHA256_HEX, "v0.3.0 historical artifact remains its published SHA-256");
     const release = read("docs/RELEASE_V0.3.0.md");
-    assert.ok(release.includes(`\`${recorded}\``), "the current v0.3.0 release record carries the recorded plugin artifact hash");
+    assert.ok(release.includes(`\`${historical}\``), "the v0.3.0 release record carries its historical artifact hash");
+
     const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
     assert.ok(pkg.scripts["verify"]?.includes("npm run verify:plugin-artifact"));
     const ci = read(".github/workflows/ci.yml");
     const jobs = Object.fromEntries([...ci.matchAll(/\n {2}([a-z-]+):\n([\s\S]*?)(?=\n {2}(?:[a-z-]+:|#)|$)/g)].map((m) => [m[1] as string, m[2] as string]));
-    for (const job of ["verify", "verify-windows"]) assert.ok(jobs[job]?.includes("npm run verify:plugin-artifact"), `${job} checks the plugin artifact`);
+    for (const job of ["verify", "verify-windows"]) assert.ok(jobs[job]?.includes("npm run verify:plugin-artifact"), `${job} checks the current plugin artifact`);
   });
 });

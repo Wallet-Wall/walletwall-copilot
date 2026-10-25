@@ -56,23 +56,23 @@ async function fragment(name: string): Promise<string> {
   }
   return fragments.get(name) as string;
 }
-const sha256 = (b: Buffer): string => createHash("sha256").update(b).digest("hex");
-const sources = JSON.parse(readFileSync(`${BRAND}/brand-sources.json`, "utf8")) as { images: { file: string; sha256: string; source: { repository: string; path: string } }[]; fonts: { file: string; sha256: string; family: string; package: string }[] };
+const sha512 = (b: Buffer): string => createHash("sha512").update(b).digest("hex");
+const sources = JSON.parse(readFileSync(`${BRAND}/brand-sources.json`, "utf8")) as { images: { file: string; sha512: string; source: { repository: string; path: string } }[]; fonts: { file: string; sha512: string; family: string; package: string }[] };
 const pieces = (html: string): Record<string, string>[] =>
   [...html.matchAll(/<g class="ww-node[^"]*"([^>]*)>/g)].map((m) => Object.fromEntries([...(m[1] as string).matchAll(/([\w-]+)="([^"]*)"/g)].map((a) => [a[1] as string, a[2] as string]))).filter((p) => p["data-node-id"] !== undefined);
 
 describe("brand: real WalletWall assets, shipped locally, nothing fetched", () => {
-  test("every embedded asset is the file recorded in brand-sources.json, byte for byte, from a named WalletWall source", () => {
-    for (const a of [...sources.images, ...sources.fonts]) assert.equal(sha256(readFileSync(`${BRAND}/${a.file}`)), a.sha256, a.file);
+  test("every embedded asset is the SHA-512-pinned file recorded in brand-sources.json, byte for byte, from a named WalletWall source", () => {
+    for (const a of [...sources.images, ...sources.fonts]) assert.equal(sha512(readFileSync(`${BRAND}/${a.file}`)), a.sha512, a.file);
     for (const i of sources.images) assert.match(i.source.repository, /^Wallet-Wall\/walletwall-audio-visual-docs$/, `${i.file} comes from the WalletWall brand repository`);
     const named = new Set([...readFileSync(`${BRAND}/brand-sources.json`, "utf8").matchAll(/"repository":\s*"([^"]*)"/g)].map((m) => m[1]));
     assert.deepEqual([...named], ["Wallet-Wall/walletwall-audio-visual-docs"], "brand provenance names only the public WalletWall brand repository, never a private one");
     const dataOf = (uri: string): Buffer => Buffer.from(uri.replace(/^data:[^;]+;base64,/, ""), "base64");
-    assert.equal(sha256(dataOf(brand.MARK)), sources.images.find((i) => i.file === "walletwall-brick-wallet-96.png")?.sha256, "the mark is the brick-wallet mark");
-    assert.equal(sha256(dataOf(brand.WALLABY["inspect"] as string)), sources.images.find((i) => i.file === "walletwallaby-inspect.png")?.sha256);
-    assert.equal(sha256(dataOf(brand.WALLABY["perch"] as string)), sources.images.find((i) => i.file === "walletwallaby-perch.png")?.sha256);
-    const embedded = [...brand.FONT_FACES.matchAll(/base64,([A-Za-z0-9+/=]+)/g)].map((m) => sha256(Buffer.from(m[1] as string, "base64")));
-    assert.deepEqual(embedded, sources.fonts.map((f) => f.sha256), "each @font-face is the recorded font file");
+    assert.equal(sha512(dataOf(brand.MARK)), sources.images.find((i) => i.file === "walletwall-brick-wallet-96.png")?.sha512, "the mark is the SHA-512-pinned brick-wallet mark");
+    assert.equal(sha512(dataOf(brand.WALLABY["inspect"] as string)), sources.images.find((i) => i.file === "walletwallaby-inspect.png")?.sha512);
+    assert.equal(sha512(dataOf(brand.WALLABY["perch"] as string)), sources.images.find((i) => i.file === "walletwallaby-perch.png")?.sha512);
+    const embedded = [...brand.FONT_FACES.matchAll(/base64,([A-Za-z0-9+/=]+)/g)].map((m) => sha512(Buffer.from(m[1] as string, "base64")));
+    assert.deepEqual(embedded, sources.fonts.map((f) => f.sha512), "each @font-face is the recorded SHA-512-pinned font file");
   });
 
   test("the type voices are WalletWall's: Sora (display), Manrope (UI), IBM Plex Mono (data), loaded only from data: URIs", () => {
@@ -402,7 +402,7 @@ describe("final layout and copy contract", () => {
     assert.equal(links.length, 1, "exactly one link element: the icon");
     const m = /^<link rel="icon" type="image\/png" sizes="96x96" href="data:image\/png;base64,([A-Za-z0-9+/=]+)">$/.exec(links[0] ?? "");
     assert.ok(m, "a PNG favicon as a data: URI");
-    assert.equal(sha256(Buffer.from(m[1] as string, "base64")), sources.images.find((i) => i.file === "walletwall-brick-wallet-96.png")?.sha256, "the favicon is the recorded brick-wallet mark");
+    assert.equal(sha512(Buffer.from(m[1] as string, "base64")), sources.images.find((i) => i.file === "walletwall-brick-wallet-96.png")?.sha512, "the favicon is the SHA-512-pinned brick-wallet mark");
   });
 
   test("scrollbars are narrow and use WalletWall tokens only", () => {

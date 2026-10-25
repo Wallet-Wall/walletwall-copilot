@@ -13,7 +13,7 @@ plugin/
     walletwall-evidence-explorer/               canvas extension: WalletWall (canvas id kept for continuity)
 ```
 
-`server/walletwall-mcp.mjs` is produced by `npm run build:bundle` and checked for reproducibility by `npm run verify:bundle` (hash in `security/bundle.sha256`). `THIRD_PARTY_NOTICES.md` is produced by `npm run gen:notices` and checked by `npm run verify:notices`.
+`server/walletwall-mcp.mjs` is produced by `npm run build:bundle` and checked for reproducibility by `npm run verify:bundle` (hash in `security/bundle.sha512`). `THIRD_PARTY_NOTICES.md` is produced by `npm run gen:notices` and checked by `npm run verify:notices`.
 
 It needs no WalletWall account, no WalletWall backend, no GitHub App authentication and no remote service. It needs `node` on `PATH`.
 
