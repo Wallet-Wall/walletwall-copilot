@@ -25,6 +25,7 @@
     "pack:mcpb": "node scripts/pack-mcpb.ts --out",
     "gen:notices": "node scripts/gen-notices.ts",
     "build:bundle": "node scripts/build-bundle.ts",
+    "build:claude-directory": "node scripts/build-claude-directory.ts",
     "verify:content": "node scripts/gen-content.ts --check",
     "verify:conformance": "node scripts/gen-conformance.ts --check",
     "verify:integrity-policy": "node --test --test-reporter=spec packages/mcp/test/repo/integrity-policy.test.ts",
@@ -37,6 +38,7 @@
     "verify:notices": "node scripts/gen-notices.ts --check",
     "verify:bundle": "node scripts/build-bundle.ts --check",
     "verify:plugin": "node scripts/verify-plugin.ts",
+    "verify:claude-directory": "node scripts/build-claude-directory.ts --check",
     "test:sandbox": "node --test --test-reporter=spec \"packages/mcp/test/sandbox/*.test.ts\"",
     "test:privacy": "node --test --test-reporter=spec \"packages/mcp/test/privacy/*.test.ts\" \"packages/mcp/test/canvas/plugin-path.test.ts\"",
     "test:canvas": "node --test --test-reporter=spec \"packages/mcp/test/canvas/*.test.ts\"",
@@ -44,7 +46,7 @@
     "eval:agent": "node evals/run-agent-evals.ts",
     "conformance:report": "node scripts/conformance-report.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
-    "verify": "npm run typecheck && npm run lint && npm run verify:integrity-policy && npm run verify:content && npm run verify:conformance && npm run verify:manifest && npm run verify:bundle && npm run verify:notices && npm run verify:canvas && npm run verify:canvas-brand && npm run verify:plugin && npm run verify:plugin-manifest && npm run verify:plugin-artifact && npm run verify:mcpb && npm test"
+    "verify": "npm run typecheck && npm run lint && npm run verify:integrity-policy && npm run verify:content && npm run verify:conformance && npm run verify:manifest && npm run verify:bundle && npm run verify:notices && npm run verify:canvas && npm run verify:canvas-brand && npm run verify:plugin && npm run verify:plugin-manifest && npm run verify:plugin-artifact && npm run verify:mcpb && npm run verify:claude-directory && npm test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

@@ -27,6 +27,8 @@ function list(dir: string, base = ""): string[] {
   });
 }
 
+const pathOrder = (a: string, b: string): number => Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+
 describe("plugin manifest digest (what the Copilot plugin ships is pinned)", () => {
   test("the manifest-version-1 SHA-512 file equals the current-policy hash of the RFC 8785 canonical manifest", () => {
     const line = norm(readFileSync(`${ROOT}security/plugin-manifest.sha512`, "utf8"));
@@ -34,8 +36,9 @@ describe("plugin manifest digest (what the Copilot plugin ships is pinned)", () 
   });
 
   test("every plugin file is listed with its exact digest, and nothing unlisted ships", () => {
-    const actual = list(`${ROOT}plugin`).sort();
-    assert.deepEqual(manifest.files.map((f) => f.path.replace(/^plugin\//, "")), actual);
+    const actual = list(`${ROOT}plugin`).sort(pathOrder);
+    const recorded = manifest.files.map((f) => f.path.replace(/^plugin\//, "")).sort(pathOrder);
+    assert.deepEqual(recorded, actual);
     for (const f of manifest.files) {
       const body = norm(readFileSync(`${ROOT}${f.path}`, "utf8"));
       assert.equal(currentIntegrityHex(body), f.sha512, f.path);

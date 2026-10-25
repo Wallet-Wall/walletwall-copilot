@@ -1,0 +1,8 @@
+{
+  "name": "walletwall",
+  "version": "0.3.0",
+  "description": "Vault technical-readiness and provenance workflows using the local WalletWall MCP engine.",
+  "author": {
+    "name": "WalletWall"
+  }
+}

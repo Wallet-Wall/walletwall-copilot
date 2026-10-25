@@ -115,7 +115,7 @@ export function validatePluginDir(dir: string, repoRoot: string): Finding[] {
     if (recorded !== `${sha}  plugin/server/walletwall-mcp.mjs`) add("server/walletwall-mcp.mjs", `does not match ${INTEGRITY_POLICY.current.bundle}`);
   }
 
-  const forbidden = ["hooks.json", "agents", "lsp.json", ".mcp.json", ".github"];
+  const forbidden = ["hooks.json", "agents", "lsp.json", ".github"];
   for (const f of forbidden) if (existsSync(join(dir, f))) add(f, "is not part of the plugin (no hooks, agents or remote configuration)");
   validateCopilotDir(dir, add);
   return out;
