@@ -40,7 +40,7 @@ function copyStatic(): void {
   cpSync(join(root, "plugin", ".mcp.json"), join(outDir, ".mcp.json"));
   cpSync(join(root, "plugin", "skills"), join(outDir, "skills"), { recursive: true });
   cpSync(join(root, "LICENSE"), join(outDir, "LICENSE"));
-  cpSync(join(root, "docs", "CLAUDE_DISTRIBUTION.md"), join(outDir, "README.md"));
+  cpSync(join(root, "docs", "CLAUDE_DIRECTORY_README.md"), join(outDir, "README.md"));
 }
 
 function copyRuntimeTree(source: string, destination: string, include: (relativePath: string) => boolean): void {
