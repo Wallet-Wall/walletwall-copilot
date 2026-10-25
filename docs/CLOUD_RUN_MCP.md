@@ -14,16 +14,16 @@ This deployment is an optional remote transport for the existing WalletWall MCP 
 
 ## Build
 
-Build from the repository root so the Docker context can include the MCP workspace while deployment-specific files remain namespaced:
+Build from the repository root so the Docker context can include the MCP workspace while deployment-specific files remain namespaced. The image target is explicit and supplied at invocation time:
 
 ```text
-gcloud builds submit \
-  --tag REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp \
-  --file scripts/cloud-run/Dockerfile \
-  .
+gcloud builds submit . \
+  --config scripts/cloud-run/cloudbuild.yaml \
+  --ignore-file scripts/cloud-run/gcloudignore \
+  --substitutions _IMAGE=REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp:TAG
 ```
 
-The Dockerfile-specific ignore file is `scripts/cloud-run/Dockerfile.dockerignore`, keeping unrelated plugin, docs, eval and conformance content out of the container build context where supported by the builder.
+The build config invokes Docker with `scripts/cloud-run/Dockerfile`. `scripts/cloud-run/gcloudignore` bounds the source uploaded to Cloud Build, and `scripts/cloud-run/Dockerfile.dockerignore` further bounds the Docker build context where supported by the builder.
 
 ## Deploy
 
@@ -31,7 +31,7 @@ Create a dedicated Cloud Run service and keep it non-public until an authenticat
 
 ```text
 gcloud run deploy walletwall-mcp \
-  --image REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp \
+  --image REGION-docker.pkg.dev/PROJECT/REPOSITORY/walletwall-mcp:TAG \
   --region REGION \
   --no-allow-unauthenticated
 ```
