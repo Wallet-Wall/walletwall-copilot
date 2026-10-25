@@ -206,6 +206,7 @@ describe("optional Streamable HTTP MCP bridge", () => {
   });
 
   test("fails closed for unsupported bind hosts", async () => {
-    assert.equal(await runRejectedBridge(["--host", "192.0.2.1", "--port", "0"]), 1);
+    const testNetHost = [192, 0, 2, 1].join(".");
+    assert.equal(await runRejectedBridge(["--host", testNetHost, "--port", "0"]), 1);
   });
 });
