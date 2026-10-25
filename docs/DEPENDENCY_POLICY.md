@@ -4,7 +4,7 @@ Facts below were measured on the audited commit with `npm ci`, `npm ls`, `npm au
 
 ## What users actually receive
 
-The plugin ships one committed file, `plugin/server/walletwall-mcp.mjs`, built from source by `npm run build:bundle` and checked for reproducibility in CI (`npm run verify:bundle`, hash in `security/bundle.sha256`). It contains code from exactly three third-party packages, whose license texts are in `plugin/THIRD_PARTY_NOTICES.md` (`npm run verify:notices`):
+The plugin ships one committed file, `plugin/server/walletwall-mcp.mjs`, built from source by `npm run build:bundle` and checked for reproducibility in CI (`npm run verify:bundle`, hash in `security/bundle.sha512`). It contains code from exactly three third-party packages, whose license texts are in `plugin/THIRD_PARTY_NOTICES.md` (`npm run verify:notices`):
 
 | Bundled package | Version | License |
 | --- | --- | --- |

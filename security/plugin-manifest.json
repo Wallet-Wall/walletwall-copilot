@@ -28,97 +28,97 @@
   "skills": [
     "walletwall-evidence"
   ],
-  "toolManifestSha256": "2d2f857c2b0c8ef824a3bc59d52baef6895db0209f16830d4a5025800ca815ec",
-  "serverBundleSha256": "3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1",
+  "toolManifestSha512": "e3eaba89803bdf1ed7d30fabbbc4236fe5b0bf28e41be43524f1e50b54c776b43be795c9d0e8e5118a7f8af1921954ec47b053d5ca57ce0877d32534fd051aa0",
+  "serverBundleSha512": "8945dc8d3ad2df5e096bbd47f6754c457ed0d871e2867ed9fdb8ac00e77c58c53bb94db94e5efc6d3b45917423d36c678bdb3a256875b8977145486176691504",
   "files": [
     {
       "path": "plugin/LICENSE",
-      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "sha512": "98f6b79b778f7b0a15415bd750c3a8a097d650511cb4ec8115188e115c47053fe700f578895c097051c9bc3dfb6197c2b13a15de203273e1a3218884f86e90e8",
       "bytes": 11358
     },
     {
       "path": "plugin/README.md",
-      "sha256": "0bfbf5ca35aab56fd5b8c3b800300871f74558897a2e9f04cf1be394a14108e7",
+      "sha512": "2bfc6814d924f7beb47a2207d6cee1e023ac68e4256a04ae1c381a9737426e3144aaec5fbc813e3ea05fe544d8867d6a29972c66ebcb112d71b885246c6a8fd3",
       "bytes": 2937
     },
     {
       "path": "plugin/THIRD_PARTY_NOTICES.md",
-      "sha256": "a533a596dcd2c37cec07980093ab5b5d12b5af929c4db9302ccd72e1b62b1d50",
+      "sha512": "f5ab3bd38900f7ecac05d1df94588bd7813436eff34f0be6499c16d7b7aad6a84e3eebf5c81502c89e7aa1d8c8985ec0e382f05b45423a74d1f1c1701b8cc78d",
       "bytes": 18448
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/brand.mjs",
-      "sha256": "4053c7e20bd38c0b9e538da649d841c13bcbcc4c95ce66059cfedcbd8cbf6199",
+      "sha512": "ef8c57f29eb1a09adbb077741e3002dfc8783d1360a6a98f37f7e80b49240ce02d764104f78154fba6669944ff9dce59aca2f7b9a7a2fa2fa79d11f1deffc2da",
       "bytes": 179904
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/client.mjs",
-      "sha256": "31b621f50ba983f1359c23920c62a180a6d334828e5f252cc49267986b22cb64",
+      "sha512": "7392acb4f36bc51558ea5c2ee6915698de456ea467fb6e96fd980624caa0b370924322027f8496d4c15ab99f809481b2879a303285a8f74e334b8a1bbf09d7ba",
       "bytes": 43612
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/coinstellation-model.mjs",
-      "sha256": "849d95af37bd59b03c1eac3767f3ba93dedc3015a7dbc77b4b46f1ef5fc488a3",
+      "sha512": "d4d7eda1fed6a01e38aacf6ae0c3b5d511caad17d4020a9c09708b09da256bb4288b4ee2316ca72b3fb896fc414c5021c246c46467f518975af310c748d0a178",
       "bytes": 58513
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/copilot-extension.json",
-      "sha256": "564c4f7f388022c95ae784630de52a191ecd2b576c255b7b214d54dc4b678f93",
+      "sha512": "b80e8e267d1cd55c628d1af2ea641819a047e93b63456c139c63911a7bd6b2907cfeaeb5ef484fcab8b323320ca33d96e55847deecb42a5cd3e7e8e5e43054c7",
       "bytes": 61
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/explorer.mjs",
-      "sha256": "90d4965c085a7b017ad4a058ce0cc9049b725969c64daf8f7cf2d25dda237ec9",
+      "sha512": "bdb382e68b96f9611a9f31b52a7318f8e000533f46079e2b8d0a983b84bcb7dc1b14e6d3f3f26169685250be54cdd17c731b5a4bc77813900e1bed15333ffa58",
       "bytes": 15875
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/extension.mjs",
-      "sha256": "fdd8cc0dd10a29972aa83d576279723a6d7b60430b8f0d800eeb534d7413c90b",
+      "sha512": "96cd531a9e1873b2c3438b3fc5a531964a84264a839640ad2590ab44d450c4290a06b4f4ca1257beb9c33022e31b47f5fb402dc56f9bd4b638094d1ca761e06c",
       "bytes": 3668
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/fixtures.mjs",
-      "sha256": "328004ba7ddd8548533d1a47cbae6a4d3098bfe12938ff5f3605373bc921f70b",
+      "sha512": "08ed3dfacb452f45543884c40ce8b3dfc6f27d644478af2a97f99c5ac9317bae6a98d6ce73446a6560ccaa7ea2018766782b778c371635c28adc05b8ebae03e7",
       "bytes": 38076
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/mcp-client.mjs",
-      "sha256": "b23f3eb4b9f6925093703d056fb0e9723625c012a7bda141823eb2a76d4f9f0f",
+      "sha512": "14e4803fbd043a3741df32b4adf4a7a79cce812fd5dacca0c743cb53b3482cc00eaad2f0950bf06d3619feb996bb30376d407f8b33fa7263db38bfc26d5ee414",
       "bytes": 4516
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/render.mjs",
-      "sha256": "3c0dd2243bfbf156fff2bd060a89f0fec7d947ea1e1cbe0fdb28fafc01d99010",
+      "sha512": "b3602c7e3599a6752184484353dc94a8ff34289e398af757dbfb458af19cad05705adf458aed1b7333c0055e9b001b157c3c708a18d90b90fbe074b8996339b6",
       "bytes": 63283
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/styles.mjs",
-      "sha256": "298e9b9a304e30e20947acd0ddfec7f47f6e78bfa2188d24f164d7091d8f848a",
+      "sha512": "b31c31c5f3324d1eb054c82f97324882a7451f263e7ae078a5826801f5ccf7c136bc7b6f54f1a8d9f7cba69289070a9a19d6d0c6436d37830f2bceb934450a1b",
       "bytes": 49177
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wall.mjs",
-      "sha256": "8a997d7a4a07b7f8860eae519262be52eb81203f0ee2e71881ab7022b329ef7e",
+      "sha512": "2787397d290f7ac1b9ed2cf631cb6ca56bab86067ef01d9e974945ed00ee5e31ddb43a65980e62aea0a896a1cdfbce2bfe28291c7495bdb9546401fc38ae633b",
       "bytes": 26050
     },
     {
       "path": "plugin/mcp.json",
-      "sha256": "79004bf393cd91a629eb68babb7ff85a5f3cbf409e92bbfd73f7be79a793f2ee",
+      "sha512": "7b738185aa3e39c752a55c3eb189db58a7d307b6ecf71bf29f387905b3834da793ad61e3a353b63b07a1cbcad2b1667d0416d8e93445bc4a30fa840d6e80fe36",
       "bytes": 231
     },
     {
       "path": "plugin/plugin.json",
-      "sha256": "b2d6a10ab79d3f403c9fe8a333af274bef058cf418e7efe0d1d19892bf2e9781",
+      "sha512": "18809b394d9a01a12d532e668fe4ae6f046d8bfd498905a73d08fd087d8cbe61542a2c19385a3d22916cbcd6a17f11dd7e014bb32356d4866e603f6ce1b04dca",
       "bytes": 532
     },
     {
       "path": "plugin/server/walletwall-mcp.mjs",
-      "sha256": "3f30bd32314e196db7f7d1cee5558ac1d9f36aec2191ecb836e6e6a1014332a1",
+      "sha512": "8945dc8d3ad2df5e096bbd47f6754c457ed0d871e2867ed9fdb8ac00e77c58c53bb94db94e5efc6d3b45917423d36c678bdb3a256875b8977145486176691504",
       "bytes": 971608
     },
     {
       "path": "plugin/skills/walletwall-evidence/SKILL.md",
-      "sha256": "b3bf19f6e20c64779687a168776244677b5f9405a5e5703f6fb698462ae83c07",
+      "sha512": "32dbbeb0a83827959f37f41a411502ea41db12113ce7991299aa7ab46e70750ca13f76c23f872c97342e84c04afeeedd8ae3947cd9f1d30bcfb7a671e1411a69",
       "bytes": 4835
     }
   ]

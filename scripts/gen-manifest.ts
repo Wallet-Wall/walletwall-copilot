@@ -1,13 +1,14 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { canonicalize, sha256Hex } from "../packages/mcp/src/canonical.ts";
+import { canonicalize } from "../packages/mcp/src/canonical.ts";
 import { resourcesManifest } from "../packages/mcp/src/resources.ts";
 import { TOOLS, TOOL_ANNOTATIONS, inputJsonSchema } from "../packages/mcp/src/tools.ts";
 import { ENGINE_NAME, ENGINE_VERSION } from "../packages/mcp/src/version.ts";
+import { currentIntegrityHex, INTEGRITY_POLICY } from "./integrity-policy.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const manifestPath = `${root}security/tool-manifest.json`;
-const shaPath = `${root}security/tool-manifest.sha256`;
+const shaPath = `${root}${INTEGRITY_POLICY.current.toolManifest}`;
 
 const manifest = {
   manifestVersion: "1",
@@ -26,8 +27,8 @@ const manifest = {
 };
 
 const pretty = `${JSON.stringify(manifest, null, 2)}\n`;
-const hash = sha256Hex(canonicalize(JSON.parse(pretty), { numbers: "jcs" }));
-const shaLine = `${hash}  security/tool-manifest.json (RFC 8785 canonical form, SHA-256)\n`;
+const hash = currentIntegrityHex(canonicalize(JSON.parse(pretty), { numbers: "jcs" }));
+const shaLine = `${hash}  security/tool-manifest.json (RFC 8785 canonical form, SHA-512)\n`;
 
 if (process.argv.includes("--check")) {
   const norm = (s: string): string => s.replace(/\r\n/g, "\n");
@@ -40,13 +41,13 @@ if (process.argv.includes("--check")) {
     // reported below
   }
   if (curManifest !== pretty || curSha !== shaLine) {
-    console.error("Tool contract changed. security/tool-manifest.json or .sha256 differs from the live tool definitions.");
+    console.error("Tool contract changed. security/tool-manifest.json or its policy-selected digest differs from the live tool definitions.");
     console.error("Review the diff, then run: npm run gen:manifest");
     process.exit(1);
   }
-  console.log(`tool manifest verified: sha256 ${hash}`);
+  console.log(`tool manifest verified: ${INTEGRITY_POLICY.currentAlgorithm} ${hash}`);
 } else {
   writeFileSync(manifestPath, pretty);
   writeFileSync(shaPath, shaLine);
-  console.log(`wrote security/tool-manifest.json; sha256 ${hash}`);
+  console.log(`wrote security/tool-manifest.json; ${INTEGRITY_POLICY.currentAlgorithm} ${hash}`);
 }

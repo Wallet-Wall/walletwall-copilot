@@ -22,12 +22,13 @@ A response-time commitment and a disclosure policy for public releases will be s
 
 1. **Local, offline, read-only, stdio-only.** No listening socket, no outbound connection, no filesystem or database access from engine code.
 2. **No secrets handled.** The server takes no credentials, reads no environment, and the plugin passes none (`mcp.json` has no `env`).
-3. **Static, reviewed tool contract.** Tool names, descriptions and input schemas are compiled in, never loaded remotely, never dynamic. They are pinned in `security/tool-manifest.json` with an RFC 8785 canonical SHA-256 in `security/tool-manifest.sha256`. CI fails on any change that is not accompanied by a regenerated manifest, so every contract change appears as an explicit diff.
+3. **Static, reviewed tool contract.** Tool names, descriptions and input schemas are compiled in, never loaded remotely, never dynamic. They are pinned in `security/tool-manifest.json` with an RFC 8785 canonical SHA-512 in `security/tool-manifest.sha512`. CI fails on any change that is not accompanied by a regenerated manifest, so every contract change appears as an explicit diff.
 4. **Strict inputs.** Closed schemas, bounded strings (≤ 128), bounded arrays (≤ 128 items), flat records (≤ 16 entries), no JSON numbers in evidence, output-safe text charset, rejection of `__proto__`/`constructor`/`prototype` keys, bounded nesting.
 5. **Sanitized outputs and errors.** Fixed error codes and messages; validation errors list schema field names only.
-6. **Reproducible shipped artifact.** `plugin/server/walletwall-mcp.mjs` is built from source with a pinned toolchain; CI rebuilds it and fails if the committed file or `security/bundle.sha256` differ.
+6. **Reproducible shipped artifact.** `plugin/server/walletwall-mcp.mjs` is built from source with a pinned toolchain; CI rebuilds it and fails if the committed file or `security/bundle.sha512` differ.
 7. **Minimal supply chain.** Two direct runtime dependencies (`@modelcontextprotocol/sdk`, `zod`); three third-party packages are bundled into the shipped file (`@modelcontextprotocol/sdk`, `zod`, `zod-to-json-schema`); the bundle imports only `node:crypto` and `node:process`.
 8. **No server code in the shipped artifact.** The runtime entry point is stdio only. HTTP, SSE and Streamable HTTP transports, the SDK client, Ajv and every middleware module are **absent** from the bundle (status **REMOVED**, see below).
+9. **SHA-512 for WalletWall-owned release integrity.** Current bundle, tool-manifest, plugin-manifest, plugin-artifact and local brand-asset integrity fingerprints use SHA-512. SHA-256 remains where an upstream contract requires it (for example MCP Registry `fileSha256`), where a value is itself a native upstream hash, or where an immutable historical release/provenance record must be preserved. WWEP 0.1 evidence and MCP resource-digest semantics are versioned separately and are not silently changed by this release-integrity migration.
 
 ## Temporary files: only what this project created is ever deleted
 
@@ -50,7 +51,7 @@ Remaining limits: the SDK's HTTP transports still exist in `node_modules` for de
 WalletWall protects against hostile **input** (tool arguments, evidence bundles, other local web pages reaching the canvas listener, hostile pull requests). It does **not** and cannot protect against a hostile **local owner or a compromised runtime**. Anyone who can set environment variables for, change the command line of, or replace the files used by the Node.js process that Copilot starts already controls that process. Examples:
 
 - `NODE_OPTIONS=--inspect`, `--require`, `--import` or a replaced `node` binary on `PATH` in the environment that launches the plugin. Node.js honours these before any WalletWall code runs; a debugger or preload can read every tool input and output. WalletWall does not try to detect or block such switches: a blacklist of flags would be cosmetic (the list is open-ended, and code that runs inside the process can remove its own checks). The honest control is the operating system's account and process boundary.
-- A modified `plugin/server/walletwall-mcp.mjs` on disk. Its SHA-256 is published in `security/bundle.sha256` and in `security/plugin-manifest.json` so that a reviewer can compare, but WalletWall does not verify itself at runtime.
+- A modified `plugin/server/walletwall-mcp.mjs` on disk. Its SHA-512 is published in `security/bundle.sha512` and in `security/plugin-manifest.json` so that a reviewer can compare, but WalletWall does not verify itself at runtime.
 - Other software running as the same user, including the Copilot app, extensions and the model provider's client.
 
 What WalletWall does control: the canvas extension starts the bundled MCP server with an environment that contains only `PATH` (and `SystemRoot` on Windows), so `NODE_OPTIONS` and similar variables of the extension process are not forwarded to that child. The MCP server itself reads no environment.

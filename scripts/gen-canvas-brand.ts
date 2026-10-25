@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { INTEGRITY_POLICY } from "./integrity-policy.ts";
 
 /**
  * Embeds the WalletWall brand assets in canvas/brand/ (fonts, the brick-wallet mark, the WalletWallaby guide poses) into the
  * canvas as one text module of data: URIs. The canvas page therefore needs no font, image or CDN request, and the plugin
- * stays plain text. Every file must match the SHA-256 recorded in canvas/brand/brand-sources.json.
+ * stays plain text. Every local file must match the policy-selected current digest recorded in brand-sources.json.
  */
 const root = fileURLToPath(new URL("..", import.meta.url));
 const brandDir = `${root}canvas/brand`;
@@ -13,7 +14,7 @@ const outPath = `${root}plugin/com.github.copilot/extensions/walletwall-evidence
 
 interface Asset {
   file: string;
-  sha256: string;
+  sha512: string;
   role: string;
 }
 interface Font extends Asset {
@@ -28,9 +29,9 @@ const sources = JSON.parse(readFileSync(`${brandDir}/brand-sources.json`, "utf8"
 
 function bytesOf(a: Asset): Buffer {
   const bytes = readFileSync(`${brandDir}/${a.file}`);
-  const actual = createHash("sha256").update(bytes).digest("hex");
-  if (actual !== a.sha256) {
-    console.error(`canvas/brand/${a.file}: sha256 ${actual} does not match brand-sources.json (${a.sha256})`);
+  const actual = createHash(INTEGRITY_POLICY.currentAlgorithm).update(bytes).digest("hex");
+  if (actual !== a.sha512) {
+    console.error(`canvas/brand/${a.file}: ${INTEGRITY_POLICY.currentAlgorithm} ${actual} does not match brand-sources.json (${a.sha512})`);
     process.exit(1);
   }
   return bytes;

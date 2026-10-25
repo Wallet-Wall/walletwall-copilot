@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { INTEGRITY_POLICY } from "../../../../scripts/integrity-policy.ts";
 import { PROHIBITED_CLAIMS } from "./claims.ts";
 
 export interface Finding {
@@ -109,9 +110,9 @@ export function validatePluginDir(dir: string, repoRoot: string): Finding[] {
   const bundle = join(dir, "server", "walletwall-mcp.mjs");
   if (!existsSync(bundle)) add("server/walletwall-mcp.mjs", "bundled server is missing; run npm run build:bundle");
   else {
-    const sha = createHash("sha256").update(readFileSync(bundle, "utf8").replace(/\r\n/g, "\n"), "utf8").digest("hex");
-    const recorded = readFileSync(join(repoRoot, "security", "bundle.sha256"), "utf8").trim();
-    if (recorded !== `${sha}  plugin/server/walletwall-mcp.mjs`) add("server/walletwall-mcp.mjs", "does not match security/bundle.sha256");
+    const sha = createHash(INTEGRITY_POLICY.currentAlgorithm).update(readFileSync(bundle, "utf8").replace(/\r\n/g, "\n"), "utf8").digest("hex");
+    const recorded = readFileSync(join(repoRoot, INTEGRITY_POLICY.current.bundle), "utf8").trim();
+    if (recorded !== `${sha}  plugin/server/walletwall-mcp.mjs`) add("server/walletwall-mcp.mjs", `does not match ${INTEGRITY_POLICY.current.bundle}`);
   }
 
   const forbidden = ["hooks.json", "agents", "lsp.json", ".mcp.json", ".github"];

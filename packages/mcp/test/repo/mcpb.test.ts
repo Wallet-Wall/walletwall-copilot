@@ -11,6 +11,7 @@ import { createOwnedRun } from "../support/owned-temp.ts";
 const read = (p: string): string => readFileSync(`${ROOT}${p}`, "utf8").replace(/\r\n/g, "\n");
 const json = <T>(p: string): T => JSON.parse(read(p)) as T;
 const sha256 = (b: Buffer): string => createHash("sha256").update(b).digest("hex");
+const sha512 = (b: Buffer): string => createHash("sha512").update(b).digest("hex");
 
 interface Entry {
   path: string;
@@ -22,7 +23,6 @@ interface Entry {
   bytes: Buffer;
 }
 
-/** A strict reader for the one ZIP shape the packer writes. Anything else is an error. */
 function readZip(zip: Buffer): Entry[] {
   const eocd = zip.length - 22;
   assert.equal(zip.readUInt32LE(eocd), 0x06054b50, "end of central directory at the very end (no comment)");
@@ -70,16 +70,14 @@ describe("MCPB package (the WalletWall MCP for the official MCP Registry)", () =
   const b = pack("b.mcpb");
   const entries = readZip(a);
 
-  test("two builds are byte-identical and match the recorded hash", () => {
+  test("two builds are byte-identical and match both recorded integrity hashes", () => {
     assert.ok(a.equals(b));
-    assert.equal(read("security/mcpb.sha256").split(/\s+/)[0], sha256(a));
+    assert.equal(read("security/mcpb.sha256").split(/\s+/)[0], sha256(a), "MCP Registry compatibility hash");
+    assert.equal(read("security/mcpb.sha512").split(/\s+/)[0], sha512(a), "WalletWall release-integrity hash");
   });
 
   test("the archive holds exactly the four files needed to run the server: no canvas, skill, evals, docs, .git or dev files", () => {
-    assert.deepEqual(
-      entries.map((e) => e.path),
-      EXPECTED,
-    );
+    assert.deepEqual(entries.map((e) => e.path), EXPECTED);
   });
 
   test("every entry is stored with fixed header fields and an intact CRC", () => {
@@ -96,7 +94,7 @@ describe("MCPB package (the WalletWall MCP for the official MCP Registry)", () =
     const get = (p: string): Buffer => (entries.find((e) => e.path === p) as Entry).bytes;
     assert.ok(get("server/walletwall-mcp.mjs").equals(readFileSync(`${ROOT}plugin/server/walletwall-mcp.mjs`)));
     assert.equal(get("manifest.json").toString("utf8"), read("mcpb/manifest.json"));
-    assert.equal(sha256(get("server/walletwall-mcp.mjs")), read("security/bundle.sha256").split(/\s+/)[0]);
+    assert.equal(sha512(get("server/walletwall-mcp.mjs")), read("security/bundle.sha512").split(/\s+/)[0]);
   });
 
   test("the notices in the archive cover the bundled packages and nothing about the canvas", () => {
@@ -157,7 +155,7 @@ describe("server.json for the official MCP Registry", () => {
     assert.equal(s.version, mcpb.version);
   });
 
-  test("one MCPB package from its own tagged GitHub Release, stdio only, with the recorded file hash", () => {
+  test("one MCPB package from its own tagged GitHub Release, stdio only, with the registry-required SHA-256", () => {
     assert.equal(s.packages.length, 1);
     const p = s.packages[0]!;
     assert.equal(p.registryType, "mcpb");

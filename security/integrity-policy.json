@@ -1,0 +1,40 @@
+{
+  "policyVersion": "1",
+  "currentAlgorithm": "sha512",
+  "current": {
+    "bundle": "security/bundle.sha512",
+    "toolManifest": "security/tool-manifest.sha512",
+    "pluginManifest": "security/plugin-manifest.sha512",
+    "pluginArtifact": "security/plugin-artifact.sha512",
+    "mcpb": "security/mcpb.sha512"
+  },
+  "sha256Exceptions": {
+    "compatibility": {
+      "mcpRegistryArtifact": "security/mcpb.sha256"
+    },
+    "protocol": {
+      "evidenceDigestImplementation": "packages/mcp/src/canonical.ts",
+      "resourceDigestImplementation": "packages/mcp/src/resources.ts"
+    },
+    "provenance": {
+      "brandSources": "canvas/brand/brand-sources.json",
+      "agentFinderDraft": "docs/discovery/agent-finder-icon-declaration.draft.json",
+      "agentFinderRegression": "packages/mcp/test/repo/discovery-readiness.test.ts",
+      "apacheReferenceRegression": "packages/mcp/test/repo/public-release.test.ts"
+    },
+    "testOnly": {
+      "fingerprintHarness": "packages/mcp/test/support/harness.ts",
+      "canonicalRegression": "packages/mcp/test/sandbox/canonical.test.ts",
+      "mcpbRegression": "packages/mcp/test/repo/mcpb.test.ts"
+    },
+    "historical": {
+      "pluginV030": "security/history/v0.3.0/plugin-artifact.sha256",
+      "releaseV030": "docs/RELEASE_V0.3.0.md"
+    }
+  },
+  "historicalDocuments": [
+    "docs/PUBLIC_RELEASE_AUDIT.md",
+    "docs/PUBLIC_VISIBILITY_FLIP_CHECKLIST.md",
+    "docs/RELEASE_V0.3.0.md"
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "note": "Brand assets embedded in the WalletWall canvas. Every file here is copied or derived from a named WalletWall brand source; nothing is redrawn. scripts/gen-canvas-brand.ts embeds them into the plugin and fails if a hash below no longer matches the file.",
+  "note": "Brand assets embedded in the WalletWall canvas. Every local file is SHA-512 pinned and copied or derived from a named WalletWall brand source; nothing is redrawn. scripts/gen-canvas-brand.ts uses SHA-512 as the only current integrity authority. Nested source.sha256 values record upstream/source provenance only.",
   "colorSource": {
     "repository": "Wallet-Wall/walletwall-audio-visual-docs",
     "commit": "d013c06baf43fee8046d0eb93b03c0648c735209",
@@ -9,7 +9,7 @@
   "images": [
     {
       "file": "walletwall-brick-wallet-96.png",
-      "sha256": "179a4f9a1b74d0287b8199d5b6316f6b84c7840afbb7a1b4d90d1f43a9a54665",
+      "sha512": "b71156368f35b3b8c45808ede17770412445fdbf071be8ceef82bafe8acc6d5879a6339cdc6a785da33981ef97f951c25b05c4c0c45c17d9581eded31a6fef50",
       "role": "WalletWall mark (identity rail) and the canvas page favicon (<link rel=\"icon\">, the same embedded file)",
       "source": {
         "repository": "Wallet-Wall/walletwall-audio-visual-docs",
@@ -21,7 +21,7 @@
     },
     {
       "file": "walletwallaby-inspect.png",
-      "sha256": "3d632e92f4142d723e0cd177b3730e37f6d67c0dfaf8f50947f7d6e46cfd71ad",
+      "sha512": "c8a447e9b8a0d951edf2bbe017bc1b8a1fe49e9fdb3aeae1bd8f70a973054b53cedfa77a4cf5799c1dc6b909a4f930927e07f25d38d8d069e79d3df309a24c84",
       "role": "WalletWallaby guide, inspecting pose",
       "source": {
         "repository": "Wallet-Wall/walletwall-audio-visual-docs",
@@ -33,7 +33,7 @@
     },
     {
       "file": "walletwallaby-perch.png",
-      "sha256": "9a065dfdcaa880b07bbf83acee5dc65425642a837e2e54b4d74312695193e712",
+      "sha512": "c0fee5a100ababfc577e1dfcf2771cf5ccb3a7c1e3a1740797e5f37c23fcfdddfe79e181185b571623c39151a80f7008a85a6b2a85f64b29502992923d2aff1e",
       "role": "WalletWallaby guide, perched pose",
       "source": {
         "repository": "Wallet-Wall/walletwall-audio-visual-docs",
@@ -47,7 +47,7 @@
   "fonts": [
     {
       "file": "fonts/sora-latin-wght-normal.woff2",
-      "sha256": "fa26406eeda9a3c6ec3d9ea8813c3045d6dc755e30c716d5c094e8ef43be5a7f",
+      "sha512": "5b62778ffd0054b895ddb493ff46f760f96d0dcbc6e171466ea5497c02ce02c7a12238ebde1e73c7e95530634a0eab7fe1c4f1ca9d24f6f54cf6a9e9d9bab9f2",
       "family": "Sora Variable",
       "role": "display",
       "weight": "100 800",
@@ -59,7 +59,7 @@
     },
     {
       "file": "fonts/manrope-latin-wght-normal.woff2",
-      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "sha512": "5537c005cd8f321f26fe67f6292b3ec14e88ff4b2365311628dbbe4753e01e568f6881b9f2e7d71e8e6b2c261ed25f372829dd28f89f865ce574b4e1fec29614",
       "family": "Manrope Variable",
       "role": "ui",
       "weight": "200 800",
@@ -71,7 +71,7 @@
     },
     {
       "file": "fonts/ibm-plex-mono-latin-400-normal.woff2",
-      "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7",
+      "sha512": "d5b9ed102916ebc2e1ddfe322a5dee1302329de23c0c7895639106766a52906b8ec2b9bf3ac7884dbdce6166e27d315808128d35d9609e45841e3c8c2818031a",
       "family": "IBM Plex Mono",
       "role": "mono",
       "weight": "400",
@@ -83,7 +83,7 @@
     },
     {
       "file": "fonts/ibm-plex-mono-latin-500-normal.woff2",
-      "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22",
+      "sha512": "8e5f116c757f033e001d1622798ef0e689d860b6e4102c6d760398ebe653c6ec257bdcee0d8ec1ca7cf5663269ae36b79f8d44b5a0a81298c816ac5ed9a020ed",
       "family": "IBM Plex Mono",
       "role": "mono",
       "weight": "500",
@@ -96,6 +96,6 @@
   ],
   "fontSource": {
     "selection": "The WalletWall app's :root (--font-display Sora, --font-ui Manrope, --font-mono IBM Plex Mono) and the @fontsource versions its lockfile pins. The app source is not public, so the npm packages above are the verifiable source.",
-    "describes": "The files here are those npm packages' latin subsets, unmodified: each SHA-256 above equals the file of the same name in the published package tarball."
+    "describes": "The files here are those npm packages' latin subsets, unmodified; SHA-512 is the local current integrity authority."
   }
 }

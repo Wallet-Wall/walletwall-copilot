@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { canonicalize, sha256Hex } from "../../src/canonical.ts";
+import { currentIntegrityHex } from "../../../../scripts/integrity-policy.ts";
+import { canonicalize } from "../../src/canonical.ts";
 import { createServer } from "../../src/server.ts";
 import { resourcesManifest } from "../../src/resources.ts";
 import { ROOT } from "../support/harness.ts";
@@ -16,10 +17,10 @@ const manifest = JSON.parse(manifestText) as {
 };
 
 describe("tool manifest (tool contracts are security-sensitive)", () => {
-  test("SHA-256 file equals the hash of the RFC 8785 canonical manifest", () => {
-    const line = readFileSync(`${ROOT}security/tool-manifest.sha256`, "utf8").replace(/\r\n/g, "\n");
-    const expected = sha256Hex(canonicalize(JSON.parse(manifestText), { numbers: "jcs" }));
-    assert.ok(line.startsWith(`${expected}  `), "tool-manifest.sha256 is stale; run npm run gen:manifest and review the manifest diff");
+  test("current integrity file equals the hash of the RFC 8785 canonical manifest", () => {
+    const line = readFileSync(`${ROOT}security/tool-manifest.sha512`, "utf8").replace(/\r\n/g, "\n");
+    const expected = currentIntegrityHex(canonicalize(JSON.parse(manifestText), { numbers: "jcs" }));
+    assert.ok(line.startsWith(`${expected}  `), "tool-manifest.sha512 is stale; run npm run gen:manifest and review the manifest diff");
   });
 
   test("the manifest matches exactly what a client receives over the protocol", async () => {

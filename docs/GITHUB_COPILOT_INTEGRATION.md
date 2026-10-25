@@ -45,7 +45,7 @@ Copilot supports two formats. We use **Agent Plugins 1.0** (the documentation re
 
 **Display name.** The manifest `name` must be lowercase, so the identifier is `walletwall`. The format has no display-name field; the product is presented as "WalletWall" in README, skill and docs. No client-specific display-name extension was added because none is documented.
 
-**Repository layout vs. plugin root.** The plugin must be self-contained (a subdirectory install cannot reach `packages/`). The engine is therefore bundled to `plugin/server/walletwall-mcp.mjs` (committed, reproducible, hash-pinned in `security/bundle.sha256`). Install forms documented for the CLI: `copilot plugin install ./plugin`, or `OWNER/REPO:PATH` (`Wallet-Wall/walletwallrus-copilot:plugin`, requires access to the repository).
+**Repository layout vs. plugin root.** The plugin must be self-contained (a subdirectory install cannot reach `packages/`). The engine is therefore bundled to `plugin/server/walletwall-mcp.mjs` (committed, reproducible, hash-pinned in `security/bundle.sha512`). Install forms documented for the CLI: `copilot plugin install ./plugin`, or `OWNER/REPO:PATH` (`Wallet-Wall/walletwall-copilot:plugin`, requires access to the repository).
 
 ## Verified against the real client
 
