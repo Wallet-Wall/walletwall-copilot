@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+plugin
+docs
+evals
+conformance
+security
+spec
+canvas
+mcpb
+skills
+*.md
