@@ -322,7 +322,7 @@ describe("history: corrections, supersessions and withdrawals keep every record 
     const a = articleOf(fragment("receipt-mismatch"), focusOf("receipt-mismatch").id);
     assert.ok(a.includes("Whether the bytes disclosed here are the committed bytes is what the digest and receipt checks under Verify say."));
     assert.ok(!/Nothing inside it changed|disclosed as it was|nothing in it was changed/.test(a), "no UI-authored promise about content");
-    assert.ok(a.includes('data-state="MISMATCH" data-attention="true">MISMATCH</span> <span class="muted small">the embedded digest is not the SHA-256'));
+    assert.ok(a.includes('data-state="MISMATCH" data-attention="true">MISMATCH</span> <span class="wp-check-meaning">The embedded digest is not the SHA-256'));
   });
 
   test("a withdrawn record is still fully inspectable: assessments, digest, receipt and reason all remain", () => {
@@ -365,7 +365,7 @@ describe("receipt and replay: printed with their boundary, never as a truth badg
   test("a matching receipt is MATCH with the engine's fields and the sentence of what it does not establish", () => {
     const r = focusOf("receipt-valid");
     const a = articleOf(fragment("receipt-valid"), r.id);
-    const block = a.slice(a.indexOf('<div class="wp-receipt" data-receipt="MATCH">'), a.indexOf('<div class="wp-replay"'));
+    const block = a.slice(a.indexOf('data-check="receipt" data-receipt="MATCH"'), a.indexOf('data-check="replay"'));
     assert.ok(block.includes('<span class="chip" data-state="MATCH">MATCH</span>'));
     assert.ok(block.includes(`<code class="wp-exact">${r.receipt.issued!.digest}</code>`) && block.includes(`<code class="wp-exact">${r.receipt.issued!.bundleDigest}</code>`));
     assert.ok(block.includes("<code>matches: true</code>"));
@@ -376,18 +376,18 @@ describe("receipt and replay: printed with their boundary, never as a truth badg
   test("a mismatching receipt is MISMATCH with the engine's reasons explained, and the digest check shows both digests", () => {
     const r = focusOf("receipt-mismatch");
     const a = articleOf(fragment("receipt-mismatch"), r.id);
-    assert.ok(a.includes('<div class="wp-receipt" data-receipt="MISMATCH">') && a.includes('<span class="chip" data-state="MISMATCH" data-attention="true">MISMATCH</span>'));
+    assert.ok(a.includes('data-check="receipt" data-receipt="MISMATCH"') && a.includes('<span class="chip" data-state="MISMATCH" data-attention="true">MISMATCH</span>'));
     assert.ok(a.includes("<code>RECORD_INVALID</code>") && a.includes(esc(wp.RECEIPT_REASON_LABELS["RECORD_INVALID"]!)));
     assert.ok(a.includes(`<code class="wp-exact">${r.record.digest}</code>`) && a.includes(`<code class="wp-exact">${r.digest.computedDigest}</code>`), "embedded and computed digests both shown in full");
-    assert.ok(a.includes("the embedded digest is not the SHA-256 of the disclosed canonical record"));
+    assert.ok(a.includes("The embedded digest is not the SHA-256 of the disclosed canonical record."));
     assert.ok(a.includes('<span class="chip" data-state="INVALID" data-attention="true">INVALID</span>') && a.includes("<code>DIGEST_MISMATCH</code> at <code>digest</code>"));
     assert.ok(a.includes("Digest mismatch is a record-integrity finding") || a.includes("Digest match &ne; factual correctness"));
   });
 
   test("no receipt is UNAVAILABLE, said in words, and never shown as a failure", () => {
     const a = articleOf(fragment("unreplayable"), focusOf("unreplayable").id);
-    assert.ok(a.includes('<div class="wp-receipt" data-receipt="UNAVAILABLE">') && a.includes("No receipt is carried for this record."));
-    assert.ok(!/<div class="wp-receipt"[\s\S]*?data-state="MISMATCH"/.test(a.slice(a.indexOf('<div class="wp-receipt"'), a.indexOf('<div class="wp-replay"'))));
+    assert.ok(a.includes('data-check="receipt" data-receipt="UNAVAILABLE"') && a.includes("No receipt is carried for this record."));
+    assert.ok(!/data-state="MISMATCH"/.test(a.slice(a.indexOf('data-check="receipt"'), a.indexOf('data-check="replay"'))));
   });
 
   test("an absent check is absence, never a verdict: no validation result, no digest check or no receipt verification prints as not carried", () => {
@@ -397,9 +397,9 @@ describe("receipt and replay: printed with their boundary, never as a truth badg
     delete r["digest"];
     (r["receipt"] as { verification: unknown }).verification = null;
     const html = render.renderView(view("receipt-valid", f as unknown as DisclosureFixture));
-    assert.ok(html.includes('<dt>Record validation</dt><dd><span class="chip" data-state="NA">not carried</span>'));
-    assert.ok(html.includes("this fixture carries no digest check") && html.includes("<dt>Digest (computed from the disclosed bytes)</dt><dd><span class=\"muted\">not carried</span>"));
-    assert.ok(html.includes('data-receipt="UNCHECKED"') && html.includes("A receipt is carried, but no verification result for it."));
+    assert.ok(html.includes('data-check="record" data-result="NOT_CARRIED"') && html.includes('<span class="chip" data-state="NA">not carried</span> <span class="wp-check-meaning">No validation result is carried in this disclosure.'));
+    assert.ok(html.includes('data-check="digest" data-result="NOT_CARRIED"') && html.includes("<dt>Computed digest</dt><dd><span class=\"muted\">not carried</span>"));
+    assert.ok(html.includes('data-receipt="UNCHECKED"') && html.includes("A receipt is carried, but no verification result is available in this disclosure. No check was run here."));
     assert.ok(!/data-state="(INVALID|MISMATCH)"/.test(html) && !html.includes("matches: false"), "nothing is invented in place of the missing checks");
     const s = structuredClone(WALLPRINT_FIXTURES["current-supported"]!);
     const focal = s.records[0]!.record.claims.find((c) => c.assertionId === s.records[0]!.record.subject.focalAssertionId)! as unknown as { authority: { authorityId: string; kind: string; satisfied: unknown } };
@@ -410,21 +410,21 @@ describe("receipt and replay: printed with their boundary, never as a truth badg
 
   test("replay REPRODUCED, MISMATCH and UNREPLAYABLE are printed with reasons, recomputed digest and sections; missing evidence is not filled in", () => {
     const ok = articleOf(fragment("receipt-valid"), focusOf("receipt-valid").id);
-    assert.ok(ok.includes('<div class="wp-replay" data-replay="REPRODUCED">') && ok.includes(`<code class="wp-exact">${focusOf("receipt-valid").replay.recomputedDigest}</code>`));
+    assert.ok(ok.includes('data-check="replay" data-replay="REPRODUCED"') && ok.includes(`<code class="wp-exact">${focusOf("receipt-valid").replay.recomputedDigest}</code>`));
 
     const mm = focusOf("replay-mismatch");
     const m = articleOf(fragment("replay-mismatch"), mm.id);
-    assert.ok(m.includes('<div class="wp-replay" data-replay="MISMATCH">') && m.includes('<span class="chip" data-state="MISMATCH" data-attention="true">MISMATCH</span>'));
+    assert.ok(m.includes('data-check="replay" data-replay="MISMATCH"') && m.includes('<span class="chip" data-state="MISMATCH" data-attention="true">MISMATCH</span>'));
     assert.ok(m.includes("<code>CLAIM_MISMATCH</code>") && m.includes(esc(wp.REPLAY_REASON_LABELS["CLAIM_MISMATCH"]!)) && m.includes("<dt>Sections that differ</dt><dd><code>claims</code></dd>"));
     assert.ok(m.includes(`<code class="wp-exact">${mm.replay.recomputedDigest}</code>`));
     assert.ok(m.includes('data-receipt="MATCH"'), "a matching receipt sits beside a replay mismatch: integrity is not correctness");
 
     const un = articleOf(fragment("unreplayable"), focusOf("unreplayable").id);
-    assert.ok(un.includes('<div class="wp-replay" data-replay="UNREPLAYABLE">') && un.includes("<code>MISSING_EVIDENCE</code>"));
+    assert.ok(un.includes('data-check="replay" data-replay="UNREPLAYABLE"') && un.includes("<code>MISSING_EVIDENCE</code>"));
     assert.ok(un.includes("The referenced evidence bundle is not in the evidence store. It is not filled in."));
     assert.ok(un.includes("<dd><span class=\"muted\">nothing was recomputed</span></dd>"));
     assert.ok(un.includes("<strong>UNREPLAYABLE is not INCORRECT.</strong>"));
-    const replayBlock = un.slice(un.indexOf('<div class="wp-replay"'), un.indexOf('<details class="wp-more wp-raw">'));
+    const replayBlock = un.slice(un.indexOf('data-check="replay"'), un.indexOf("</ol>", un.indexOf('data-check="replay"')));
     assert.ok(!/(?<!not )\bincorrect\b|\bwrong\b|\bfalse\b/i.test(text(replayBlock)), "nothing calls the record incorrect");
     for (const h of ["0".repeat(64), "null"]) assert.ok(!un.includes(`<code class="wp-exact">${h}</code>`), "no placeholder digest is invented");
   });
