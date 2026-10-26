@@ -10,7 +10,7 @@ Use the local `walletwall` MCP server as the evidence and policy boundary. This 
 ## Workflow
 
 1. Identify the exact asset by chain ID and contract address. A symbol alone is not identity.
-2. Inventory the evidence actually supplied. Do not fabricate observations, providers, authorities, balances, permissions, prices, routes, or execution results.
+2. Inventory the evidence actually supplied. Do not fabricate observations, providers, authorities, balances, permissions, prices, routes, or execution results. If you assemble WWEP evidence from the user's measurements, follow `walletwall://schemas/claims` exactly; `walletwall://examples/vault-readiness-established` is a complete synthetic input and `walletwall://examples/vault-readiness-not-established` shows incomplete evidence that stays `NOT_ESTABLISHED`.
 3. Call `resolve_asset` when deployment identity is relevant.
 4. Call `inspect_evidence` and `check_invariants` before drawing a readiness conclusion.
 5. Call `trace_provenance` when authority, derivation, independence, or contradiction matters.

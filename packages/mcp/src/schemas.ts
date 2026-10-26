@@ -109,7 +109,7 @@ export const CHAIN_ID_RE = /^[1-9][0-9]{0,17}$/;
 export const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 /** Conservative output-safe text: no quotes, brackets, newlines or control characters. */
 export const SAFE_TEXT_RE = /^[A-Za-z0-9 _.:/+-]{0,128}$/;
-const KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+export const KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 
 const Id = z.string().regex(ID_RE);
 const Iso = z

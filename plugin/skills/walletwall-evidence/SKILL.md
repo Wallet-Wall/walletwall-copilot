@@ -18,11 +18,17 @@ You have WalletWall MCP: a local, offline, read-only MCP server named `walletwal
 
 Read `walletwall://spec/wwep` and `walletwall://policies/authority` when you need exact semantics.
 
+## Resources for constructing evidence
+
+- `walletwall://schemas/claims` — the exact contract per claim type: required subject and value keys with their formats, which observation origins and source kinds may establish or corroborate the claim, how an observation links to its assertion, and the registry and derivation relationships. Read it before you assemble a bundle from the user's measurements. `walletwall://schemas/evidence` is the closed bundle schema.
+- `walletwall://examples/identity-established`, `walletwall://examples/balance-established`, `walletwall://examples/vault-readiness-established` and `walletwall://examples/vault-readiness-not-established` — complete synthetic tool inputs with the engine's expected result. They are illustrative evidence, not claims about any real wallet; adapt their shape, never present them as the user's evidence.
+- When `inspect_evidence` reports `INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`, the assertion's `diagnostics` entries name the record and the missing, invalid, unexpected or mismatched keys. Use them to construct a correct **new** input and say that it is new (rule 8); the reason code itself is stable.
+
 ## WalletWall canvas
 
 When the user wants to **see** one evidence bundle (not just hear a summary), open the WalletWall canvas (canvas id `walletwall-evidence-explorer`) after you have called the WalletWall tools:
 
-- Use `open_canvas` with `canvasId: "walletwall-evidence-explorer"` and an `input` of `{ "bundle": <the same bundle you passed to inspect_evidence>, "evaluatedAt": "<the same evaluatedAt>" }`. For a quick look at a synthetic example use `{ "fixture": "usdc-established" | "stale-identity" | "conflicting-balances" }`.
+- Use `open_canvas` with `canvasId: "walletwall-evidence-explorer"` and an `input` of `{ "bundle": <the same bundle you passed to inspect_evidence>, "evaluatedAt": "<the same evaluatedAt>" }`. For a quick look at a synthetic example use `{ "fixture": "usdc-established" | "stale-identity" | "conflicting-balances" }`; on a host without the canvas, the `walletwall://examples/` resources serve equivalent synthetic bundles.
 - Pass the **input bundle**, never tool output. The canvas asks the local WalletWall MCP server for every state it shows and computes nothing itself.
 - To change what is shown use the canvas actions `set_bundle` and `select_assertion`. Use `get_view` to read what the panel displays and describe those values; do not re-derive them.
 - The canvas shows limitations next to every state. When you describe the panel, repeat the limitations and conflicts too.

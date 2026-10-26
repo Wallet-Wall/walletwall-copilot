@@ -26,7 +26,7 @@ describe("privacy runtime proofs (real stdio server under the privacy guard)", (
     describe(`entry: ${label}`, () => {
       test("PRIV-001 offline MCP works with every network API blocked: all tools and resources answered", async () => {
         const s = await session(label);
-        assert.equal(s.responses.length, 16);
+        assert.equal(s.responses.length, 21, "2 list requests, 8 tool calls and one read of each of the 11 resources");
         assert.ok(s.responses.every((r) => !r.includes('"isError":true') || r.includes("INVALID_INPUT")), "only the deliberate bad-input call may error");
         assert.ok(s.responses.filter((r) => r.includes('"isError":true')).length === 1);
         assert.deepEqual(s.guard.network, []);

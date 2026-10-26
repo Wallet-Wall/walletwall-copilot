@@ -716,10 +716,10 @@ function cached(getter) {
 function nullish(input2) {
   return input2 === null || input2 === void 0;
 }
-function cleanRegex(source) {
-  const start = source.startsWith("^") ? 1 : 0;
-  const end = source.endsWith("$") ? source.length - 1 : source.length;
-  return source.slice(start, end);
+function cleanRegex(source2) {
+  const start = source2.startsWith("^") ? 1 : 0;
+  const end = source2.endsWith("$") ? source2.length - 1 : source2.length;
+  return source2.slice(start, end);
 }
 function floatSafeRemainder(val, step) {
   const ratio = val / step;
@@ -787,28 +787,28 @@ function putProp(target, key, value) {
   else
     target[key] = value;
 }
-function mirrorShape(target, source, keys, wrap) {
-  const raw = sourceShape(source);
+function mirrorShape(target, source2, keys, wrap) {
+  const raw = sourceShape(source2);
   for (const key of keys) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
     if (!desc.enumerable)
       continue;
     if (desc.get) {
       deferProp(target, key, () => {
-        const value = source._zod.def.shape[key];
+        const value = source2._zod.def.shape[key];
         return wrap ? wrap(value, key) : value;
       });
     } else
       putProp(target, key, wrap ? wrap(desc.value, key) : desc.value);
   }
 }
-function mirrorProps(target, source) {
-  for (const key of Reflect.ownKeys(source)) {
-    const desc = Object.getOwnPropertyDescriptor(source, key);
+function mirrorProps(target, source2) {
+  for (const key of Reflect.ownKeys(source2)) {
+    const desc = Object.getOwnPropertyDescriptor(source2, key);
     if (!desc.enumerable)
       continue;
     if (desc.get)
-      deferProp(target, key, () => source[key]);
+      deferProp(target, key, () => source2[key]);
     else
       putProp(target, key, desc.value);
   }
@@ -2033,8 +2033,8 @@ var creditCard = /^\d(?:[ -]?\d){11,18}$/;
 var currencyCode = /^(?:AED|AFN|ALL|AMD|AOA|ARS|AUD|AWG|AZN|BAM|BBD|BDT|BHD|BIF|BMD|BND|BOB|BOV|BRL|BSD|BTN|BWP|BYN|BZD|CAD|CDF|CHE|CHF|CHW|CLF|CLP|CNY|COP|COU|CRC|CUP|CVE|CZK|DJF|DKK|DOP|DZD|EGP|ERN|ETB|EUR|FJD|FKP|GBP|GEL|GHS|GIP|GMD|GNF|GTQ|GYD|HKD|HNL|HTG|HUF|IDR|ILS|INR|IQD|IRR|ISK|JMD|JOD|JPY|KES|KGS|KHR|KMF|KPW|KRW|KWD|KYD|KZT|LAK|LBP|LKR|LRD|LSL|LYD|MAD|MDL|MGA|MKD|MMK|MNT|MOP|MRU|MUR|MVR|MWK|MXN|MXV|MYR|MZN|NAD|NGN|NIO|NOK|NPR|NZD|OMR|PAB|PEN|PGK|PHP|PKR|PLN|PYG|QAR|RON|RSD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|SLE|SOS|SRD|SSP|STN|SVC|SYP|SZL|THB|TJS|TMT|TND|TOP|TRY|TTD|TWD|TZS|UAH|UGX|USD|USN|UYI|UYU|UYW|UZS|VED|VES|VND|VUV|WST|XAD|XAF|XAG|XAU|XBA|XBB|XBC|XBD|XCD|XCG|XDR|XOF|XPD|XPF|XPT|XSU|XTS|XUA|XXX|YER|ZAR|ZMW|ZWG)$/;
 var iban = /^[A-Z]{2}(?!00|01|99)\d{2}[A-Z0-9]{11,30}$/;
 var dateSource = `(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))`;
-function anchor(source) {
-  return new RegExp(`^${source}$`);
+function anchor(source2) {
+  return new RegExp(`^${source2}$`);
 }
 var date = /* @__PURE__ */ anchor(dateSource);
 function timeSource(args) {
@@ -4885,11 +4885,11 @@ var $ZodTemplateLiteral = /* @__PURE__ */ $constructor("$ZodTemplateLiteral", (i
   const regexParts = [];
   for (const part of def.parts) {
     if (typeof part === "object" && part !== null) {
-      const source = partPattern(part);
-      if (!source) {
+      const source2 = partPattern(part);
+      if (!source2) {
         throw new Error(`Invalid template literal part, no pattern found: ${[...part._zod.traits].shift()}`);
       }
-      regexParts.push(cleanRegex(source));
+      regexParts.push(cleanRegex(source2));
     } else if (part === null || primitiveTypes.has(typeof part)) {
       regexParts.push(escapeRegex(`${part}`));
     } else {
@@ -13015,9 +13015,9 @@ function withParser(schema, parser) {
     installCompiledUserMethods(clone2, schema, parser);
   return clone2;
 }
-function installCompiledUserMethods(target, source, parser) {
+function installCompiledUserMethods(target, source2, parser) {
   const targetAny = target;
-  const sourceAny = source;
+  const sourceAny = source2;
   if (typeof sourceAny.safeParse === "function") {
     const originalSafeParse = sourceAny.safeParse;
     targetAny.safeParse = (data, params) => {
@@ -15620,10 +15620,10 @@ function _stringFormat(Class2, format, fnOrRegex, _params = {}) {
 
 // node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
-  for (const source of sources) {
-    for (const key of Reflect.ownKeys(source)) {
-      if (Object.prototype.propertyIsEnumerable.call(source, key)) {
-        assignProp(target, key, source[key]);
+  for (const source2 of sources) {
+    for (const key of Reflect.ownKeys(source2)) {
+      if (Object.prototype.propertyIsEnumerable.call(source2, key)) {
+        assignProp(target, key, source2[key]);
       }
     }
   }
@@ -23117,8 +23117,42 @@ function evidenceDigest(value, options = {}) {
   return sha256Hex(canonicalize(value, options));
 }
 
-// packages/mcp/src/generated/content.ts
-var SPEC_WWEP_MD = '# WalletWall Evidence Profile 0.1 (WWEP 0.1) \u2014 DRAFT\n\nStatus: **draft, pre-release**. This is a WalletWall-defined profile. It is **not** an industry standard,\nhas not been reviewed outside WalletWall, and makes no claim of interoperability beyond the W3C PROV alignment\ndescribed in section 9.\n\nKey words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119 / RFC 8174 when in capitals.\n\n## 1. Purpose and non-purpose\n\nWWEP defines a structured record of *what evidence was presented, from where, with what authority, and with what\nlimits*, and a deterministic procedure that classifies how well that evidence supports a claim.\n\nWWEP **does not** establish that upstream evidence is true. Every state defined here describes the *sufficiency of\npresented evidence under a published policy*. A state such as `ESTABLISHED` means "the presented evidence satisfies\nthe policy for this claim type", never "this is verified truth". WWEP also says nothing about arbitrary natural\nlanguage prose produced later by a language model.\n\n## 2. Versions\n\n| Identifier | Value | Meaning |\n| --- | --- | --- |\n| `EvidenceProfileVersion` | `0.1` | The profile version in every bundle (`wwepVersion`). |\n| `RegistryVersion` | `0.2.0` | Version of the bundled asset and chain registry. Record-level, point-in-time verification (see `DATA_SOURCES.md`). |\n| `RulesVersion` | `0.1.0-draft` | Version of the derivation rules (`wwdr.usd-value`, `wwvr.vault-technical-readiness`). |\n\nA bundle MUST declare `wwepVersion: "0.1"`. Any other value MUST be rejected. See `VERSIONING.md`.\n\n## 3. Evidence-origin classes\n\nEvery observation and assertion has exactly one origin class.\n\n| Origin | Meaning |\n| --- | --- |\n| `CHAIN_OBSERVED` | A value read from canonical chain state at an identified block. The transport used to read it (RPC, indexer, local node) is recorded separately and carries no authority. |\n| `AUTHORITY_ATTESTED` | A statement published by the issuer or protocol that is the appropriate authority for the claim. |\n| `PROVIDER_OBSERVED` | A value that a third-party provider reports on its own behalf (price feed, labeling, indexed analytics). |\n| `USER_SUPPLIED` | A value supplied by the person using the tool. |\n| `WALLETWALL_DERIVED` | A value computed by a published WalletWall rule from other assertions. |\n\nEach origin corresponds to a fixed set of source kinds (`CHAIN_OBSERVED`\u2192`CHAIN_STATE`,\n`AUTHORITY_ATTESTED`\u2192`ISSUER_PUBLICATION`, `PROVIDER_OBSERVED`\u2192`PROVIDER_ENDPOINT`, `USER_SUPPLIED`\u2192`USER_INPUT`,\n`WALLETWALL_DERIVED`\u2192`WALLETWALL_RULES`). An observation whose source kind does not match its origin MUST NOT\nqualify as evidence of that origin (limitation `ORIGIN_SOURCE_KIND_MISMATCH`, invariant INV-13).\n\n## 4. Data model\n\nAll evidence-critical values are strings. JSON numbers MUST NOT appear in evidence objects. Quantities are\ncanonical atomic-unit decimal strings (section 7). Every object is closed: unknown properties are rejected.\n\n- **Source** \u2014 `{id, kind, authorityId?, transport?{retrievedVia}, independenceGroup?}`. Where evidence came from.\n  `transport.retrievedVia` is metadata only.\n- **Observation** \u2014 `{id, sourceId, origin, observedAt, finality, result, subject, payload}`. One reading.\n  `result` is `VALUE`, `NO_RESULT` or `ERROR`. `NO_RESULT` and `ERROR` carry no value.\n- **Assertion** \u2014 `{id, claimType, origin, temporality, subject, value|null, observationIds, derivationId?,\n  assertedAt, limitations?, declared?}`. A claim about a subject, backed by observations or by a derivation.\n  `temporality` is `CURRENT` (must be fresh) or `PINNED` (a historical point such as a block).\n  `declared` lets an author state the support, freshness, finality and corroboration they *believe* apply; the\n  engine never trusts it and reports any excess as a violation.\n- **Derivation** \u2014 `{id, ruleId, rulesVersion, inputAssertionIds, outputAssertionId}`. A WalletWall rule applied to\n  assertions. Derivations take assertions only, never raw observations.\n- **EvidenceDependency** \u2014 the directed edge `assertion \u2192 input` induced by a derivation\'s `inputAssertionIds` (and\n  by an assertion\'s `observationIds`). Dependencies are computed, not stored separately.\n- **Authority** \u2014 the entity or state that may establish a claim type, e.g. `canonical-chain-state`,\n  `issuer-publication`, `walletwall-rules`.\n- **AuthorityPolicy** \u2014 the per-claim-type rules for authority, corroboration, finality, freshness and required\n  dependencies (`authority-policies/policies.json`, see `AUTHORITY_MODEL.md`).\n- **SupportState**, **FreshnessState**, **FinalityState** \u2014 section 5.\n- **Conflict** \u2014 `{id, assertionIds, reason}` declared by an author, or detected by the engine when two\n  non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.\n- **Limitation** \u2014 a code from a closed enumeration attached to a result that explains why it is weaker than it\n  might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).\n- **Supersession** \u2014 `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion\n  replaces an older one; the older assertion stays in the bundle and is reported `SUPERSEDED`.\n- **RegistryVersion**, **RulesVersion**, **EvidenceProfileVersion** \u2014 section 2.\n\n## 5. States\n\nExact semantics are in `SUPPORT_STATES.md`. Summary:\n\n- Support: `ESTABLISHED`, `SUPPORTED`, `PARTIAL`, `CONFLICTING`, `STALE`, `SUPERSEDED`, `UNKNOWN`, `NOT_ESTABLISHED`.\n- Freshness: `CURRENT`, `STALE`, `PINNED`, `UNKNOWN_FRESHNESS`.\n- Finality: `FINALIZED`, `UNFINALIZED`, `UNKNOWN_FINALITY`; `null` when finality does not apply to the claim type.\n\nWhen states are combined across dependencies the **weakest** member wins, in this order from strongest to weakest:\n`ESTABLISHED > SUPPORTED > PARTIAL > STALE > SUPERSEDED > UNKNOWN > CONFLICTING > NOT_ESTABLISHED`.\n\n## 6. Mandatory evidence invariants\n\nThese are enforced by `check_invariants` and by executable conformance tests. Each has an identifier.\n\n1. **INV-01** `NO_SOURCE \u2192 NO_FACT`. An assertion with no observation and no derivation MUST NOT carry a value or be\n   presented as `PARTIAL` or stronger.\n2. **INV-02** `STALE` MUST NOT satisfy `CURRENT`.\n3. **INV-03** `CONFLICTING` MUST NOT satisfy `ESTABLISHED`.\n4. **INV-04** `NO_RESULT` MUST NOT become `ZERO`.\n5. **INV-05** `UNKNOWN` MUST NOT become `FALSE`.\n6. **INV-06** `WALLETWALL_DERIVED` MUST NOT masquerade as upstream authority.\n7. **INV-07** Processing evidence MUST NOT increase the authority of its inputs.\n8. **INV-08** Duplicate evidence MUST NOT increase independent corroboration.\n9. **INV-09** Multiple provider endpoints MUST NOT automatically imply independent authority.\n10. **INV-10** Derived results retain the limitations of their dependencies.\n11. **INV-11** Token quantity MUST NOT silently become USD value without explicit price evidence.\n12. **INV-12** Historical assertions are superseded, never silently rewritten.\n13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply\n    `authority = Alchemy` for Ethereum state.\n\n**INV-00** (engine rule) \u2014 declared states MUST NOT exceed states computed by the published rules.\n\n## 7. Canonicalization and digests\n\nEvidence objects are serialized with the **RFC 8785 JSON Canonicalization Scheme** and hashed with **SHA-256**.\n`JSON.stringify` output MUST NOT be hashed. The implementation additionally rejects lone surrogates (I-JSON),\nnon-plain objects and every JSON number in evidence objects.\n\nEvidence-critical quantities are canonical atomic-unit decimal strings matching `^(0|[1-9][0-9]{0,77})$` and not\nexceeding `2^256 \u2212 1`. Decimals are strings matching `^(0|[1-9][0-9]?)$` and at most 36. Arithmetic uses `BigInt`.\nDecimal renderings are exact and unrounded. JavaScript `Number` MUST NOT hold a token balance.\n\nTwo digests are defined for an observation: the **evidence digest** (canonical form of the whole observation) and the\n**content digest** (canonical form of `{result, subject, payload}`), used to detect duplicate evidence.\n\n## 8. Evaluation\n\nEvaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rules)`. The evaluation time is an\nexplicit input; the engine never reads a clock. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and\n`SUPPORT_STATES.md`. In outline:\n\n1. Reject any bundle that fails the closed schema.\n2. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.\n3. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively).\n4. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations.\n5. Independently check the invariants and report violations without mutating results.\n\n## 9. Provenance alignment\n\n`trace_provenance` emits a graph shaped like W3C PROV-JSON: observations and assertions are `entity`, derivations are\n`activity`, sources and the WalletWall rule engine are `agent`; relations use `wasDerivedFrom`, `wasAttributedTo`,\n`wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full\nimplementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced.\n\n## 10. Readiness terminology\n\nWWEP defines `VAULT_TECHNICAL_READINESS`, never a generic `READY`. Its values are `CRITERIA_MET`,\n`CRITERIA_NOT_MET` and `NOT_ESTABLISHED`. It does **not** establish investment merit, solvency, creditworthiness,\nlegal status, regulatory compliance, absence of fraud, or future performance.\n\n## 11. Known limitations of 0.1\n\n- Evidence is evaluated as presented. The engine cannot verify that a `CHAIN_OBSERVED` reading was faithfully\n  retrieved (`TRANSPORT_FIDELITY_NOT_VERIFIED` is always attached).\n- Registry content is verified only at a point in time (`REGISTRY_VERIFIED_POINT_IN_TIME`); later changes to a contract are not observed.\n- Address checksums (EIP-55) are not verified; addresses are compared case-insensitively.\n- No live providers exist; all evidence is supplied by the caller.\n- Only five claim types are defined: `ASSET_IDENTITY`, `TOKEN_BALANCE_AT_BLOCK`, `TOKEN_USD_PRICE`,\n  `TOKEN_USD_VALUE`, `VAULT_TECHNICAL_READINESS`.\n';
+// packages/mcp/src/quantity.ts
+var UINT256_MAX = (1n << 256n) - 1n;
+var MAX_DECIMALS = 36;
+var ATOMIC_RE = /^(0|[1-9][0-9]{0,77})$/;
+var DECIMALS_RE = /^(0|[1-9][0-9]?)$/;
+function bad() {
+  throw new WwError("INVALID_QUANTITY", "Quantity is not a canonical atomic-unit decimal string.");
+}
+function parseAtomic(text) {
+  if (!ATOMIC_RE.test(text)) bad();
+  const v = BigInt(text);
+  if (v > UINT256_MAX) bad();
+  return v;
+}
+function parseDecimals(text) {
+  if (!DECIMALS_RE.test(text)) bad();
+  const n = Number.parseInt(text, 10);
+  if (n > MAX_DECIMALS) bad();
+  return n;
+}
+function formatAtomic(amount, decimals) {
+  if (amount < 0n || decimals < 0 || decimals > MAX_DECIMALS) bad();
+  const digits = amount.toString().padStart(decimals + 1, "0");
+  const whole = digits.slice(0, digits.length - decimals);
+  const frac = digits.slice(digits.length - decimals).replace(/0+$/, "");
+  return frac.length === 0 ? whole : `${whole}.${frac}`;
+}
+var PRICE_RE = /^(0|[1-9][0-9]{0,40})(\.[0-9]{1,18})?$/;
+function parsePriceScaled18(text) {
+  if (!PRICE_RE.test(text)) bad();
+  const [whole = "0", frac = ""] = text.split(".");
+  return BigInt(whole) * 10n ** 18n + BigInt(frac.padEnd(18, "0"));
+}
+function usdValueScaled18(atomic, decimals, priceScaled18) {
+  return atomic * priceScaled18 / 10n ** BigInt(decimals);
+}
 
 // packages/mcp/registry/chains.json
 var chains_default = {
@@ -23804,6 +23838,9 @@ var policyByClaim = new Map(policiesFile.policies.map((p) => [p.claimType, p]));
 function getPolicy(claimType) {
   return policyByClaim.get(claimType);
 }
+function allPolicies() {
+  return policiesFile.policies;
+}
 function findChain(chainId) {
   return CHAINS.find((c) => c.chainId === chainId);
 }
@@ -23842,115 +23879,391 @@ function rawPolicies() {
   return policiesFile;
 }
 
-// packages/mcp/src/version.ts
-var ENGINE_NAME = "walletwall-mcp";
-var ENGINE_TITLE = "WalletWall MCP";
-var ENGINE_VERSION = "0.1.0";
+// packages/mcp/src/claims.ts
+var ORIGIN_SOURCE_KINDS = {
+  CHAIN_OBSERVED: ["CHAIN_STATE"],
+  AUTHORITY_ATTESTED: ["ISSUER_PUBLICATION"],
+  PROVIDER_OBSERVED: ["PROVIDER_ENDPOINT"],
+  USER_SUPPLIED: ["USER_INPUT"],
+  WALLETWALL_DERIVED: ["WALLETWALL_RULES"]
+};
+var BLOCK_NUMBER_RE = /^(0|[1-9][0-9]{0,17})$/;
+var USD_SCALED_18_RE = /^(0|[1-9][0-9]{0,139})$/;
+var ROUNDING_MODES = ["FLOOR_SCALED_18"];
+var READINESS_CLASSIFICATIONS = ["CRITERIA_MET", "CRITERIA_NOT_MET", "NOT_ESTABLISHED"];
+var parses = (parse3) => (value) => {
+  try {
+    parse3(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+var safeText = (description) => ({
+  accepts: (v) => SAFE_TEXT_RE.test(v),
+  schema: { type: "string", pattern: SAFE_TEXT_RE.source, description }
+});
+var DECIMALS_RULE = {
+  accepts: parses(parseDecimals),
+  schema: {
+    type: "string",
+    pattern: DECIMALS_RE.source,
+    description: `Token decimals as a decimal string, 0 to ${MAX_DECIMALS}. For a registered deployment it must equal the registry decimals.`
+  }
+};
+var SUBJECT_KEY_RULES = {
+  chainId: {
+    accepts: (v) => CHAIN_ID_RE.test(v),
+    schema: { type: "string", pattern: CHAIN_ID_RE.source, description: "EIP-155 chain ID as a decimal string." }
+  },
+  address: {
+    accepts: (v) => ADDRESS_RE.test(v),
+    schema: { type: "string", pattern: ADDRESS_RE.source, description: "Token contract address: 0x followed by 40 hex digits." },
+    caseInsensitive: true
+  },
+  token: {
+    accepts: (v) => ADDRESS_RE.test(v),
+    schema: { type: "string", pattern: ADDRESS_RE.source, description: "Token contract address of the balance: 0x followed by 40 hex digits." },
+    caseInsensitive: true
+  },
+  holder: {
+    accepts: (v) => ADDRESS_RE.test(v),
+    schema: { type: "string", pattern: ADDRESS_RE.source, description: "Account address whose balance is observed: 0x followed by 40 hex digits." },
+    caseInsensitive: true
+  },
+  blockNumber: {
+    accepts: (v) => BLOCK_NUMBER_RE.test(v),
+    schema: { type: "string", pattern: BLOCK_NUMBER_RE.source, description: "Block height as a decimal string." }
+  },
+  blockHash: {
+    accepts: (v) => HASH_RE.test(v),
+    schema: { type: "string", pattern: HASH_RE.source, description: "Block hash: 0x followed by 64 hex digits." },
+    caseInsensitive: true
+  }
+};
+var CASE_INSENSITIVE_SUBJECT_KEYS = new Set(
+  Object.entries(SUBJECT_KEY_RULES).filter(([, rule]) => rule.caseInsensitive === true).map(([key]) => key)
+);
+var CASE_NOTE = " Matched case-insensitively between an observation and its assertion; conflict grouping and supersession identity compare the exact string, so supply lowercase hex.";
+var VALUE_KEY_RULES = {
+  ASSET_IDENTITY: {
+    symbol: safeText("Token symbol as published by the issuer or protocol. For an ESTABLISHED identity it must equal the registry symbol. A symbol is never identity on its own."),
+    decimals: DECIMALS_RULE,
+    issuerAuthorityId: safeText(
+      "Authority identifier of the issuer or protocol publication that attests the deployment, for example the registry record's authorityId. It must equal the registry authorityId for the subject deployment and the authorityId of the attesting ISSUER_PUBLICATION source."
+    )
+  },
+  TOKEN_BALANCE_AT_BLOCK: {
+    balanceAtomic: {
+      accepts: parses(parseAtomic),
+      schema: { type: "string", pattern: ATOMIC_RE.source, description: "Balance in atomic units as a canonical decimal integer string, at most 2^256 - 1. Never a JSON number." }
+    },
+    decimals: DECIMALS_RULE
+  },
+  TOKEN_USD_PRICE: {
+    priceUsd: {
+      accepts: parses(parsePriceScaled18),
+      schema: { type: "string", pattern: PRICE_RE.source, description: "USD price as a decimal string with at most 18 fractional digits. A price is a provider observation and can be at most SUPPORTED." }
+    }
+  },
+  TOKEN_USD_VALUE: {
+    usdScaled18: {
+      accepts: (v) => USD_SCALED_18_RE.test(v),
+      schema: { type: "string", pattern: USD_SCALED_18_RE.source, description: "USD value scaled by 10^18 as a decimal integer string, computed by rule wwdr.usd-value from balance and price evidence." }
+    },
+    rounding: {
+      accepts: (v) => ROUNDING_MODES.includes(v),
+      schema: { type: "string", enum: ROUNDING_MODES, description: "Rounding applied by the derivation rule." }
+    }
+  },
+  VAULT_TECHNICAL_READINESS: {
+    classification: {
+      accepts: (v) => READINESS_CLASSIFICATIONS.includes(v),
+      schema: { type: "string", enum: READINESS_CLASSIFICATIONS, description: "The published VAULT_TECHNICAL_READINESS classification. Never a generic READY." }
+    }
+  }
+};
+for (const policy of allPolicies()) {
+  const shaped = Object.keys(VALUE_KEY_RULES[policy.claimType]).sort();
+  const declared = [...policy.valueKeys].sort();
+  if (shaped.length !== declared.length || shaped.some((k, i) => k !== declared[i])) {
+    throw new Error(`value keys for ${policy.claimType} differ between the authority policy and the claim shape table`);
+  }
+  for (const k of policy.subjectKeys) {
+    if (SUBJECT_KEY_RULES[k] === void 0) throw new Error(`subject key ${k} of ${policy.claimType} has no shape rule`);
+  }
+}
+var KNOWN_RECORD_KEYS = /* @__PURE__ */ new Set([
+  ...KNOWN_PATH_SEGMENTS,
+  ...Object.keys(SUBJECT_KEY_RULES),
+  ...Object.values(VALUE_KEY_RULES).flatMap((rules) => Object.keys(rules))
+]);
+function diagnoseRecord(rec, rules, requiredKeys) {
+  const missingKeys = [];
+  const invalidKeys = [];
+  for (const key of requiredKeys) {
+    const value = rec === null ? void 0 : rec[key];
+    if (value === void 0) missingKeys.push(key);
+    else if (typeof value !== "string") invalidKeys.push({ key, reason: "WRONG_TYPE" });
+    else if (!(rules[key]?.accepts(value) ?? true)) invalidKeys.push({ key, reason: "INVALID_FORMAT" });
+  }
+  const required2 = new Set(requiredKeys);
+  const unexpectedKeys = rec === null ? [] : Object.keys(rec).filter((k) => !required2.has(k)).slice(0, LIMITS.recordEntries).map((k) => KNOWN_RECORD_KEYS.has(k) ? k : "*").sort();
+  return { requiredKeys: [...requiredKeys], missingKeys, invalidKeys, unexpectedKeys };
+}
+function subjectValid(subject, keys) {
+  for (const k of keys) {
+    const v = subject[k];
+    if (typeof v !== "string") return false;
+    const rule = SUBJECT_KEY_RULES[k];
+    if (rule !== void 0 && !rule.accepts(v)) return false;
+  }
+  return true;
+}
+function valueValid(claimType, rec) {
+  if (rec === null) return false;
+  const rules = VALUE_KEY_RULES[claimType];
+  if (rules === void 0) return false;
+  for (const [key, rule] of Object.entries(rules)) {
+    const v = rec[key];
+    if (typeof v !== "string" || !rule.accepts(v)) return false;
+  }
+  return true;
+}
+var CLAIMS_RESOURCE_URI = "walletwall://schemas/claims";
+var SHAPE_LIMITATIONS = ["INVALID_SUBJECT", "SUBJECT_MISMATCH", "INVALID_VALUE", "VALUE_MISMATCH"];
+function recordSchema(keys, rules, appliesTo) {
+  const properties = {};
+  for (const k of keys) {
+    const rule = rules[k];
+    const schema = rule?.schema ?? { type: "string", pattern: SAFE_TEXT_RE.source, description: "Output-safe text." };
+    properties[k] = rule?.caseInsensitive === true ? { ...schema, description: `${schema.description}${CASE_NOTE}` } : schema;
+  }
+  return {
+    type: "object",
+    appliesTo,
+    required: [...keys],
+    properties,
+    propertyNames: { pattern: KEY_RE.source },
+    additionalProperties: {
+      type: ["string", "boolean", "null"],
+      description: "Accepted by the bundle schema but not part of this claim's contract. Not used to compute support, freshness or finality; still part of the record's digest and inspected by check_invariants (for example a value key naming USD on a quantity claim violates INV-11). Reported as unexpectedKeys in diagnostics when the record fails its shape."
+    },
+    maxProperties: LIMITS.recordEntries
+  };
+}
+function authorityRequirement(p) {
+  const kinds = (origins) => [...new Set(origins.flatMap((o) => ORIGIN_SOURCE_KINDS[o]))].join(", ");
+  if (p.derived) {
+    return `Established only by the WalletWall rule ${p.ruleId ?? ""} from its dependency assertions (${p.requiredDependencyClaimTypes.join(", ")}). It never carries more support than its weakest dependency and always carries WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY.`;
+  }
+  if (p.authoritativeOrigins.length === 0) {
+    return `No origin can establish this claim. Observations from ${p.corroboratingOrigins.join(", ")} sources (kinds ${kinds(p.corroboratingOrigins)}) corroborate it; with at least ${p.minIndependentCorroboration} independent groups it reaches ${p.maxSupportWithoutAuthority} at most.`;
+  }
+  const registryRule = p.authorityIdSource === "REGISTRY" ? " The attesting source's authorityId must equal the registry authorityId for the subject deployment, otherwise AUTHORITY_ID_MISMATCH; value.symbol, value.decimals and value.issuerAuthorityId must equal the registry record, otherwise REGISTRY_MISMATCH." : " Transport such as an RPC or provider endpoint is recorded as source.transport.retrievedVia and never counts as authority.";
+  const finalityRule = p.requiresFinality ? " The authoritative observation must be FINALIZED to be ESTABLISHED; otherwise it is SUPPORTED." : "";
+  return `ESTABLISHED requires at least one observation with origin ${p.authoritativeOrigins.join(" or ")} from a source of kind ${kinds(p.authoritativeOrigins)}.` + registryRule + finalityRule + ` Without an authoritative observation, ${p.corroboratingOrigins.join(", ")} observations from ${p.minIndependentCorroboration} or more independent groups reach ${p.maxSupportWithoutAuthority} at most.`;
+}
+function claimContracts(examplesByClaim) {
+  const claims = {};
+  for (const p of allPolicies()) {
+    const origins = [...p.authoritativeOrigins, ...p.corroboratingOrigins];
+    const sourceKindByOrigin = {};
+    for (const o of origins) sourceKindByOrigin[o] = ORIGIN_SOURCE_KINDS[o];
+    const caseFolded = p.subjectKeys.filter((k) => CASE_INSENSITIVE_SUBJECT_KEYS.has(k));
+    claims[p.claimType] = {
+      policyId: p.policyId,
+      derived: p.derived,
+      subject: recordSchema(p.subjectKeys, SUBJECT_KEY_RULES, p.derived ? "assertion.subject" : "assertion.subject and observation.subject"),
+      value: recordSchema(p.valueKeys, VALUE_KEY_RULES[p.claimType], p.derived ? "assertion.value" : "assertion.value and observation.payload"),
+      observation: p.derived ? null : {
+        origins: { authoritative: p.authoritativeOrigins, corroborating: p.corroboratingOrigins },
+        sourceKindByOrigin,
+        result: "VALUE",
+        finalityApplies: p.finalityApplies,
+        requiresFinality: p.requiresFinality,
+        linkage: [
+          "assertion.observationIds lists the ids of the observations that support it; each must exist in bundle.observations.",
+          "observation.sourceId names a bundle source whose kind is listed under sourceKindByOrigin for the observation's origin.",
+          caseFolded.length > 0 ? `observation.subject must equal assertion.subject on every subject key; ${caseFolded.join(", ")} match case-insensitively, the other keys exactly.` : "observation.subject must equal assertion.subject on every subject key.",
+          "observation.payload must satisfy the value shape; every supporting payload must agree on the value keys and equal assertion.value on them.",
+          "assertion.origin must be the origin of at least one supporting observation.",
+          "An observation with result NO_RESULT or ERROR carries no value. If no supporting observation carries a value the assertion is UNKNOWN (never zero, never false); otherwise the NO_RESULT limitation is attached and the valued observations are evaluated."
+        ]
+      },
+      assertion: {
+        temporality: p.maxAgeSeconds === null ? "CURRENT or PINNED" : `CURRENT (fresh within ${p.maxAgeSeconds} seconds of evaluatedAt) or PINNED (a historical point)`,
+        derivationId: p.derived ? "required: names the bundle derivation that produced this assertion" : "absent for this claim type"
+      },
+      authority: {
+        authorityId: p.authority.authorityId,
+        kind: p.authority.kind,
+        authorityIdSource: p.authorityIdSource,
+        maxSupportWithoutAuthority: p.maxSupportWithoutAuthority,
+        minIndependentCorroboration: p.minIndependentCorroboration,
+        maxAgeSeconds: p.maxAgeSeconds,
+        requirement: authorityRequirement(p)
+      },
+      derivation: p.derived ? {
+        ruleId: p.ruleId,
+        requiredDependencyClaimTypes: p.requiredDependencyClaimTypes,
+        linkage: "assertion.derivationId names a bundle derivation whose outputAssertionId is this assertion's id and whose inputAssertionIds name the dependency assertions; assertion.observationIds is empty and assertion.origin is WALLETWALL_DERIVED."
+      } : null,
+      example: examplesByClaim[p.claimType] ?? null
+    };
+  }
+  return {
+    wwepVersion: WWEP_VERSION,
+    policiesVersion: POLICIES_VERSION,
+    note: "Per-claim-type contract generated from the bundled authority policies and the evaluator's shape rules. assertion.subject and observation.subject share one subject shape; assertion.value and observation.payload share one value shape. The closed bundle schema is walletwall://schemas/evidence; worked synthetic inputs are served under walletwall://examples/.",
+    recordRules: {
+      keyPattern: KEY_RE.source,
+      scalarValues: "string, boolean or null. Every evidence-critical value is a string; JSON numbers are rejected by the bundle schema.",
+      textPattern: SAFE_TEXT_RE.source,
+      maxEntries: LIMITS.recordEntries
+    },
+    diagnostics: {
+      limitations: SHAPE_LIMITATIONS,
+      note: "When inspect_evidence attaches one of these limitations, the assertion's diagnostics entries name the record checked (ASSERTION_SUBJECT, ASSERTION_VALUE, OBSERVATION_SUBJECT or OBSERVATION_PAYLOAD), the observationId where applicable, requiredKeys, missingKeys, invalidKeys (WRONG_TYPE or INVALID_FORMAT), unexpectedKeys and mismatchedKeys. Record values are never echoed; only observation ids already present in the evaluation appear; key names outside the contract vocabulary are reported as *; one entry per distinct observation."
+    },
+    claims
+  };
+}
 
-// packages/mcp/src/resources.ts
-var json2 = (v) => JSON.stringify(v, null, 2);
-var RESOURCES = [
+// packages/mcp/src/examples.ts
+var EVALUATED_AT = "2026-10-23T12:00:30Z";
+var OBSERVED_AT = "2026-10-23T12:00:00Z";
+var USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+var HOLDER = "0x1234567890123456789012345678901234567890";
+var BLOCK_HASH = `0x${"ab".repeat(32)}`;
+var BLOCK_NUMBER = "21000000";
+var SOURCES = {
+  chain: { id: "src-chain", kind: "CHAIN_STATE", transport: { retrievedVia: "Alchemy" }, independenceGroup: "grp-chain" },
+  issuer: { id: "src-issuer", kind: "ISSUER_PUBLICATION", authorityId: "issuer:circle", independenceGroup: "grp-issuer" },
+  provA: { id: "src-prov-a", kind: "PROVIDER_ENDPOINT", transport: { retrievedVia: "ProviderA" }, independenceGroup: "grp-a" },
+  provB: { id: "src-prov-b", kind: "PROVIDER_ENDPOINT", transport: { retrievedVia: "ProviderB" }, independenceGroup: "grp-b" },
+  user: { id: "src-user", kind: "USER_INPUT", independenceGroup: "grp-user" }
+};
+var source = (key) => structuredClone(SOURCES[key]);
+var publishedChainSource = () => ({ ...source("chain"), transport: { retrievedVia: "ExampleRpcProvider" } });
+var identityObservation = (over = {}) => ({
+  id: "obs-identity",
+  sourceId: "src-issuer",
+  origin: "AUTHORITY_ATTESTED",
+  observedAt: OBSERVED_AT,
+  finality: "UNKNOWN_FINALITY",
+  result: "VALUE",
+  subject: { chainId: "1", address: USDC },
+  payload: { symbol: "USDC", decimals: "6", issuerAuthorityId: "issuer:circle" },
+  ...over
+});
+var balanceObservation = (over = {}) => ({
+  id: "obs-balance",
+  sourceId: "src-chain",
+  origin: "CHAIN_OBSERVED",
+  observedAt: OBSERVED_AT,
+  finality: "FINALIZED",
+  result: "VALUE",
+  subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH },
+  payload: { balanceAtomic: "1500000", decimals: "6" },
+  ...over
+});
+var identityAssertion = (over = {}) => ({
+  id: "a-identity",
+  claimType: "ASSET_IDENTITY",
+  origin: "AUTHORITY_ATTESTED",
+  temporality: "CURRENT",
+  subject: { chainId: "1", address: USDC },
+  value: { symbol: "USDC", decimals: "6", issuerAuthorityId: "issuer:circle" },
+  observationIds: ["obs-identity"],
+  assertedAt: OBSERVED_AT,
+  ...over
+});
+var balanceAssertion = (over = {}) => ({
+  id: "a-balance",
+  claimType: "TOKEN_BALANCE_AT_BLOCK",
+  origin: "CHAIN_OBSERVED",
+  temporality: "PINNED",
+  subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH },
+  value: { balanceAtomic: "1500000", decimals: "6" },
+  observationIds: ["obs-balance"],
+  assertedAt: OBSERVED_AT,
+  ...over
+});
+function identityBundle() {
+  return { wwepVersion: "0.1", sources: [source("issuer")], observations: [identityObservation()], assertions: [identityAssertion()], derivations: [] };
+}
+function balanceBundle() {
+  return { wwepVersion: "0.1", sources: [publishedChainSource()], observations: [balanceObservation()], assertions: [balanceAssertion()], derivations: [] };
+}
+function readinessBundle() {
+  return {
+    wwepVersion: "0.1",
+    sources: [source("issuer"), publishedChainSource()],
+    observations: [identityObservation(), balanceObservation()],
+    assertions: [identityAssertion(), balanceAssertion()],
+    derivations: []
+  };
+}
+function incompleteReadinessBundle() {
+  return {
+    wwepVersion: "0.1",
+    sources: [publishedChainSource()],
+    observations: [identityObservation({ id: "obs-identity-chain", sourceId: "src-chain", origin: "CHAIN_OBSERVED" }), balanceObservation()],
+    assertions: [identityAssertion({ origin: "CHAIN_OBSERVED", observationIds: ["obs-identity-chain"] }), balanceAssertion()],
+    derivations: []
+  };
+}
+var SYNTHETIC_NOTICE = "Synthetic, illustrative evidence published by the WalletWall engine for consumers of the MCP contract. The holder address, block number, block hash, balance, timestamps, source ids, independence groups and the transport label are invented placeholders; no provider served these readings. The contract address, symbol, decimals and issuer authority are copied from the bundled registry record for the deployment so that the identity can be established. Nothing here is a claim about any real wallet, balance or chain state, and the expected states describe evidence sufficiency under the published policies, not truth.";
+var PUBLISHED_EXAMPLES = [
   {
-    uri: "walletwall://registry/stablecoins",
-    name: "registry-stablecoins",
-    title: "Stablecoin deployment registry (record-level verification)",
-    description: "Bundled, static registry of stablecoin deployments. Each record carries the authority publication and chain observation it was verified against, with the verification date. Point-in-time; not a safety statement.",
-    mimeType: "application/json",
-    read: () => json2(rawRegistry().stablecoins)
+    name: "identity-established",
+    title: "Established asset identity (synthetic)",
+    demonstrates: "The exact ASSET_IDENTITY assertion and attesting observation shape that evaluates to ESTABLISHED against the registry.",
+    claimType: "ASSET_IDENTITY",
+    toolCall: { name: "inspect_evidence", arguments: { bundle: identityBundle(), evaluatedAt: EVALUATED_AT } },
+    missingMeasurement: null
   },
   {
-    uri: "walletwall://registry/chains",
-    name: "registry-chains",
-    title: "Chain registry (chain IDs observed, finality labels descriptive)",
-    description: "Bundled, static registry of supported chains and their finality models.",
-    mimeType: "application/json",
-    read: () => json2(rawRegistry().chains)
+    name: "balance-established",
+    title: "Established balance at a finalized block (synthetic)",
+    demonstrates: "The exact TOKEN_BALANCE_AT_BLOCK assertion and chain-state observation shape that evaluates to ESTABLISHED and FINALIZED.",
+    claimType: "TOKEN_BALANCE_AT_BLOCK",
+    toolCall: { name: "inspect_evidence", arguments: { bundle: balanceBundle(), evaluatedAt: EVALUATED_AT } },
+    missingMeasurement: null
   },
   {
-    uri: "walletwall://schemas/evidence",
-    name: "schema-evidence",
-    title: "WWEP 0.1 evidence bundle JSON Schema",
-    description: "JSON Schema for the WWEP 0.1 evidence bundle accepted by the evidence tools.",
-    mimeType: "application/schema+json",
-    read: () => json2(external_exports.toJSONSchema(BundleSchema, { target: "draft-2020-12", io: "input", unrepresentable: "any", reused: "inline" }))
+    name: "vault-readiness-established",
+    title: "Vault technical readiness: CRITERIA_MET (synthetic)",
+    demonstrates: "A complete assess_vault_readiness call over an established identity and an established balance that classifies as CRITERIA_MET.",
+    claimType: "VAULT_TECHNICAL_READINESS",
+    toolCall: {
+      name: "assess_vault_readiness",
+      arguments: { bundle: readinessBundle(), evaluatedAt: EVALUATED_AT, identityAssertionId: "a-identity", balanceAssertionId: "a-balance" }
+    },
+    missingMeasurement: null
   },
   {
-    uri: "walletwall://policies/authority",
-    name: "policies-authority",
-    title: "Claim-specific authority policies",
-    description: "Bundled authority policies. Authority is defined per claim type; there is no global source ranking.",
-    mimeType: "application/json",
-    read: () => json2(rawPolicies())
-  },
-  {
-    uri: "walletwall://spec/wwep",
-    name: "spec-wwep",
-    title: "WalletWall Evidence Profile 0.1 (draft)",
-    description: "Normative draft text of the WalletWall Evidence Profile 0.1. Not an industry standard.",
-    mimeType: "text/markdown",
-    read: () => SPEC_WWEP_MD
-  },
-  {
-    uri: "walletwall://conformance/version",
-    name: "conformance-version",
-    title: "Engine, rules and data versions",
-    description: "Versions and content digests of the bundled engine, registry, policies, rules and specification.",
-    mimeType: "application/json",
-    read: () => json2({
-      status: "DRAFT_PRIVATE_PRE_RELEASE",
-      wwepVersion: WWEP_VERSION,
-      engineVersion: ENGINE_VERSION,
-      registryVersion: REGISTRY_VERSION,
-      registryStatus: REGISTRY_STATUS,
-      registrySha256: registryDigest(),
-      policiesVersion: POLICIES_VERSION,
-      policiesSha256: policiesDigest(),
-      rulesVersion: RULES_VERSION,
-      rules: RULES,
-      specSha256: sha256Hex(SPEC_WWEP_MD)
-    })
+    name: "vault-readiness-not-established",
+    title: "Vault technical readiness: NOT_ESTABLISHED (synthetic, incomplete evidence)",
+    demonstrates: "A well-formed assess_vault_readiness call whose identity is only chain-observed: no issuer attestation exists, the identity is PARTIAL and readiness fails closed to NOT_ESTABLISHED.",
+    claimType: "VAULT_TECHNICAL_READINESS",
+    toolCall: {
+      name: "assess_vault_readiness",
+      arguments: { bundle: incompleteReadinessBundle(), evaluatedAt: EVALUATED_AT, identityAssertionId: "a-identity", balanceAssertionId: "a-balance" }
+    },
+    missingMeasurement: "An AUTHORITY_ATTESTED observation of the identity from an ISSUER_PUBLICATION source whose authorityId equals the registry authorityId for the deployment."
   }
 ];
-function readResource(uri) {
-  return RESOURCES.find((r) => r.uri === uri);
-}
+var EXAMPLE_URI_PREFIX = "walletwall://examples/";
+var EXAMPLE_BY_CLAIM = {
+  ASSET_IDENTITY: `${EXAMPLE_URI_PREFIX}identity-established`,
+  TOKEN_BALANCE_AT_BLOCK: `${EXAMPLE_URI_PREFIX}balance-established`,
+  VAULT_TECHNICAL_READINESS: `${EXAMPLE_URI_PREFIX}vault-readiness-established`
+};
 
-// packages/mcp/src/quantity.ts
-var UINT256_MAX = (1n << 256n) - 1n;
-var MAX_DECIMALS = 36;
-var ATOMIC_RE = /^(0|[1-9][0-9]{0,77})$/;
-var DECIMALS_RE = /^(0|[1-9][0-9]?)$/;
-function bad() {
-  throw new WwError("INVALID_QUANTITY", "Quantity is not a canonical atomic-unit decimal string.");
-}
-function parseAtomic(text) {
-  if (!ATOMIC_RE.test(text)) bad();
-  const v = BigInt(text);
-  if (v > UINT256_MAX) bad();
-  return v;
-}
-function parseDecimals(text) {
-  if (!DECIMALS_RE.test(text)) bad();
-  const n = Number.parseInt(text, 10);
-  if (n > MAX_DECIMALS) bad();
-  return n;
-}
-function formatAtomic(amount, decimals) {
-  if (amount < 0n || decimals < 0 || decimals > MAX_DECIMALS) bad();
-  const digits = amount.toString().padStart(decimals + 1, "0");
-  const whole = digits.slice(0, digits.length - decimals);
-  const frac = digits.slice(digits.length - decimals).replace(/0+$/, "");
-  return frac.length === 0 ? whole : `${whole}.${frac}`;
-}
-var PRICE_RE = /^(0|[1-9][0-9]{0,40})(\.[0-9]{1,18})?$/;
-function parsePriceScaled18(text) {
-  if (!PRICE_RE.test(text)) bad();
-  const [whole = "0", frac = ""] = text.split(".");
-  return BigInt(whole) * 10n ** 18n + BigInt(frac.padEnd(18, "0"));
-}
-function usdValueScaled18(atomic, decimals, priceScaled18) {
-  return atomic * priceScaled18 / 10n ** BigInt(decimals);
-}
+// packages/mcp/src/generated/content.ts
+var SPEC_WWEP_MD = "# WalletWall Evidence Profile 0.1 (WWEP 0.1) \u2014 DRAFT\n\nStatus: **draft, pre-release**. This is a WalletWall-defined profile. It is **not** an industry standard,\nhas not been reviewed outside WalletWall, and makes no claim of interoperability beyond the W3C PROV alignment\ndescribed in section 9.\n\nKey words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119 / RFC 8174 when in capitals.\n\n## 1. Purpose and non-purpose\n\nWWEP defines a structured record of *what evidence was presented, from where, with what authority, and with what\nlimits*, and a deterministic procedure that classifies how well that evidence supports a claim.\n\nWWEP **does not** establish that upstream evidence is true. Every state defined here describes the *sufficiency of\npresented evidence under a published policy*. A state such as `ESTABLISHED` means \"the presented evidence satisfies\nthe policy for this claim type\", never \"this is verified truth\". WWEP also says nothing about arbitrary natural\nlanguage prose produced later by a language model.\n\n## 2. Versions\n\n| Identifier | Value | Meaning |\n| --- | --- | --- |\n| `EvidenceProfileVersion` | `0.1` | The profile version in every bundle (`wwepVersion`). |\n| `RegistryVersion` | `0.2.0` | Version of the bundled asset and chain registry. Record-level, point-in-time verification (see `DATA_SOURCES.md`). |\n| `RulesVersion` | `0.1.0-draft` | Version of the derivation rules (`wwdr.usd-value`, `wwvr.vault-technical-readiness`). |\n\nA bundle MUST declare `wwepVersion: \"0.1\"`. Any other value MUST be rejected. See `VERSIONING.md`.\n\n## 3. Evidence-origin classes\n\nEvery observation and assertion has exactly one origin class.\n\n| Origin | Meaning |\n| --- | --- |\n| `CHAIN_OBSERVED` | A value read from canonical chain state at an identified block. The transport used to read it (RPC, indexer, local node) is recorded separately and carries no authority. |\n| `AUTHORITY_ATTESTED` | A statement published by the issuer or protocol that is the appropriate authority for the claim. |\n| `PROVIDER_OBSERVED` | A value that a third-party provider reports on its own behalf (price feed, labeling, indexed analytics). |\n| `USER_SUPPLIED` | A value supplied by the person using the tool. |\n| `WALLETWALL_DERIVED` | A value computed by a published WalletWall rule from other assertions. |\n\nEach origin corresponds to a fixed set of source kinds (`CHAIN_OBSERVED`\u2192`CHAIN_STATE`,\n`AUTHORITY_ATTESTED`\u2192`ISSUER_PUBLICATION`, `PROVIDER_OBSERVED`\u2192`PROVIDER_ENDPOINT`, `USER_SUPPLIED`\u2192`USER_INPUT`,\n`WALLETWALL_DERIVED`\u2192`WALLETWALL_RULES`). An observation whose source kind does not match its origin MUST NOT\nqualify as evidence of that origin (limitation `ORIGIN_SOURCE_KIND_MISMATCH`, invariant INV-13).\n\n## 4. Data model\n\nAll evidence-critical values are strings. JSON numbers MUST NOT appear in evidence objects. Quantities are\ncanonical atomic-unit decimal strings (section 7). Every object is closed: unknown properties are rejected.\n\n- **Source** \u2014 `{id, kind, authorityId?, transport?{retrievedVia}, independenceGroup?}`. Where evidence came from.\n  `transport.retrievedVia` is metadata only.\n- **Observation** \u2014 `{id, sourceId, origin, observedAt, finality, result, subject, payload}`. One reading.\n  `result` is `VALUE`, `NO_RESULT` or `ERROR`. `NO_RESULT` and `ERROR` carry no value.\n- **Assertion** \u2014 `{id, claimType, origin, temporality, subject, value|null, observationIds, derivationId?,\n  assertedAt, limitations?, declared?}`. A claim about a subject, backed by observations or by a derivation.\n  `temporality` is `CURRENT` (must be fresh) or `PINNED` (a historical point such as a block).\n  `declared` lets an author state the support, freshness, finality and corroboration they *believe* apply; the\n  engine never trusts it and reports any excess as a violation.\n- **Derivation** \u2014 `{id, ruleId, rulesVersion, inputAssertionIds, outputAssertionId}`. A WalletWall rule applied to\n  assertions. Derivations take assertions only, never raw observations.\n- **EvidenceDependency** \u2014 the directed edge `assertion \u2192 input` induced by a derivation's `inputAssertionIds` (and\n  by an assertion's `observationIds`). Dependencies are computed, not stored separately.\n- **Authority** \u2014 the entity or state that may establish a claim type, e.g. `canonical-chain-state`,\n  `issuer-publication`, `walletwall-rules`.\n- **AuthorityPolicy** \u2014 the per-claim-type rules for authority, corroboration, finality, freshness and required\n  dependencies (`authority-policies/policies.json`, see `AUTHORITY_MODEL.md`).\n- **ClaimContract** \u2014 the per-claim-type subject and value shape (required keys and their formats), the observation\n  origins and source kinds that may establish or corroborate the claim, and the observation-to-assertion linkage. An\n  assertion's `subject` and each supporting observation's `subject` share one shape; an assertion's `value` and each\n  supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.\n- **SupportState**, **FreshnessState**, **FinalityState** \u2014 section 5.\n- **Conflict** \u2014 `{id, assertionIds, reason}` declared by an author, or detected by the engine when two\n  non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.\n- **Limitation** \u2014 a code from a closed enumeration attached to a result that explains why it is weaker than it\n  might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).\n- **Supersession** \u2014 `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion\n  replaces an older one; the older assertion stays in the bundle and is reported `SUPERSEDED`.\n- **RegistryVersion**, **RulesVersion**, **EvidenceProfileVersion** \u2014 section 2.\n\n## 5. States\n\nExact semantics are in `SUPPORT_STATES.md`. Summary:\n\n- Support: `ESTABLISHED`, `SUPPORTED`, `PARTIAL`, `CONFLICTING`, `STALE`, `SUPERSEDED`, `UNKNOWN`, `NOT_ESTABLISHED`.\n- Freshness: `CURRENT`, `STALE`, `PINNED`, `UNKNOWN_FRESHNESS`.\n- Finality: `FINALIZED`, `UNFINALIZED`, `UNKNOWN_FINALITY`; `null` when finality does not apply to the claim type.\n\nWhen states are combined across dependencies the **weakest** member wins, in this order from strongest to weakest:\n`ESTABLISHED > SUPPORTED > PARTIAL > STALE > SUPERSEDED > UNKNOWN > CONFLICTING > NOT_ESTABLISHED`.\n\n## 6. Mandatory evidence invariants\n\nThese are enforced by `check_invariants` and by executable conformance tests. Each has an identifier.\n\n1. **INV-01** `NO_SOURCE \u2192 NO_FACT`. An assertion with no observation and no derivation MUST NOT carry a value or be\n   presented as `PARTIAL` or stronger.\n2. **INV-02** `STALE` MUST NOT satisfy `CURRENT`.\n3. **INV-03** `CONFLICTING` MUST NOT satisfy `ESTABLISHED`.\n4. **INV-04** `NO_RESULT` MUST NOT become `ZERO`.\n5. **INV-05** `UNKNOWN` MUST NOT become `FALSE`.\n6. **INV-06** `WALLETWALL_DERIVED` MUST NOT masquerade as upstream authority.\n7. **INV-07** Processing evidence MUST NOT increase the authority of its inputs.\n8. **INV-08** Duplicate evidence MUST NOT increase independent corroboration.\n9. **INV-09** Multiple provider endpoints MUST NOT automatically imply independent authority.\n10. **INV-10** Derived results retain the limitations of their dependencies.\n11. **INV-11** Token quantity MUST NOT silently become USD value without explicit price evidence.\n12. **INV-12** Historical assertions are superseded, never silently rewritten.\n13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply\n    `authority = Alchemy` for Ethereum state.\n\n**INV-00** (engine rule) \u2014 declared states MUST NOT exceed states computed by the published rules.\n\n## 7. Canonicalization and digests\n\nEvidence objects are serialized with the **RFC 8785 JSON Canonicalization Scheme** and hashed with **SHA-256**.\n`JSON.stringify` output MUST NOT be hashed. The implementation additionally rejects lone surrogates (I-JSON),\nnon-plain objects and every JSON number in evidence objects.\n\nEvidence-critical quantities are canonical atomic-unit decimal strings matching `^(0|[1-9][0-9]{0,77})$` and not\nexceeding `2^256 \u2212 1`. Decimals are strings matching `^(0|[1-9][0-9]?)$` and at most 36. Arithmetic uses `BigInt`.\nDecimal renderings are exact and unrounded. JavaScript `Number` MUST NOT hold a token balance.\n\nTwo digests are defined for an observation: the **evidence digest** (canonical form of the whole observation) and the\n**content digest** (canonical form of `{result, subject, payload}`), used to detect duplicate evidence.\n\n## 8. Evaluation\n\nEvaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rules)`. The evaluation time is an\nexplicit input; the engine never reads a clock. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and\n`SUPPORT_STATES.md`. In outline:\n\n1. Reject any bundle that fails the closed schema.\n2. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.\n3. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively).\n4. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations.\n5. Independently check the invariants and report violations without mutating results.\n\nA shape failure is an evaluation state, not a schema rejection: an assertion whose subject or value, or whose supporting\nobservation's subject or payload, does not meet the claim contract is reported `NOT_ESTABLISHED` with the limitation\n`INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`. Each such limitation carries a structured\n`diagnostics` entry naming the record checked, the required keys and the missing, invalid, unexpected or mismatched keys.\nDiagnostics are deterministic and bounded (one entry per distinct observation), never include record values (only\nobservation ids already present in the evaluation), and report key names outside the contract vocabulary as `*`. The\nlimitation codes are the stable machine-facing reason; diagnostics only explain them.\n\n## 9. Provenance alignment\n\n`trace_provenance` emits a graph shaped like W3C PROV-JSON: observations and assertions are `entity`, derivations are\n`activity`, sources and the WalletWall rule engine are `agent`; relations use `wasDerivedFrom`, `wasAttributedTo`,\n`wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full\nimplementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced.\n\n## 10. Readiness terminology\n\nWWEP defines `VAULT_TECHNICAL_READINESS`, never a generic `READY`. Its values are `CRITERIA_MET`,\n`CRITERIA_NOT_MET` and `NOT_ESTABLISHED`. It does **not** establish investment merit, solvency, creditworthiness,\nlegal status, regulatory compliance, absence of fraud, or future performance.\n\n## 11. Known limitations of 0.1\n\n- Evidence is evaluated as presented. The engine cannot verify that a `CHAIN_OBSERVED` reading was faithfully\n  retrieved (`TRANSPORT_FIDELITY_NOT_VERIFIED` is always attached).\n- Registry content is verified only at a point in time (`REGISTRY_VERIFIED_POINT_IN_TIME`); later changes to a contract are not observed.\n- Address checksums (EIP-55) are not verified; addresses are compared case-insensitively.\n- No live providers exist; all evidence is supplied by the caller.\n- Only five claim types are defined: `ASSET_IDENTITY`, `TOKEN_BALANCE_AT_BLOCK`, `TOKEN_USD_PRICE`,\n  `TOKEN_USD_VALUE`, `VAULT_TECHNICAL_READINESS`.\n";
 
 // packages/mcp/src/evaluate.ts
 var SUPPORT_RANK = {
@@ -23968,13 +24281,6 @@ function weakest(states) {
   for (const s of states) if (out === void 0 || SUPPORT_RANK[s] < SUPPORT_RANK[out]) out = s;
   return out ?? "NOT_ESTABLISHED";
 }
-var ORIGIN_SOURCE_KINDS = {
-  CHAIN_OBSERVED: ["CHAIN_STATE"],
-  AUTHORITY_ATTESTED: ["ISSUER_PUBLICATION"],
-  PROVIDER_OBSERVED: ["PROVIDER_ENDPOINT"],
-  USER_SUPPLIED: ["USER_INPUT"],
-  WALLETWALL_DERIVED: ["WALLETWALL_RULES"]
-};
 var FINALITY_ORDER = ["UNFINALIZED", "UNKNOWN_FINALITY", "FINALIZED"];
 function weakestFinality(states) {
   for (const s of FINALITY_ORDER) if (states.includes(s)) return s;
@@ -24018,51 +24324,32 @@ function pick2(rec, keys) {
 function sameCanonical(a, b) {
   return canonicalize(a) === canonicalize(b);
 }
-var SUBJECT_VALIDATORS = {
-  chainId: (v) => CHAIN_ID_RE.test(v),
-  address: (v) => ADDRESS_RE.test(v),
-  token: (v) => ADDRESS_RE.test(v),
-  holder: (v) => ADDRESS_RE.test(v),
-  blockHash: (v) => HASH_RE.test(v),
-  blockNumber: (v) => /^(0|[1-9][0-9]{0,17})$/.test(v)
-};
-function subjectValid(subject, keys) {
-  for (const k of keys) {
-    const v = subject[k];
-    if (typeof v !== "string") return false;
-    const check2 = SUBJECT_VALIDATORS[k];
-    if (check2 !== void 0 && !check2(v)) return false;
-  }
-  return true;
+function subjectKeyEqual(key, a, b) {
+  return CASE_INSENSITIVE_SUBJECT_KEYS.has(key) ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 function subjectMatches(obsSubject, assertionSubject, keys) {
   for (const k of keys) {
     const a = obsSubject[k];
     const b = assertionSubject[k];
     if (typeof a !== "string" || typeof b !== "string") return false;
-    const addressLike = k === "address" || k === "token" || k === "holder" || k === "blockHash";
-    if (addressLike ? a.toLowerCase() !== b.toLowerCase() : a !== b) return false;
+    if (!subjectKeyEqual(k, a, b)) return false;
   }
   return true;
 }
-function valueValid(claimType, rec) {
-  if (rec === null) return false;
-  try {
-    switch (claimType) {
-      case "ASSET_IDENTITY":
-        return typeof rec["symbol"] === "string" && typeof rec["issuerAuthorityId"] === "string" && typeof rec["decimals"] === "string" && parseDecimals(rec["decimals"]) >= 0;
-      case "TOKEN_BALANCE_AT_BLOCK":
-        return typeof rec["balanceAtomic"] === "string" && typeof rec["decimals"] === "string" && parseAtomic(rec["balanceAtomic"]) >= 0n && parseDecimals(rec["decimals"]) >= 0;
-      case "TOKEN_USD_PRICE":
-        return typeof rec["priceUsd"] === "string" && parsePriceScaled18(rec["priceUsd"]) >= 0n;
-      case "TOKEN_USD_VALUE":
-        return typeof rec["usdScaled18"] === "string" && /^(0|[1-9][0-9]{0,139})$/.test(rec["usdScaled18"]) && rec["rounding"] === "FLOOR_SCALED_18";
-      case "VAULT_TECHNICAL_READINESS":
-        return rec["classification"] === "CRITERIA_MET" || rec["classification"] === "CRITERIA_NOT_MET" || rec["classification"] === "NOT_ESTABLISHED";
-    }
-  } catch {
-    return false;
+function subjectMismatchDiagnostic(o, a, keys) {
+  const mismatchedKeys = [];
+  for (const k of keys) {
+    const ov = o.subject[k];
+    const av = a.subject[k];
+    if (typeof ov === "string" && typeof av === "string" && !subjectKeyEqual(k, ov, av)) mismatchedKeys.push(k);
   }
+  return {
+    limitation: "SUBJECT_MISMATCH",
+    record: "OBSERVATION_SUBJECT",
+    observationId: o.id,
+    ...diagnoseRecord(o.subject, SUBJECT_KEY_RULES, keys),
+    mismatchedKeys
+  };
 }
 function independenceGroup(s) {
   return s.independenceGroup ?? "unspecified";
@@ -24074,6 +24361,7 @@ function emptyCore(policy) {
     finality: policy?.finalityApplies === true ? "UNKNOWN_FINALITY" : null,
     authoritySatisfied: false,
     limitations: /* @__PURE__ */ new Set(),
+    diagnostics: [],
     corroboration: 0,
     observationIds: [],
     assertionIds: []
@@ -24176,6 +24464,7 @@ function evaluateBundle(bundle, evaluatedAt) {
         satisfied: core.authoritySatisfied
       } : null,
       limitations: [...limitations].sort(),
+      diagnostics: core.diagnostics,
       independentCorroboration: core.corroboration,
       conflictsWith: conflicts,
       supersededBy: sup,
@@ -24213,14 +24502,40 @@ function evaluateBundle(bundle, evaluatedAt) {
     }
     if (!subjectValid(a.subject, policy.subjectKeys)) {
       lim.add("INVALID_SUBJECT");
+      core.diagnostics.push({
+        limitation: "INVALID_SUBJECT",
+        record: "ASSERTION_SUBJECT",
+        observationId: null,
+        ...diagnoseRecord(a.subject, SUBJECT_KEY_RULES, policy.subjectKeys),
+        mismatchedKeys: []
+      });
       return core;
     }
-    if (!valueObs.every((o) => subjectMatches(o.subject, a.subject, policy.subjectKeys))) {
+    const diagnosed = /* @__PURE__ */ new Set();
+    const subjectMismatches = valueObs.filter((o) => !subjectMatches(o.subject, a.subject, policy.subjectKeys));
+    if (subjectMismatches.length > 0) {
       lim.add("SUBJECT_MISMATCH");
+      for (const o of subjectMismatches) {
+        if (diagnosed.has(o.id)) continue;
+        diagnosed.add(o.id);
+        core.diagnostics.push(subjectMismatchDiagnostic(o, a, policy.subjectKeys));
+      }
       return core;
     }
-    if (!valueObs.every((o) => valueValid(a.claimType, o.payload))) {
+    const invalidPayloads = valueObs.filter((o) => !valueValid(a.claimType, o.payload));
+    if (invalidPayloads.length > 0) {
       lim.add("INVALID_VALUE");
+      for (const o of invalidPayloads) {
+        if (diagnosed.has(o.id)) continue;
+        diagnosed.add(o.id);
+        core.diagnostics.push({
+          limitation: "INVALID_VALUE",
+          record: "OBSERVATION_PAYLOAD",
+          observationId: o.id,
+          ...diagnoseRecord(o.payload, VALUE_KEY_RULES[a.claimType], policy.valueKeys),
+          mismatchedKeys: []
+        });
+      }
       return core;
     }
     const contents = new Set(valueObs.map((o) => canonicalize(pick2(o.payload, policy.valueKeys))));
@@ -24232,8 +24547,26 @@ function evaluateBundle(bundle, evaluatedAt) {
     }
     const first = valueObs[0];
     if (first === void 0) return core;
-    if (!valueValid(a.claimType, a.value) || !sameCanonical(pick2(a.value, policy.valueKeys), pick2(first.payload, policy.valueKeys))) {
+    if (!valueValid(a.claimType, a.value)) {
       lim.add("VALUE_MISMATCH");
+      core.diagnostics.push({
+        limitation: "VALUE_MISMATCH",
+        record: "ASSERTION_VALUE",
+        observationId: null,
+        ...diagnoseRecord(a.value, VALUE_KEY_RULES[a.claimType], policy.valueKeys),
+        mismatchedKeys: []
+      });
+      return core;
+    }
+    if (!sameCanonical(pick2(a.value, policy.valueKeys), pick2(first.payload, policy.valueKeys))) {
+      lim.add("VALUE_MISMATCH");
+      core.diagnostics.push({
+        limitation: "VALUE_MISMATCH",
+        record: "ASSERTION_VALUE",
+        observationId: first.id,
+        ...diagnoseRecord(a.value, VALUE_KEY_RULES[a.claimType], policy.valueKeys),
+        mismatchedKeys: policy.valueKeys.filter((k) => canonicalize(a.value?.[k] ?? null) !== canonicalize(first.payload[k] ?? null))
+      });
       return core;
     }
     const chainKnown = typeof a.subject["chainId"] === "string" && findChain(a.subject["chainId"]) !== void 0;
@@ -25010,21 +25343,21 @@ var TOOLS = [
   defineTool({
     name: "resolve_asset",
     title: "Resolve stablecoin deployment",
-    description: "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity.",
+    description: "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity. The registry itself is served as walletwall://registry/stablecoins and walletwall://registry/chains.",
     input: ResolveAssetInput,
     run: (args) => resolveAsset(args)
   }),
   defineTool({
     name: "normalize_observation",
     title: "Normalize balance observation",
-    description: "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data.",
+    description: "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data. The returned observation has the TOKEN_BALANCE_AT_BLOCK shape published at walletwall://schemas/claims and can be placed directly in a bundle's observations.",
     input: NormalizeInput,
     run: (args) => normalizeObservation(args)
   }),
   defineTool({
     name: "inspect_evidence",
     title: "Inspect evidence bundle",
-    description: "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only.",
+    description: "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only. Input contract: walletwall://schemas/evidence (bundle), walletwall://schemas/claims (per-claim subject, value and observation shapes), walletwall://policies/authority and walletwall://spec/wwep; worked inputs: walletwall://examples/identity-established. Shape failures carry structured diagnostics beside the limitation code.",
     input: BundleAtInput,
     run: (args) => {
       const evaluation = evaluateBundle(args.bundle, args.evaluatedAt);
@@ -25042,7 +25375,7 @@ var TOOLS = [
   defineTool({
     name: "check_invariants",
     title: "Check evidence invariants",
-    description: "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only.",
+    description: "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims and walletwall://policies/authority.",
     input: BundleAtInput,
     run: (args) => {
       const evaluation = evaluateBundle(args.bundle, args.evaluatedAt);
@@ -25058,14 +25391,14 @@ var TOOLS = [
   defineTool({
     name: "trace_provenance",
     title: "Trace assertion provenance",
-    description: "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only.",
+    description: "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims and walletwall://policies/authority.",
     input: TraceInput,
     run: (args) => traceProvenance(args.bundle, args.assertionId)
   }),
   defineTool({
     name: "assess_vault_readiness",
     title: "Assess vault technical readiness",
-    description: "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only.",
+    description: "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims (ASSET_IDENTITY and TOKEN_BALANCE_AT_BLOCK) and walletwall://policies/authority; worked inputs: walletwall://examples/vault-readiness-established (CRITERIA_MET) and walletwall://examples/vault-readiness-not-established (NOT_ESTABLISHED).",
     input: ReadinessInput,
     run: (args) => {
       const evaluation = evaluateBundle(args.bundle, args.evaluatedAt);
@@ -25112,8 +25445,140 @@ function callTool(name, rawArgs) {
   }
 }
 
+// packages/mcp/src/version.ts
+var ENGINE_NAME = "walletwall-mcp";
+var ENGINE_TITLE = "WalletWall MCP";
+var ENGINE_VERSION = "0.1.0";
+
+// packages/mcp/src/resources.ts
+var json2 = (v) => JSON.stringify(v, null, 2);
+function expectedOutcome(example) {
+  const outcome = callTool(example.toolCall.name, example.toolCall.arguments);
+  if (!outcome.ok) throw new WwError("INTERNAL", "Published example is not accepted by the engine.");
+  if (example.toolCall.name === "assess_vault_readiness") {
+    const r2 = outcome.result;
+    return {
+      classification: r2.classification,
+      criteria: r2.criteria.map((c) => ({ id: c.id, outcome: c.outcome, reason: c.reason })),
+      supportOfInputs: r2.supportOfInputs,
+      limitations: r2.limitations,
+      // The derivation and assertion the engine suggests: the VAULT_TECHNICAL_READINESS shape a bundle would carry.
+      suggestedDerivation: r2.suggestedDerivation,
+      suggestedAssertion: r2.suggestedAssertion,
+      missingMeasurement: example.missingMeasurement
+    };
+  }
+  const r = outcome.result;
+  const assertions = {};
+  for (const a of r.assertions) {
+    assertions[a.assertionId] = {
+      supportState: a.supportState,
+      freshnessState: a.freshnessState,
+      finalityState: a.finalityState,
+      authoritySatisfied: a.authority?.satisfied ?? null,
+      limitations: a.limitations
+    };
+  }
+  return { assertions, invariantViolationCount: r.invariantViolationCount };
+}
+function exampleResource(example) {
+  return {
+    uri: `${EXAMPLE_URI_PREFIX}${example.name}`,
+    name: `example-${example.name}`,
+    title: example.title,
+    description: `${example.demonstrates} Synthetic, illustrative evidence that conforms to the bundle schema; not a claim about any real wallet or chain state.`,
+    mimeType: "application/json",
+    read: () => json2({
+      example: example.name,
+      title: example.title,
+      demonstrates: example.demonstrates,
+      synthetic: true,
+      notice: SYNTHETIC_NOTICE,
+      contract: CLAIMS_RESOURCE_URI,
+      claimType: example.claimType,
+      toolCall: example.toolCall,
+      expected: expectedOutcome(example),
+      versions: { wwep: WWEP_VERSION, registry: REGISTRY_VERSION, policies: POLICIES_VERSION, rules: RULES_VERSION }
+    })
+  };
+}
+var RESOURCES = [
+  {
+    uri: "walletwall://registry/stablecoins",
+    name: "registry-stablecoins",
+    title: "Stablecoin deployment registry (record-level verification)",
+    description: "Bundled, static registry of stablecoin deployments. Each record carries the authority publication and chain observation it was verified against, with the verification date. Point-in-time; not a safety statement.",
+    mimeType: "application/json",
+    read: () => json2(rawRegistry().stablecoins)
+  },
+  {
+    uri: "walletwall://registry/chains",
+    name: "registry-chains",
+    title: "Chain registry (chain IDs observed, finality labels descriptive)",
+    description: "Bundled, static registry of supported chains and their finality models.",
+    mimeType: "application/json",
+    read: () => json2(rawRegistry().chains)
+  },
+  {
+    uri: "walletwall://schemas/evidence",
+    name: "schema-evidence",
+    title: "WWEP 0.1 evidence bundle JSON Schema",
+    description: "JSON Schema for the WWEP 0.1 evidence bundle accepted by the evidence tools. Per-claim subject, value and observation shapes are in walletwall://schemas/claims.",
+    mimeType: "application/schema+json",
+    read: () => json2(external_exports.toJSONSchema(BundleSchema, { target: "draft-2020-12", io: "input", unrepresentable: "any", reused: "inline" }))
+  },
+  {
+    uri: CLAIMS_RESOURCE_URI,
+    name: "schema-claims",
+    title: "Per-claim-type contract: subject, value, observation linkage and authority",
+    description: "For every claim type: the required subject and value keys with their formats, which observation origins and source kinds may establish or corroborate the claim, how observations link to assertions, the registry and derivation relationships, and the structured diagnostics attached to shape failures. Generated from the bundled authority policies and the evaluator's own rules.",
+    mimeType: "application/json",
+    read: () => json2(claimContracts(EXAMPLE_BY_CLAIM))
+  },
+  {
+    uri: "walletwall://policies/authority",
+    name: "policies-authority",
+    title: "Claim-specific authority policies",
+    description: "Bundled authority policies. Authority is defined per claim type; there is no global source ranking.",
+    mimeType: "application/json",
+    read: () => json2(rawPolicies())
+  },
+  {
+    uri: "walletwall://spec/wwep",
+    name: "spec-wwep",
+    title: "WalletWall Evidence Profile 0.1 (draft)",
+    description: "Normative draft text of the WalletWall Evidence Profile 0.1. Not an industry standard.",
+    mimeType: "text/markdown",
+    read: () => SPEC_WWEP_MD
+  },
+  {
+    uri: "walletwall://conformance/version",
+    name: "conformance-version",
+    title: "Engine, rules and data versions",
+    description: "Versions and content digests of the bundled engine, registry, policies, rules and specification.",
+    mimeType: "application/json",
+    read: () => json2({
+      status: "DRAFT_PRIVATE_PRE_RELEASE",
+      wwepVersion: WWEP_VERSION,
+      engineVersion: ENGINE_VERSION,
+      registryVersion: REGISTRY_VERSION,
+      registryStatus: REGISTRY_STATUS,
+      registrySha256: registryDigest(),
+      policiesVersion: POLICIES_VERSION,
+      policiesSha256: policiesDigest(),
+      rulesVersion: RULES_VERSION,
+      rules: RULES,
+      specSha256: sha256Hex(SPEC_WWEP_MD)
+    })
+  },
+  ...PUBLISHED_EXAMPLES.map(exampleResource)
+];
+function readResource(uri) {
+  return RESOURCES.find((r) => r.uri === uri);
+}
+
 // packages/mcp/src/server.ts
-var INSTRUCTIONS = "WalletWall evidence engine. Local, offline and read-only. It evaluates structured WWEP evidence you supply; it does not fetch chain data, hold keys, sign, or route transactions. Support states describe evidence sufficiency under published policy, not the truth of upstream data.";
+var INSTRUCTIONS = "WalletWall evidence engine. Local, offline and read-only. It evaluates structured WWEP evidence you supply; it does not fetch chain data, hold keys, sign, or route transactions. Support states describe evidence sufficiency under published policy, not the truth of upstream data. Input shapes: walletwall://schemas/claims (per claim type) and walletwall://schemas/evidence (bundle); worked synthetic inputs: walletwall://examples/vault-readiness-established.";
 function createServer() {
   const server2 = new Server(
     { name: ENGINE_NAME, title: ENGINE_TITLE, version: ENGINE_VERSION },

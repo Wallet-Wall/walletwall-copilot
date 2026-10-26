@@ -12,7 +12,7 @@ Use WalletWall MCP outputs as the authoritative evaluation surface for supplied 
 For each material claim:
 
 1. State the claim precisely.
-2. Identify the evidence required to support it.
+2. Identify the evidence required to support it (`walletwall://schemas/claims` lists the required subject, value and observation shape per claim type).
 3. Identify the evidence actually present.
 4. Call `inspect_evidence` for support, freshness, finality, limitations, and conflicts.
 5. Call `check_invariants` before relying on the bundle.

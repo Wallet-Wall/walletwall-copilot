@@ -1,9 +1,15 @@
 import { canonicalize, evidenceDigest } from "./canonical.ts";
-import { parseAtomic, parseDecimals, parsePriceScaled18 } from "./quantity.ts";
 import {
-  ADDRESS_RE,
-  CHAIN_ID_RE,
-  HASH_RE,
+  CASE_INSENSITIVE_SUBJECT_KEYS,
+  ORIGIN_SOURCE_KINDS,
+  SUBJECT_KEY_RULES,
+  VALUE_KEY_RULES,
+  diagnoseRecord,
+  subjectValid,
+  valueValid,
+  type AssertionDiagnostic,
+} from "./claims.ts";
+import {
   type Assertion,
   type Bundle,
   type ClaimType,
@@ -14,7 +20,6 @@ import {
   type Observation,
   type Origin,
   type Source,
-  type SourceKind,
   type SupportState,
 } from "./schemas.ts";
 import {
@@ -46,13 +51,9 @@ export function weakest(states: readonly SupportState[]): SupportState {
   return out ?? "NOT_ESTABLISHED";
 }
 
-export const ORIGIN_SOURCE_KINDS: Readonly<Record<Origin, readonly SourceKind[]>> = {
-  CHAIN_OBSERVED: ["CHAIN_STATE"],
-  AUTHORITY_ATTESTED: ["ISSUER_PUBLICATION"],
-  PROVIDER_OBSERVED: ["PROVIDER_ENDPOINT"],
-  USER_SUPPLIED: ["USER_INPUT"],
-  WALLETWALL_DERIVED: ["WALLETWALL_RULES"],
-};
+/** The shape rules and origin-to-source-kind table live in claims.ts, where the published contract is generated from them. */
+export { ORIGIN_SOURCE_KINDS, subjectValid, valueValid } from "./claims.ts";
+export type { AssertionDiagnostic } from "./claims.ts";
 
 export type InvariantId =
   | "INV-00"
@@ -87,6 +88,8 @@ export interface AssertionEvaluation {
   finalityState: FinalityState | null;
   authority: { authorityId: string; kind: string; scope: ClaimType; satisfied: boolean } | null;
   limitations: LimitationCode[];
+  /** Structural explanations for INVALID_SUBJECT, SUBJECT_MISMATCH, INVALID_VALUE and VALUE_MISMATCH; empty otherwise. */
+  diagnostics: AssertionDiagnostic[];
   /** Distinct independence groups after duplicate collapse. null for derived assertions. */
   independentCorroboration: number | null;
   conflictsWith: string[];
@@ -161,23 +164,8 @@ function sameCanonical(a: unknown, b: unknown): boolean {
   return canonicalize(a) === canonicalize(b);
 }
 
-const SUBJECT_VALIDATORS: Readonly<Record<string, (v: string) => boolean>> = {
-  chainId: (v) => CHAIN_ID_RE.test(v),
-  address: (v) => ADDRESS_RE.test(v),
-  token: (v) => ADDRESS_RE.test(v),
-  holder: (v) => ADDRESS_RE.test(v),
-  blockHash: (v) => HASH_RE.test(v),
-  blockNumber: (v) => /^(0|[1-9][0-9]{0,17})$/.test(v),
-};
-
-export function subjectValid(subject: FlatRecordValue, keys: readonly string[]): boolean {
-  for (const k of keys) {
-    const v = subject[k];
-    if (typeof v !== "string") return false;
-    const check = SUBJECT_VALIDATORS[k];
-    if (check !== undefined && !check(v)) return false;
-  }
-  return true;
+function subjectKeyEqual(key: string, a: string, b: string): boolean {
+  return CASE_INSENSITIVE_SUBJECT_KEYS.has(key) ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 function subjectMatches(obsSubject: FlatRecordValue, assertionSubject: FlatRecordValue, keys: readonly string[]): boolean {
@@ -185,49 +173,26 @@ function subjectMatches(obsSubject: FlatRecordValue, assertionSubject: FlatRecor
     const a = obsSubject[k];
     const b = assertionSubject[k];
     if (typeof a !== "string" || typeof b !== "string") return false;
-    const addressLike = k === "address" || k === "token" || k === "holder" || k === "blockHash";
-    if (addressLike ? a.toLowerCase() !== b.toLowerCase() : a !== b) return false;
+    if (!subjectKeyEqual(k, a, b)) return false;
   }
   return true;
 }
 
-/** Validates the value shape for a claim type using exact parsers. Never uses floating point. */
-export function valueValid(claimType: ClaimType, rec: FlatRecordValue | null): boolean {
-  if (rec === null) return false;
-  try {
-    switch (claimType) {
-      case "ASSET_IDENTITY":
-        return (
-          typeof rec["symbol"] === "string" &&
-          typeof rec["issuerAuthorityId"] === "string" &&
-          typeof rec["decimals"] === "string" &&
-          parseDecimals(rec["decimals"]) >= 0
-        );
-      case "TOKEN_BALANCE_AT_BLOCK":
-        return (
-          typeof rec["balanceAtomic"] === "string" &&
-          typeof rec["decimals"] === "string" &&
-          parseAtomic(rec["balanceAtomic"]) >= 0n &&
-          parseDecimals(rec["decimals"]) >= 0
-        );
-      case "TOKEN_USD_PRICE":
-        return typeof rec["priceUsd"] === "string" && parsePriceScaled18(rec["priceUsd"]) >= 0n;
-      case "TOKEN_USD_VALUE":
-        return (
-          typeof rec["usdScaled18"] === "string" &&
-          /^(0|[1-9][0-9]{0,139})$/.test(rec["usdScaled18"]) &&
-          rec["rounding"] === "FLOOR_SCALED_18"
-        );
-      case "VAULT_TECHNICAL_READINESS":
-        return (
-          rec["classification"] === "CRITERIA_MET" ||
-          rec["classification"] === "CRITERIA_NOT_MET" ||
-          rec["classification"] === "NOT_ESTABLISHED"
-        );
-    }
-  } catch {
-    return false;
+/** Explains a SUBJECT_MISMATCH for one observation: which subject keys are absent, malformed or different. */
+function subjectMismatchDiagnostic(o: Observation, a: Assertion, keys: readonly string[]): AssertionDiagnostic {
+  const mismatchedKeys: string[] = [];
+  for (const k of keys) {
+    const ov = o.subject[k];
+    const av = a.subject[k];
+    if (typeof ov === "string" && typeof av === "string" && !subjectKeyEqual(k, ov, av)) mismatchedKeys.push(k);
   }
+  return {
+    limitation: "SUBJECT_MISMATCH",
+    record: "OBSERVATION_SUBJECT",
+    observationId: o.id,
+    ...diagnoseRecord(o.subject, SUBJECT_KEY_RULES, keys),
+    mismatchedKeys,
+  };
 }
 
 function independenceGroup(s: Source): string {
@@ -240,6 +205,7 @@ interface Core {
   finality: FinalityState | null;
   authoritySatisfied: boolean;
   limitations: Set<LimitationCode>;
+  diagnostics: AssertionDiagnostic[];
   corroboration: number | null;
   observationIds: string[];
   assertionIds: string[];
@@ -252,6 +218,7 @@ function emptyCore(policy: Policy | undefined): Core {
     finality: policy?.finalityApplies === true ? "UNKNOWN_FINALITY" : null,
     authoritySatisfied: false,
     limitations: new Set(),
+    diagnostics: [],
     corroboration: 0,
     observationIds: [],
     assertionIds: [],
@@ -362,6 +329,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
           }
         : null,
       limitations: [...limitations].sort(),
+      diagnostics: core.diagnostics,
       independentCorroboration: core.corroboration,
       conflictsWith: conflicts,
       supersededBy: sup,
@@ -402,14 +370,41 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
 
     if (!subjectValid(a.subject, policy.subjectKeys)) {
       lim.add("INVALID_SUBJECT");
+      core.diagnostics.push({
+        limitation: "INVALID_SUBJECT",
+        record: "ASSERTION_SUBJECT",
+        observationId: null,
+        ...diagnoseRecord(a.subject, SUBJECT_KEY_RULES, policy.subjectKeys),
+        mismatchedKeys: [],
+      });
       return core;
     }
-    if (!valueObs.every((o) => subjectMatches(o.subject, a.subject, policy.subjectKeys))) {
+    // One diagnostic per distinct observation: observationIds may repeat an id, dependencies keep the repetition, diagnostics do not.
+    const diagnosed = new Set<string>();
+    const subjectMismatches = valueObs.filter((o) => !subjectMatches(o.subject, a.subject, policy.subjectKeys));
+    if (subjectMismatches.length > 0) {
       lim.add("SUBJECT_MISMATCH");
+      for (const o of subjectMismatches) {
+        if (diagnosed.has(o.id)) continue;
+        diagnosed.add(o.id);
+        core.diagnostics.push(subjectMismatchDiagnostic(o, a, policy.subjectKeys));
+      }
       return core;
     }
-    if (!valueObs.every((o) => valueValid(a.claimType, o.payload))) {
+    const invalidPayloads = valueObs.filter((o) => !valueValid(a.claimType, o.payload));
+    if (invalidPayloads.length > 0) {
       lim.add("INVALID_VALUE");
+      for (const o of invalidPayloads) {
+        if (diagnosed.has(o.id)) continue;
+        diagnosed.add(o.id);
+        core.diagnostics.push({
+          limitation: "INVALID_VALUE",
+          record: "OBSERVATION_PAYLOAD",
+          observationId: o.id,
+          ...diagnoseRecord(o.payload, VALUE_KEY_RULES[a.claimType], policy.valueKeys),
+          mismatchedKeys: [],
+        });
+      }
       return core;
     }
     const contents = new Set(valueObs.map((o) => canonicalize(pick(o.payload, policy.valueKeys))));
@@ -421,8 +416,26 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     }
     const first = valueObs[0];
     if (first === undefined) return core;
-    if (!valueValid(a.claimType, a.value) || !sameCanonical(pick(a.value, policy.valueKeys), pick(first.payload, policy.valueKeys))) {
+    if (!valueValid(a.claimType, a.value)) {
       lim.add("VALUE_MISMATCH");
+      core.diagnostics.push({
+        limitation: "VALUE_MISMATCH",
+        record: "ASSERTION_VALUE",
+        observationId: null,
+        ...diagnoseRecord(a.value, VALUE_KEY_RULES[a.claimType], policy.valueKeys),
+        mismatchedKeys: [],
+      });
+      return core;
+    }
+    if (!sameCanonical(pick(a.value, policy.valueKeys), pick(first.payload, policy.valueKeys))) {
+      lim.add("VALUE_MISMATCH");
+      core.diagnostics.push({
+        limitation: "VALUE_MISMATCH",
+        record: "ASSERTION_VALUE",
+        observationId: first.id,
+        ...diagnoseRecord(a.value, VALUE_KEY_RULES[a.claimType], policy.valueKeys),
+        mismatchedKeys: policy.valueKeys.filter((k) => canonicalize(a.value?.[k] ?? null) !== canonicalize(first.payload[k] ?? null)),
+      });
       return core;
     }
 

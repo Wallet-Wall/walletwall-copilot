@@ -184,7 +184,7 @@ describe("the packaged server, extracted and run over real stdio under the priva
     const packaged = await runSession({ entry: run.path("extracted", "server", "walletwall-mcp.mjs") });
     const shipped = await runSession({ entry: `${ROOT}plugin/server/walletwall-mcp.mjs`, canary: packaged.canary });
     try {
-      assert.equal(packaged.responses.length, 16);
+      assert.equal(packaged.responses.length, 21, "2 list requests, 8 tool calls and one read of each of the 11 resources");
       assert.deepEqual(packaged.guard.network, []);
       assert.deepEqual(packaged.guard.dns, []);
       assert.deepEqual(packaged.guard.fsWrite, []);
