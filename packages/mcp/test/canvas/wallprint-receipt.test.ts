@@ -468,3 +468,29 @@ describe("local section focus: a deterministic action inside the document, never
     assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie|fetch\(|EventSource|XMLHttpRequest|postMessage|innerHTML|outerHTML|insertAdjacentHTML|location\.|history\.(push|replace)State|window\.open/.test(render.WALLPRINT_JS));
   });
 });
+
+describe("the evidence view's reserved Receipt row: disabled, its prerequisite named, no link faked", () => {
+  test("Copy receipt, Verify and QR stay disabled with the pinned reason; the missing prerequisite is a committed WallPrint record of this evaluation; nothing points into a disclosure", () => {
+    const html = render.renderView({
+      status: "ready",
+      source: "fixture:usdc-established",
+      evaluatedAt: "2026-10-23T12:00:30Z",
+      versions: { wwep: "0.1", registry: "2026-10", policies: "2026-10", rules: "2026-10" },
+      bundleDigest: "a".repeat(64),
+      invariantViolationCount: "0",
+      invariantViolations: [],
+      assertions: [],
+      observations: [],
+      sources: [],
+      derivations: [],
+      selectedId: null,
+      provenance: null,
+      readiness: null,
+    });
+    for (const label of ["Copy receipt", "Verify", "QR"]) assert.ok(html.includes(`<button type="button" disabled aria-describedby="receipt-why">${label}</button>`), label);
+    assert.ok(html.includes('<p id="receipt-why" class="ww-reason">Requires immutable snapshot.</p>'), "the pinned reason is unchanged");
+    assert.ok(html.includes("a committed WallPrint record of this evaluation, with a record id, committed canonical bytes and a disclosure history"));
+    assert.ok(html.includes("no committed record, so no WallPrint disclosure can be identified for it and nothing here links to one"));
+    assert.ok(!/data-wp-jump|data-wp-target|wp-sec-|wallprint:|class="wp/.test(html), "the evidence view fakes no link into a disclosure and renders none of the document");
+  });
+});

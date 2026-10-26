@@ -5,7 +5,9 @@
 // of them; no new hue, no gradient but the sheet grid, no shadow, bevel, pill or seal.
 //
 // State colour is a secondary cue only: every state, lifecycle step, receipt and replay outcome is written in words and
-// carried by a chip, a dot or a dashed rule as well. Meaning never depends on colour.
+// carried by a chip, a dot or a dashed rule as well. Meaning never depends on colour. The Verify readout keeps three
+// edges: solid for a result, dotted for an absent result (absence is not failure), dashed brick for a mismatch, an invalid
+// record or a result the document does not recognise. A positive result is never singled out: no fill, no seal, no glow.
 //
 // Layout is container-driven (`@container wp`), so the document recomposes when the host panel resizes, not only when the
 // browser does; a media-query fallback covers engines without container queries. Nothing is reordered with `order`,
@@ -40,6 +42,8 @@ const NARROW = `
 .wp-lineage{flex-direction:column;gap:12px}
 .wp-lineage-arrow{display:none}
 .wp-lineage-node[data-link]::before{content:"";display:block;width:1px;height:12px;margin:0 0 2px 16px;background:var(--ww-umber)}
+.wp-checks{grid-template-columns:1fr}
+.wp-check-fields>div,.wp-receipt-fields>div{grid-template-columns:1fr}
 ${STACKED(".wp-table")}`;
 
 export const WALLPRINT_CSS = `
@@ -121,12 +125,38 @@ export const WALLPRINT_CSS = `
 .wp-link{margin:0;font-size:12px}
 .wp-diff{margin-top:10px}
 .wp-diff-group{margin-top:4px}
-/* Verify: a monospace grid of the integrity metadata, the receipt and the replay result, each with its boundary. */
+/* Verify: four questions in one grid, each a quiet row of the instrument. A positive result is the plate's resting state
+   (no rule singles it out); absence is a dotted neutral edge; only a mismatch, an invalid record or an unrecognised
+   result gets the dashed brick edge. No filled panel, no seal, no glow. */
 .wp-verify-grid>div{grid-template-columns:200px minmax(0,1fr)}
-.wp-digest-check{margin:4px 0 0}
+.wp-verify-intro{margin:6px 0 0}
 .wp-boundary{margin:8px 0;padding:8px 10px;border-left:2px solid var(--ww-umber-deep);background:var(--ww-node);font-size:12.5px}
-.wp-receipt,.wp-replay{margin-top:10px;padding:8px 10px;border:1px solid var(--ww-cut-strong);border-radius:var(--ww-radius-panel)}
-.wp-receipt[data-receipt="MISMATCH"],.wp-replay[data-replay="MISMATCH"],.wp-receipt[data-receipt="UNAVAILABLE"],.wp-replay[data-replay="UNREPLAYABLE"]{border-style:dashed;border-color:var(--ww-brick-low)}
+.wp-checks{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.wp-check{min-width:0;padding:10px 12px;border:1px solid var(--ww-cut-strong);border-radius:var(--ww-radius-panel)}
+.wp-check[data-result="NOT_CARRIED"],.wp-check[data-result="NO_DIGEST"],.wp-check[data-receipt="UNAVAILABLE"],.wp-check[data-receipt="UNCHECKED"],.wp-check[data-replay="UNREPLAYABLE"],.wp-check[data-replay="NOT_CARRIED"]{border-style:dotted}
+.wp-check[data-result="INVALID"],.wp-check[data-result="MISMATCH"],.wp-check[data-result="UNRECOGNISED"],.wp-check[data-receipt="MISMATCH"],.wp-check[data-receipt="UNRECOGNISED"],.wp-check[data-replay="MISMATCH"],.wp-check[data-replay="UNRECOGNISED"]{border-style:dashed;border-color:var(--ww-brick-low)}
+.wp-check h4{margin:0;display:flex;align-items:baseline;gap:8px}
+.wp-check-no{font-size:10.5px;font-weight:700;letter-spacing:0.08em;line-height:14px;padding:0 4px;border:1px solid var(--ww-umber);color:var(--ww-umber-deep)}
+.wp-check-q{margin:6px 0 0;font-size:13px;font-weight:600;color:var(--ww-charcoal)}
+.wp-check-a{margin:6px 0 0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:12.5px}
+.wp-check-meaning{max-width:62ch}
+.wp-check-fields>div,.wp-receipt-fields>div{grid-template-columns:150px minmax(0,1fr)}
+.wp-receipt-standing{margin:8px 0}
+.wp-receipt-lineage{margin-top:8px;padding-top:6px;border-top:1px solid var(--ww-cut)}
+.wp-version-inline{min-height:36px;padding:0 10px;border:1px solid var(--ww-cut-strong);border-radius:var(--ww-radius-badge);background:var(--ww-label);color:var(--ww-umber-deep);font:700 11.5px var(--font-ui);cursor:pointer}
+.wp-independent{margin:10px 0 0;font-size:12.5px;max-width:72ch}
+/* Jump: one row of section controls in the chip material under the status line; buttons, never links. */
+.wp-jump{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.wp-jump button{min-height:36px;padding:0 12px;border:1px solid var(--ww-cut-strong);border-radius:var(--ww-radius-badge);background:var(--ww-label);color:var(--ww-charcoal);font:700 12px var(--font-ui);cursor:pointer}
+.wp-jump button:hover{border-color:var(--ww-brick-low)}
+/* Registration and derivation: the readout grid, then five steps on one drafted rail (a static hairline; nothing draws). */
+.wp-registration,.wp-derivation{margin-top:14px}
+.wp-steps{list-style:none;margin:8px 0 0;padding:0 0 0 20px;position:relative}
+.wp-steps::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--ww-umber)}
+.wp-step{position:relative;padding:4px 0 8px;min-width:0}
+.wp-step::before{content:"";position:absolute;left:-20px;top:8px;width:11px;height:11px;border:1px solid var(--ww-umber-deep);background:var(--ww-rail)}
+.wp-step-title{display:block;font-size:10.5px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:var(--ww-umber-deep)}
+.wp-step p{margin:4px 0 0;font-size:12.5px}
 .wp-raw-body{display:block}
 .wp-raw-text{display:block;white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto;padding:8px;background:var(--ww-node);border:1px solid var(--ww-cut)}
 .wp-invariants{margin-top:14px}
@@ -154,6 +184,8 @@ export const WALLPRINT_CSS = `
 .wp-columns{gap:0 18px}
 .wp-facts>div{grid-template-columns:120px minmax(0,1fr)}
 .wp-verify-grid>div{grid-template-columns:160px minmax(0,1fr)}
+.wp-checks{gap:10px}
+.wp-check-fields>div,.wp-receipt-fields>div{grid-template-columns:120px minmax(0,1fr)}
 }
 /* The eight-column assessments table stacks its rows well before the plate is narrow, so no id wraps mid-word. */
 @container wp (min-width:720px) and (max-width:959px){${STACKED(".wp-assessments .wp-table")}}
@@ -172,5 +204,6 @@ body:has(.wp) .ww-lens-badge{display:inline-block}
 .wp-version{min-height:44px}
 .wp-copyable button.copy{min-height:36px;padding:0 12px}
 .wp .wp-more>summary{min-height:44px}
+.wp-jump button,.wp-version-inline{min-height:44px}
 }
 `;
