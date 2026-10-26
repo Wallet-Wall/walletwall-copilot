@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
+import { findSecretLike } from "../../src/wallprint/language.ts";
 import { ROOT } from "../support/harness.ts";
 import type { DisclosureFixture, DisclosureRecord } from "../support/wallprint-disclosures.ts";
 
@@ -469,6 +470,17 @@ describe("local section focus: a deterministic action inside the document, never
 
   test("the page script still stores nothing, talks to no origin, writes no markup and never touches the location", () => {
     assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie|fetch\(|EventSource|XMLHttpRequest|postMessage|innerHTML|outerHTML|insertAdjacentHTML|location\.|history\.(push|replace)State|window\.open/.test(render.WALLPRINT_JS));
+  });
+});
+
+describe("security of the shipped fixtures and the rendered document", () => {
+  test("no credential-shaped text in the generated fixtures or in any rendered fragment, no link, no javascript URL", () => {
+    assert.equal(findSecretLike(JSON.stringify(WALLPRINT_FIXTURES)), null, "the fixtures carry no credential-shaped text");
+    for (const name of names) {
+      const html = fragment(name);
+      assert.equal(findSecretLike(html), null, name);
+      assert.ok(!/<a\b|href=|javascript:|data:text\/html|srcdoc=/i.test(html), `${name}: no link, URL scheme or document injection surface`);
+    }
   });
 });
 
