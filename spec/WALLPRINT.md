@@ -274,6 +274,19 @@ UNREPLAYABLE != INCORRECT
   `validateWallPrintRecord` refuses the record with `CONFLICTS_MISMATCH` on that claim: such an evaluation is not
   recordable in WallPrint 0.1. Found by the disclosure UI lane and reported here; admitting it is a contract decision
   (the conflict-consistency rule in `record.ts` would need a third cause for propagated conflicts), not a UI patch.
+- A receipt carries no issuance instant and no identifier of its own; it is identified by its record id and digest. The
+  disclosure view prints the disclosure instant from the lifecycle ledger and invents no receipt id. Whether a receipt
+  should carry an issuance instant or a digest of its own is a contract decision for a later lane.
+- `verifyReceipt` returns `matches: false` with `RECEIPT_INVALID` or `RECORD_INVALID` before any comparison, so an input
+  it could not check and a compared non-match share one boolean, and the field comparisons are not run on an invalid
+  record (the altered-copy fixture reports `RECORD_INVALID` alone although its digest also differs). The disclosure
+  view tells that case as "not compared". Likewise `verifyWallPrintDigest` folds a canonicalization failure into
+  `{ matches: false, computedDigest: null }`, which the view shows as "not computable". A tri-state or a `compared`
+  flag is a contract decision, not a UI patch. Found by the Receipt verification UX lane's adversarial review.
+- The disclosure view's input shape (a record with its digest check, validation, lifecycle, receipt and verification,
+  replay and diff) is defined in `packages/mcp/test/support/wallprint-disclosures.ts`, and `ReplayResult` has a
+  TypeScript interface but no runtime schema, so the view re-states their consistency rules in its own projections. A
+  canonical runtime schema for both is a contract follow-up.
 
 ## Prototype reconciliation
 
