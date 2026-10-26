@@ -126,8 +126,8 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-render.mjs",
-      "sha512": "e96525069faa5fde9704816418ed466201a6370b21ea67b22f73270dbe0ffea153f9130be3331f43e091b81c395f7ddabdda1450aced36c14ec094eac014698a",
-      "bytes": 63254
+      "sha512": "cc1428216794c585621a9829e10e925ed6f13dbc5d17865a26951bcebde673b69ff7c3550c5df749cdd99bb2c5df16267e7bf0f203b0ec08ea84bb0bafec4264",
+      "bytes": 63416
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-styles.mjs",

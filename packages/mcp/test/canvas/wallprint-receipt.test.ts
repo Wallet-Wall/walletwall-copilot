@@ -214,8 +214,11 @@ describe("the receipt check: the engine's fields, the boundary, and one receipt 
     for (const [k, v] of Object.entries(issued.versions)) assert.ok(block.includes(`<li><code>${k}</code> <code>${v}</code></li>`), k);
     assert.ok(block.includes("<dt>Engine result</dt><dd><code>matches: true</code>"));
     const vocab = WALLPRINT_VOCABULARY as unknown as { receipt: { establishes: string; doesNotEstablish: string[] } };
-    assert.ok(block.includes(`<p class="wp-boundary"><strong>${esc(vocab.receipt.establishes)}</strong> A matching receipt demonstrates consistency between this disclosed record and its commitment. A matching receipt does not establish ${vocab.receipt.doesNotEstablish.map(esc).join(", ")}.</p>`));
+    assert.ok(block.includes(`<p class="wp-boundary"><strong>What a matching receipt establishes:</strong> ${esc(vocab.receipt.establishes)} A matching receipt demonstrates consistency between this disclosed record and its commitment. A matching receipt does not establish ${vocab.receipt.doesNotEstablish.map(esc).join(", ")}.</p>`));
     assert.ok(!block.includes("Receipt ID") && !block.includes("receipt id:"), "no receipt identifier is invented: a receipt is identified by its record id and digest");
+    // On a mismatch the boundary is a definition of what a match would mean, never a bold assertion that these bytes match.
+    const mismatch = receiptBlock(articleOf(fragment("receipt-mismatch"), focusOf("receipt-mismatch").id));
+    assert.ok(mismatch.includes("<strong>What a matching receipt establishes:</strong>") && !mismatch.includes(`<strong>${esc(vocab.receipt.establishes)}</strong>`));
   });
 
   test("no receipt and an unverified receipt are neutral: no attention mark, no MATCH or MISMATCH, absence said in words, the boundary still present", () => {

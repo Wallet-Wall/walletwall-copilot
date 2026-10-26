@@ -575,7 +575,8 @@ function verify(m, vm, vocabulary) {
         .map((r) => `<li><span class="wp-version-label">${esc(r.version)}</span> <code>${esc(r.id)}</code> · lifecycle ${chip(r.lifecycle.state, vocabulary.lifecycleStates)} · receipt ${resultChip(r.receiptStatus)} · replay ${replayChip(r, vocabulary)} · <button type="button" class="wp-version-inline" data-wp-version="${esc(r.id)}" data-wp-then="receipt">Show ${esc(r.version)} receipt</button></li>`)
         .join("")}</ul><p class="muted small">Each version carries its own receipt; the receipts listed here belong to those versions and are never merged into this one.</p></div>`
     : "";
-  const boundary = `<p class="wp-boundary"><strong>${esc(vocabulary.receipt.establishes)}</strong> A matching receipt demonstrates consistency between this disclosed record and its commitment. A matching receipt does not establish ${list(vocabulary.receipt.doesNotEstablish).map((x) => esc(x)).join(", ")}.</p>`;
+  // The boundary is a definition of what a match would mean, prefixed so that on a mismatch it never reads as an assertion.
+  const boundary = `<p class="wp-boundary"><strong>What a matching receipt establishes:</strong> ${esc(vocabulary.receipt.establishes)} A matching receipt demonstrates consistency between this disclosed record and its commitment. A matching receipt does not establish ${list(vocabulary.receipt.doesNotEstablish).map((x) => esc(x)).join(", ")}.</p>`;
   const receiptCheck = check("receipt", "3", "Receipt", m.receiptStatus, resultChip(m.receiptStatus), RECEIPT_PRESENTATION[m.receiptStatus], `${receiptReasons ?? ""}${receiptFields}${standing}${lineageReceipts}${boundary}`);
 
   // 4. Replay: can the historical evaluation be reproduced under the recorded context? The engine's outcome and reasons.
