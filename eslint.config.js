@@ -8,7 +8,7 @@ const FORBIDDEN_MODULES = [
 ].flatMap((m) => [m, `node:${m}`]);
 
 export default defineConfig(
-  { ignores: ["node_modules/**", "plugin/server/**", "plugin/com.github.copilot/**/fixtures.mjs", "plugin/com.github.copilot/**/wallprint-fixtures.mjs", "packages/mcp/src/generated/**", "conformance/**"] },
+  { ignores: ["node_modules/**", "plugin/server/**", "plugin/com.github.copilot/**/fixtures.mjs", "plugin/com.github.copilot/**/wallprint-fixtures.mjs", "plugin/com.github.copilot/**/wallprint-reference.mjs", "packages/mcp/src/generated/**", "conformance/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -104,7 +104,7 @@ export default defineConfig(
   {
     files: ["plugin/com.github.copilot/**/*.mjs"],
     languageOptions: {
-      globals: { process: "readonly", Buffer: "readonly", URL: "readonly", setTimeout: "readonly", clearTimeout: "readonly", structuredClone: "readonly" },
+      globals: { process: "readonly", Buffer: "readonly", URL: "readonly", setTimeout: "readonly", clearTimeout: "readonly", structuredClone: "readonly", TextEncoder: "readonly" },
     },
     rules: {
       "no-restricted-imports": [

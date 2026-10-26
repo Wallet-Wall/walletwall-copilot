@@ -17,7 +17,11 @@
 //  - Receipt and replay results are printed with their boundary: digest integrity is not factual truth, and
 //    UNREPLAYABLE is not INCORRECT.
 //  - Identifiers, digests and timestamps are printed in full, as recorded, in monospace, with a copy control.
+//  - The portable reference and its QR code are a locator (record id, committed digest, WallPrint version), printed as a
+//    registration block beside its exact text and never as a seal: they establish nothing about the record's claims.
 import { esc } from "./wall.mjs";
+import { encodeQr, qrPathData } from "./wallprint-qr.mjs";
+import { REFERENCE_DOES_NOT_ESTABLISH, REFERENCE_IDENTIFIES, REFERENCE_TARGETS, REFERENCE_VERSION, encodeReference, encodeReferenceEnvelope, tryReference } from "./wallprint-reference.mjs";
 
 export const ASSESSOR_ROLE_LABELS = {
   WALLETWALL: "WalletWall",
@@ -34,6 +38,38 @@ export const ASSESSOR_ROLE_LABELS = {
  */
 export const WALLPRINT_SECTIONS = ["receipt", "replay", "history", "assessments", "provenance"];
 export const SECTION_LABELS = { receipt: "Receipt", replay: "Replay", history: "History", assessments: "Assessments", provenance: "Provenance" };
+/** The words for a portable reference's target: the jump sections plus the record itself. */
+const TARGET_LABELS = { record: "Record", ...SECTION_LABELS };
+
+/**
+ * How each resolution outcome of a portable reference is told. UNAVAILABLE is not invalid: the store does not hold the
+ * record. DIGEST_MISMATCH says which digests differ and never which record is right. A malformed or unsupported reference
+ * is described by its fixed problem code; no part of the text is shown. None of these is a statement about the facts.
+ */
+export const REFERENCE_PRESENTATION = {
+  RESOLVED: "The record this reference names is held here; the digest it carries and the digest the engine recorded for its canonical bytes both equal the digest the reference carries. What that establishes is only that: which record, which bytes, as the engine recorded them.",
+  UNAVAILABLE: "No record with this id is held in this disclosure store. The reference is well formed and names a record and a digest; the record it names is not available here. Unavailable is not invalid, and this says nothing about the record or its claims.",
+  /** More than one bundled record carries the id: nothing can be resolved, and nothing is said about either record. */
+  UNAVAILABLE_AMBIGUOUS: "More than one record held in this disclosure store carries this id, so the reference resolves to none of them. Nothing is said about any of those records or their claims.",
+  NOT_COMPARED: "The record this reference names is held here, but this disclosure carries no digest, or no engine-computed digest, for it, so the reference's digest was compared with nothing. Nothing is said to match or to differ.",
+  DIGEST_MISMATCH: "The resolved record does not match the digest carried by this reference.",
+  MALFORMED_REFERENCE: "The text is not a WallPrint portable reference in the form this document reads. Nothing was resolved and no part of the text is shown.",
+  UNSUPPORTED_VERSION: "The reference declares a reference or WallPrint version this document does not read. Nothing was resolved.",
+};
+/** The fixed problem codes a failed parse can carry, in words. Anything else is "not recognised". */
+export const REFERENCE_PROBLEM_LABELS = {
+  text: "not a non-empty text",
+  length: "longer than any reference can be",
+  characters: "contains a character no reference contains (space, percent, hash, control, non-ASCII or punctuation outside the grammar)",
+  scheme: "does not begin with walletwall://wallprint/",
+  query: "the parameters are not reference, wallprint, digest and an optional target, once each, in that order",
+  envelope: "not a reference envelope: the type tag or the fixed keys differ",
+  reference: "the reference version",
+  wallprint: "the WallPrint version",
+  recordId: "the record id is not a lower-case record id of 3 to 64 characters",
+  digest: "the digest is not 64 lower-case hexadecimal characters",
+  target: "the target is not one of record, receipt, replay, history, assessments, provenance",
+};
 
 export const CLAIM_LABELS = {
   ASSET_IDENTITY: "Asset identity",
@@ -435,12 +471,25 @@ export function recordViewModel(entry, index, fixture, vocabulary) {
     wallprintVersion: str(rec.wallprintVersion),
     canonicalization: str(rec.canonicalization),
     digestAlgorithm: str(rec.digestAlgorithm),
+    reference: committedReference(entry, rec, events),
   };
 }
 
-export function wallPrintViewModel(name, fixture, vocabulary) {
+/**
+ * The portable reference of a record: its id, the digest its COMMITTED lifecycle event recorded (the committed digest,
+ * from the engine's ledger, not the disclosed copy's own field) and its WallPrint version. A disclosure that carries no
+ * committed identity for this record gets no reference and no QR code: the prerequisite is named instead. Nothing here
+ * is computed beyond reading the three recorded values; the codec refuses them unless each has its fixed shape.
+ */
+function committedReference(entry, rec, events) {
+  const committed = events.find((e) => e.state === "COMMITTED") ?? null;
+  if (committed === null || committed.recordId !== entry.id || str(rec.id) !== entry.id) return null;
+  return tryReference({ recordId: committed.recordId, digest: committed.recordDigest, wallprintVersion: rec.wallprintVersion });
+}
+
+export function wallPrintViewModel(name, fixture, vocabulary, focus = null) {
   const records = list(fixture.records).filter(isObject);
-  const models = records.map((entry, i) => recordViewModel(entry, i, fixture, vocabulary));
+  const models = records.map((entry, i) => recordViewModel(entry, i, { ...fixture, focus: typeof focus === "string" ? focus : fixture.focus }, vocabulary));
   // A focus that names no record would hide every article: the first record is shown instead, and the view says which.
   const first = models[0];
   if (first !== undefined && !models.some((m) => m.focused)) first.focused = true;
@@ -708,7 +757,106 @@ ${replayCheck}
 </ol>
 <p class="wp-independent">Receipt and replay are separate questions: a matching receipt beside a replay mismatch, or beside an unreplayable record, is a consistent result. This document never combines them into one state.</p>
 ${registration}
+${portable(m)}
 ${derivation}
+</section>`;
+}
+
+/**
+ * Portable reference: the record's locator (id, committed digest, WallPrint version) in its one fixed text form, printed
+ * exactly with a copy control, and the same text as a QR code drawn locally from it. The block is a registration block
+ * of the plate: a hairline frame, the ink on the paper, the words "Scan" and "Copy reference"; no seal, no mark of
+ * approval, no colour of success. A reader who cannot scan loses nothing: the text is the reference. Without a committed
+ * record identity (no COMMITTED event naming this record and its digest) there is no reference and no code, and the
+ * prerequisite is named.
+ */
+function portable(m) {
+  const ref = m.reference;
+  const intro = `<p class="muted small">A locator for this record: its id, its committed digest and the WallPrint version, in one fixed form. The code and the text beside it carry exactly the same reference. ${esc(REFERENCE_IDENTIFIES)}</p>`;
+  const boundary = `<p class="wp-boundary"><strong>A reference is a locator, not authority.</strong> It names which record and which bytes; it does not establish ${list(REFERENCE_DOES_NOT_ESTABLISH)
+    .map((x) => esc(x))
+    .join(", ")}. It is not a signature. The code encodes no web address and no local address: it is a <code>walletwall:</code> locator that no app registers a handler for, so scanning it opens nothing by itself; opening it needs a compatible WalletWall disclosure store, such as this panel's bundled lineages. No public resolver exists in this release.</p>`;
+  if (ref === null) {
+    return `<div class="wp-portable" data-wp-reference="unavailable"><h4>Portable reference</h4>${intro}<p class="note">No portable reference for this record: this disclosure carries no committed record identity for it (a COMMITTED lifecycle event naming this record with its committed digest, and a WallPrint version). A reference needs exactly those three values. No code is drawn in its place.</p>${boundary}</div>`;
+  }
+  const text = encodeReference(ref);
+  const code = encodeQr(text);
+  const { extent, d } = qrPathData(code);
+  const textId = `wp-pr-${esc(m.id)}`;
+  const svg = `<svg class="wp-qr-code" viewBox="0 0 ${extent} ${extent}" role="img" aria-label="QR code. It encodes the portable reference printed beside it and nothing else." aria-describedby="${textId}" shape-rendering="crispEdges" data-qr-version="${esc(String(code.version))}" data-qr-modules="${esc(String(code.size))}" data-qr-ec="${esc(code.ecLevel)}"><rect class="wp-qr-quiet" width="${extent}" height="${extent}"/><path class="wp-qr-dark" d="${d}"/></svg>`;
+  const sections = REFERENCE_TARGETS.filter((t) => t !== "record").map((t) => `<li><span class="wp-eyebrow-inline">${esc(TARGET_LABELS[t])}</span> ${exact(encodeReference({ ...ref, target: t }), `portable reference to the ${TARGET_LABELS[t]} section`)}</li>`);
+  return `<div class="wp-portable" data-wp-reference="available" data-wp-reference-target="none"><h4>Portable reference</h4>${intro}
+<div class="wp-portable-block">
+<div class="wp-qr">${svg}<p class="wp-qr-caption">Scan · Copy reference</p><p class="muted small wp-qr-meta">QR version ${esc(String(code.version))}, ${esc(String(code.size))} modules, error correction ${esc(code.ecLevel)}, quiet zone 4</p></div>
+<div class="wp-portable-text">
+<dl class="states wp-facts wp-portable-fields">
+<div><dt>Reference</dt><dd><span class="wp-copyable"><code class="wp-exact" id="${textId}">${esc(text)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full portable reference">Copy reference</button></span></dd></div>
+<div><dt>Record</dt><dd>${exact(ref.recordId, "WallPrint id")}</dd></div>
+<div><dt>Committed digest</dt><dd>${exact(ref.digest, "committed digest")} <span class="muted small">from the COMMITTED event of the lifecycle ledger</span></dd></div>
+<div><dt>Encodes</dt><dd>the record id, the committed digest, WallPrint version <code>${esc(ref.wallprintVersion)}</code> and reference format <code>${esc(REFERENCE_VERSION)}</code>; no section target, no web or local address, no wallet address, no key, no record content</dd></div>
+</dl>
+${boundary}
+<details class="wp-more wp-portable-sections"><summary>Section references and the envelope</summary><p class="muted small">The same reference pointing at one section of this record, and the reference as a JSON envelope (RFC 8785 key order). Each is exact and copyable; none is a different reference.</p><ul class="limits wp-codes wp-portable-targets">${sections.join("")}</ul><p class="muted small">Envelope:</p>${exact(encodeReferenceEnvelope(ref), "reference envelope")}</details>
+</div>
+</div>
+</div>`;
+}
+
+/**
+ * The resolution readout printed above the lineage when the document was opened from a portable reference: which
+ * record it named, whether the digests agree, and which section it asked for. A mismatch is an integrity finding that
+ * decides nothing about which record is right; both digests are printed for the reader.
+ */
+function referenceReadout(view) {
+  const r = isObject(view.reference) ? view.reference : null;
+  if (r === null) return "";
+  const res = isObject(r.resolution) ? r.resolution : null;
+  const outcome = str(r.outcome);
+  const target = str(r.target);
+  const targetWord = target !== null && Object.hasOwn(TARGET_LABELS, target) ? TARGET_LABELS[target] : null;
+  const named = `<dl class="states wp-facts wp-reference-fields"><div><dt>Record named</dt><dd>${exact(str(r.recordId), "referenced record id")}</dd></div><div><dt>Digest carried</dt><dd>${exact(str(r.digest), "reference digest")}</dd></div><div><dt>Section</dt><dd>${targetWord ? esc(targetWord) : '<span class="muted">none: the record itself</span>'}</dd></div></dl>`;
+  if (outcome === "RESOLVED") {
+    return `<div class="wp-reference-result wp-rise" data-wp-step="0" data-outcome="RESOLVED" role="status"><p class="wp-eyebrow">Opened from a portable reference</p><p class="wp-reference-line">${chip("RESOLVED", ["RESOLVED"], false)} <span class="wp-check-meaning">${esc(REFERENCE_PRESENTATION.RESOLVED)}</span></p>${named}<p class="muted small">The record is shown below as recorded, with its own lifecycle; a reference to an earlier version opens that version, never the lineage's current one in its place.</p></div>`;
+  }
+  const digests = `<dl class="states wp-facts wp-reference-fields"><div><dt>Digest carried by the reference</dt><dd>${exact(str(r.digest), "reference digest")}</dd></div><div><dt>Digest the record carries</dt><dd>${res && typeof res.embeddedDigest === "string" ? exact(res.embeddedDigest, "embedded digest") : '<span class="muted">none carried</span>'}</dd></div><div><dt>Digest the engine computed</dt><dd>${res && typeof res.computedDigest === "string" ? exact(res.computedDigest, "computed digest") : '<span class="muted">not carried: nothing was computed here</span>'}</dd></div></dl>`;
+  if (outcome === "DIGEST_MISMATCH") {
+    return `<div class="wp-reference-result wp-rise" data-wp-step="0" data-outcome="DIGEST_MISMATCH" role="alert"><p class="wp-eyebrow">Opened from a portable reference</p><p class="wp-reference-line">${chip("DIGEST_MISMATCH", ["DIGEST_MISMATCH"])} <span class="wp-check-meaning">${esc(REFERENCE_PRESENTATION.DIGEST_MISMATCH)}</span></p>${digests}<p class="muted small">This document does not decide which bytes are the committed ones; it shows the record it found, as recorded, and the Verify section below carries the engine's own checks for it. The record named: ${exact(str(r.recordId), "referenced record id")}${targetWord ? `; section asked for: ${esc(targetWord)} (not opened, because the digests differ)` : ""}.</p></div>`;
+  }
+  // Absence is absence: a disclosure that carries no digest to compare against gets the plate's quiet edge, no alarm.
+  if (outcome === "NOT_COMPARED") {
+    return `<div class="wp-reference-result wp-rise" data-wp-step="0" data-outcome="NOT_COMPARED" role="status"><p class="wp-eyebrow">Opened from a portable reference</p><p class="wp-reference-line">${chip("NOT_COMPARED", ["NOT_COMPARED"], false)} <span class="wp-check-meaning">${esc(REFERENCE_PRESENTATION.NOT_COMPARED)}</span></p>${digests}<p class="muted small">The record is shown below as recorded; the Verify section carries whatever checks this disclosure does carry. The record named: ${exact(str(r.recordId), "referenced record id")}${targetWord ? `; section asked for: ${esc(targetWord)} (not opened, because the digests were not compared)` : ""}.</p></div>`;
+  }
+  return `<div class="wp-reference-result wp-rise" data-wp-step="0" data-outcome="UNRECOGNISED" role="status"><p class="wp-eyebrow">Opened from a portable reference</p><p class="wp-reference-line"><span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span> <span class="wp-check-meaning">The carried resolution outcome is not one this document recognises. No result is shown.</span></p></div>`;
+}
+
+/**
+ * The view when a portable reference resolved to no record here: the fixed outcome and its problem code in words,
+ * nothing of the text, no record, no state. UNAVAILABLE is said as unavailable, never as invalid.
+ */
+export function renderReferenceOutcome(view) {
+  const r = isObject(view.reference) ? view.reference : {};
+  const outcome = str(r.outcome);
+  const known = outcome !== null && ["UNAVAILABLE", "MALFORMED_REFERENCE", "UNSUPPORTED_VERSION"].includes(outcome);
+  const problem = str(r.problem);
+  const problemWord = problem !== null && Object.hasOwn(REFERENCE_PROBLEM_LABELS, problem) ? REFERENCE_PROBLEM_LABELS[problem] : null;
+  const title = outcome === "UNAVAILABLE" ? "Record unavailable" : outcome === "MALFORMED_REFERENCE" ? "Malformed reference" : outcome === "UNSUPPORTED_VERSION" ? "Unsupported version" : "Reference not opened";
+  // The id and digest an unavailable reference names are the reader's own input, printed back as written so the reader
+  // can see which record was asked for; they are labelled as such and are not the store's values.
+  const body = known
+    ? `<p class="wp-reference-line">${chip(outcome, [outcome], outcome === "UNAVAILABLE" ? false : undefined)} <span class="wp-check-meaning">${esc(outcome === "UNAVAILABLE" && problem === "ambiguous" ? REFERENCE_PRESENTATION.UNAVAILABLE_AMBIGUOUS : REFERENCE_PRESENTATION[outcome])}</span></p>${
+        outcome === "UNAVAILABLE"
+          ? `<dl class="states wp-facts wp-reference-fields"><div><dt>Record named, as written in the reference</dt><dd>${exact(str(r.recordId), "referenced record id")}</dd></div><div><dt>Digest carried, as written in the reference</dt><dd>${exact(str(r.digest), "reference digest")}</dd></div></dl><p class="muted small">${esc(REFERENCE_IDENTIFIES)} This panel resolves references against its bundled disclosure lineages only.</p>`
+          : `<p class="muted small">Problem: <code>${esc(problem ?? "")}</code>${problemWord ? ` (${esc(problemWord)}${problem === "reference" || problem === "wallprint" ? (outcome === "UNSUPPORTED_VERSION" ? " is not one this document reads" : " is not a version") : ""})` : problem === null ? "" : " (not recognised)"}. A reference is read exactly as written: no case folding, no percent-decoding, no reordering of its parameters.</p>`
+      }`
+    : '<p class="wp-reference-line"><span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span> <span class="wp-check-meaning">The carried outcome is not one this document recognises. No result is shown.</span></p>';
+  return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="A portable WallPrint reference">WallPrint</span></div><p class="ww-rail-asset"><span class="ww-rail-symbol">WallPrint</span><span class="ww-rail-sep" aria-hidden="true">·</span><span class="ww-rail-chain">portable reference</span></p></header></div>
+<section class="wp" data-wp-reference-outcome="${esc(outcome ?? "")}" aria-label="Portable reference outcome">
+<div class="wp-plate">
+<p class="wp-fixture muted small">Opened from a portable reference. Source: <code>${esc(view.source ?? "")}</code>.</p>
+<div class="wp-reference-result" data-outcome="${esc(known ? outcome : "UNRECOGNISED")}" role="${outcome === "UNAVAILABLE" ? "status" : "alert"}"><p class="wp-eyebrow">Portable reference</p><h2 class="wp-title">${esc(title)}</h2>${body}</div>
+${renderWallPrintList(view.wallprints)}
+<p class="muted small wp-foot">A portable reference locates a record; it decides no state, no authority, no verdict, and this page shows no record it did not resolve.</p>
+</div>
 </section>`;
 }
 
@@ -734,14 +882,18 @@ ${verify(m, vm, vocabulary)}
  * same things about the same codes.
  */
 export function renderWallPrint(view, labels) {
-  const vm = wallPrintViewModel(view.fixture, view.disclosure, view.vocabulary);
+  // Opened from a reference, the record in view is the one the reference named; a section is opened only after a
+  // successful resolution with matching digests, and only one of the fixed targets (the client refuses anything else).
+  const vm = wallPrintViewModel(view.fixture, view.disclosure, view.vocabulary, str(view.focus));
+  const open = isObject(view.reference) && view.reference.outcome === "RESOLVED" && typeof view.target === "string" && Object.hasOwn(TARGET_LABELS, view.target) ? view.target : null;
   const asset = vm.registry.asset;
   const headerAsset = `<p class="ww-rail-asset"><span class="ww-rail-symbol">${esc(asset ? asset.symbol : "WallPrint")}</span><span class="ww-rail-sep" aria-hidden="true">·</span><span class="ww-rail-chain">${vm.registry.chain ? `chain ${esc(vm.registry.chain.chainId)}` : "disclosure record"}</span></p>`;
   const records = vm.records.map((m) => article(m, vm, view.vocabulary, labels)).join("\n");
   return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="A fixture-backed disclosure record">WallPrint</span></div>${headerAsset}</header></div>
-<section class="wp" data-wp-fixture="${esc(vm.name)}" data-wp-focus="${esc(vm.focus ?? "")}" aria-label="WallPrint disclosure">
+<section class="wp" data-wp-fixture="${esc(vm.name)}" data-wp-focus="${esc(vm.focus ?? "")}"${open ? ` data-wp-open="${esc(open)}"` : ""} aria-label="WallPrint disclosure">
 <div class="wp-plate">
 <p class="wp-fixture muted small">Synthetic fixture <code>${esc(vm.name)}</code>: ${esc(vm.title)} Source: <code>${esc(view.source ?? "")}</code>.${vm.scenario ? ` <span class="wp-scenario" data-scenario="${esc(vm.scenario.kind ?? "")}">Construction: ${vm.scenario.label ? esc(vm.scenario.label) : `not recognised: ${esc(String(vm.scenario.kind).slice(0, 24))}`}${vm.scenario.patched.length ? ` (changed: ${vm.scenario.patched.map((p) => `<code>${esc(p)}</code>`).join(", ")})` : ""}.</span>` : ""}</p>
+${referenceReadout(view)}
 ${records}
 ${invariants(view.vocabulary)}
 <p class="muted small wp-foot">This page renders the canonical WallPrint record and the engine's receipt, replay and diff results for it. It decides no state, no authority, no verdict.</p>

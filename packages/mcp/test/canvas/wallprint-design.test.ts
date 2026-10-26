@@ -158,7 +158,14 @@ describe("the page: the WallPrint stylesheet and script ship inside the same non
       // `ww-lens-badge` is the canvas's pre-existing lens label in the header ("Observed" on The Wall), not a verdict.
       for (const m of html.replaceAll('class="ww-lens-badge"', "").matchAll(/class="([^"]*)"/g)) assert.ok(!/\b(card|tile|kpi|badge|seal|score|progress|gauge|stat)\b/i.test(m[1] as string), `${name}: class ${m[1]}`);
       assert.ok(!/✅|✔|🏆|🎉|⭐|🔒|🛡/.test(html), `${name}: no celebration or security glyph`);
-      assert.ok(!/<svg class="wp-reg[^>]*>[\s\S]*?<\/svg>[\s\S]*?<svg(?! class="wp-reg)/.test(html), `${name}: the only drawing is the registration mark; no decorative chart`);
+      // The only drawings are the registration mark and the portable reference's QR code: one per portable block, inside it, nowhere else.
+      assert.ok(!/<svg(?! class="wp-reg)(?! class="wp-qr-code")/.test(html), `${name}: the only drawings are the registration mark and the QR code`);
+      assert.equal((html.match(/<svg class="wp-qr-code"/g) ?? []).length, (html.match(/data-wp-reference="available"/g) ?? []).length, `${name}: one QR code per available reference`);
+      for (const m of html.matchAll(/<svg class="wp-qr-code"/g)) {
+        const before = html.lastIndexOf('<div class="wp-portable"', m.index);
+        const after = html.indexOf('<div class="wp-derivation">', m.index);
+        assert.ok(before >= 0 && after >= 0 && html.lastIndexOf('<div class="wp-derivation">', m.index) < before, `${name}: a QR code is drawn only inside a portable reference block`);
+      }
     }
   });
 });

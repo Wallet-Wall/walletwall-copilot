@@ -26,7 +26,7 @@ describe("plugin path privacy: Copilot plugin + MCP + Canvas (PRIV-017, PRIV-018
   test("PRIV-019 the canvas extension imports no filesystem, OS, DNS, raw-socket, TLS, VM or worker module and calls no outbound network API", () => {
     const allowed: Record<string, string[]> = {
       "extension.mjs": ["node:url", "@github/copilot-sdk/extension", "./explorer.mjs", "./fixtures.mjs", "./wallprint-fixtures.mjs"],
-      "explorer.mjs": ["node:crypto", "node:http", "./mcp-client.mjs", "./fixtures.mjs", "./wallprint-fixtures.mjs", "./render.mjs"],
+      "explorer.mjs": ["node:crypto", "node:http", "./mcp-client.mjs", "./fixtures.mjs", "./wallprint-fixtures.mjs", "./wallprint-reference.mjs", "./render.mjs"],
       "mcp-client.mjs": ["node:child_process"],
       "render.mjs": ["./coinstellation-model.mjs", "./wall.mjs", "./brand.mjs", "./styles.mjs", "./client.mjs", "./wallprint-render.mjs", "./wallprint-styles.mjs", "./wallprint-client.mjs"],
       "client.mjs": ["./wall.mjs"],
@@ -36,10 +36,13 @@ describe("plugin path privacy: Copilot plugin + MCP + Canvas (PRIV-017, PRIV-018
       "brand.mjs": [],
       "fixtures.mjs": [],
       // The WallPrint disclosure view: a pure renderer over serialized engine outputs, its stylesheet, its page script and the generated fixtures.
-      "wallprint-render.mjs": ["./wall.mjs"],
+      "wallprint-render.mjs": ["./wall.mjs", "./wallprint-qr.mjs", "./wallprint-reference.mjs"],
       "wallprint-styles.mjs": [],
       "wallprint-client.mjs": [],
       "wallprint-fixtures.mjs": [],
+      // The portable reference codec (generated from packages/mcp/src/wallprint/reference.ts) and the local QR encoder: both import nothing.
+      "wallprint-reference.mjs": [],
+      "wallprint-qr.mjs": [],
     };
     for (const f of extFiles.filter((x) => x.name.endsWith(".mjs"))) {
       assert.ok(Object.hasOwn(allowed, f.name), `${f.name} is a new canvas module: give it an explicit import allow-list here`);

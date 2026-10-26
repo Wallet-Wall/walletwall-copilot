@@ -53,6 +53,8 @@ jobs:
         run: npm run verify:canvas
       - name: WallPrint disclosure fixtures are current
         run: npm run verify:wallprint
+      - name: WallPrint portable reference codec in the canvas is the build of the canonical module
+        run: npm run verify:wallprint-reference
       - name: Plugin structure
         run: npm run verify:plugin
       - name: Claude Directory package structure and size limits
@@ -98,6 +100,7 @@ jobs:
           npm run verify:notices
           npm run verify:canvas
           npm run verify:wallprint
+          npm run verify:wallprint-reference
           npm run verify:plugin
           npm run verify:claude-directory
           npm run verify:plugin-manifest

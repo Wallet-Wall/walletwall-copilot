@@ -14,10 +14,11 @@ const explorer = createExplorer({ command: "node", serverArgs: [serverPath] });
 
 const bundleInput = {
   type: "object",
-  description: "Show a bundle, or a WallPrint disclosure record. Provide `fixture`, or `bundle` together with `evaluatedAt`, or `wallprint` alone.",
+  description: "Show a bundle, or a WallPrint disclosure record. Provide `fixture`, or `bundle` together with `evaluatedAt`, or `wallprint` alone, or `reference` alone.",
   properties: {
     fixture: { type: "string", enum: Object.keys(FIXTURES), description: "A bundled synthetic evidence bundle." },
     wallprint: { type: "string", enum: Object.keys(WALLPRINT_FIXTURES), description: "A bundled synthetic WallPrint disclosure lineage, shown as a disclosure record exactly as the WallPrint engine produced it." },
+    reference: { type: "string", description: "A portable WallPrint reference exactly as scanned or copied (walletwall://wallprint/... or its JSON envelope). It is parsed strictly and resolved only against the bundled disclosure lineages; the panel reports RESOLVED, UNAVAILABLE (the record is not held here), DIGEST_MISMATCH, MALFORMED_REFERENCE or UNSUPPORTED_VERSION. A reference locates a record; it establishes nothing about the record's claims." },
     bundle: { type: "object", description: "A WWEP 0.1 evidence bundle, exactly as you pass it to the WalletWall MCP tools. Do not pass tool output here." },
     evaluatedAt: { type: "string", description: "Evaluation time, UTC ISO 8601 with a Z suffix, exactly as passed to the WalletWall MCP tools." },
     assertionId: { type: "string", description: "Assertion to show first." },
@@ -45,7 +46,7 @@ await joinSession({
       actions: [
         {
           name: "set_bundle",
-          description: "Replace the displayed bundle, or show a WallPrint disclosure record (`wallprint`). Returns the evaluation the WalletWall MCP server produced for each assertion, or the disclosure's recorded lifecycle, assessments, receipt and replay results.",
+          description: "Replace the displayed bundle, show a WallPrint disclosure record (`wallprint`), or open a portable WallPrint reference (`reference`). Returns the evaluation the WalletWall MCP server produced for each assertion, or the disclosure's recorded lifecycle, assessments, receipt and replay results, or the reference's resolution outcome.",
           inputSchema: bundleInput,
           handler: (ctx) => guard(() => explorer.setInput(ctx.instanceId, ctx.input ?? {})),
         },

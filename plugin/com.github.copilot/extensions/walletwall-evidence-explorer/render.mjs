@@ -17,7 +17,7 @@ import { esc, renderWall } from "./wall.mjs";
 import { FONT_FACES, MARK, WALLABY } from "./brand.mjs";
 import { CSS } from "./styles.mjs";
 import { CLIENT_JS } from "./client.mjs";
-import { renderWallPrint, renderWallPrintList } from "./wallprint-render.mjs";
+import { renderReferenceOutcome, renderWallPrint, renderWallPrintList } from "./wallprint-render.mjs";
 import { WALLPRINT_CSS } from "./wallprint-styles.mjs";
 import { WALLPRINT_JS } from "./wallprint-client.mjs";
 
@@ -612,6 +612,8 @@ export function renderView(view) {
   // The WallPrint disclosure view: a fixture-backed canonical record, its lifecycle, assessments, provenance, lineage and
   // verification data, printed as the engine recorded them with the same state hints and limitation descriptions as The Wall.
   if (view.status === "wallprint") return renderWallPrint(view, { SUPPORT_HINTS, FRESHNESS_HINTS, FINALITY_HINTS, LIMITATION_LABELS });
+  // A portable reference that resolved to no record here: its fixed outcome, nothing of its text, no record.
+  if (view.status === "reference") return renderReferenceOutcome(view);
   if (view.status === "error") {
     return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header></div><p class="note" data-attention="true" role="alert">The evidence could not be evaluated: <code>${esc(view.error.code)}</code>. ${esc(view.error.message)} No states are shown.</p>`;
   }
