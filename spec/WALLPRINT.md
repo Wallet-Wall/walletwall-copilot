@@ -2,8 +2,9 @@
 
 Status: **draft, pre-release**. WallPrint is a WalletWall-defined disclosure record built on the WalletWall Evidence
 Profile (WWEP 0.1, `EVIDENCE_PROFILE.md`). It is not an industry standard and has not been reviewed outside WalletWall.
-This lane ships the domain contract and its tests only: no disclosure page, no QR code, no external assessor import,
-no hosted service, no chain write, no signature system.
+This module is the domain contract and its tests. The canvas renders a fixture-backed disclosure view of these records
+(`canvas/README.md`, items 11 to 14) that adds no presentation field to the record and computes nothing. There is no
+QR code, no external assessor import, no hosted service, no chain write and no signature system.
 
 ## Principle
 
@@ -220,14 +221,18 @@ No signature system exists in this lane.
 registry and rules versions and from the MCP and plugin surfaces (`VERSIONING.md`). A change to the record shape, the
 canonical form, the lifecycle table or the admission rules is a WallPrint version change.
 
-## The future UI
+## The disclosure UI (fixture-backed)
 
-The planned disclosure page renders these sections from the contract without adding presentation fields to it:
+The canvas's WallPrint view renders these sections from the contract without adding presentation fields to it:
 Subject (`record.subject`); Current WalletWall assessment (the `WALLETWALL` entry); Why WalletWall says this
-(authority, freshness, finality, conflicts, limitations from the focal claim); Assessments (one row per assessor, never
-merged); Record (`view.lifecycle.events`); Provenance (`record.provenance`, the bundle through `evidence`);
-Corrections & supersessions (`view.supersedes`, `view.supersededBy`, `lineage`, `diffWallPrints`); Verify (canonical
-payload, digest, policy and rule versions, receipt).
+(authority, freshness, finality, corroboration, conflicts, limitations and violations from the focal claim);
+Assessments (one row per assessor, never merged); Record (`view.lifecycle.events`); Provenance (`record.provenance`
+and the `evidence` references); Corrections & supersessions (`view.supersedes`, `view.supersededBy`, `lineage`,
+`diffWallPrints`); Verify (canonical payload, digest, versions, `validateWallPrintRecord`, `verifyWallPrintDigest`,
+`verifyReceipt`, `replayWallPrint`). Its input is `wallprint-fixtures.mjs`, generated from this module by
+`scripts/gen-wallprint-fixtures.ts` through `packages/mcp/test/support/wallprint-disclosures.ts`: synthetic lineages
+whose every verdict is an engine output. The page quotes the principle, the invariants and the receipt boundary from
+the module's exports and decides nothing.
 
 ## Non-negotiable invariants
 
@@ -261,6 +266,11 @@ UNREPLAYABLE != INCORRECT
   registry names issuer and protocol authorities only.
 - The record is not an MCP tool or resource in this lane; `main.ts`, `server.ts` and `tools.ts` do not import it, so
   the shipped bundle and manifests are unchanged.
+- A claim whose `CONFLICTING` state is propagated from a dependency (a derived readiness claim over two conflicting
+  balances, conformance `CNF-004`) carries no `conflictsWith` entry and no `OBSERVATION_DISAGREEMENT` limitation, so
+  `validateWallPrintRecord` refuses the record with `CONFLICTS_MISMATCH` on that claim: such an evaluation is not
+  recordable in WallPrint 0.1. Found by the disclosure UI lane and reported here; admitting it is a contract decision
+  (the conflict-consistency rule in `record.ts` would need a third cause for propagated conflicts), not a UI patch.
 
 ## Prototype reconciliation
 

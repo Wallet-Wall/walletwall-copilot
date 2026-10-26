@@ -19,6 +19,7 @@ import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { callTools } from "./mcp-client.mjs";
 import { FIXTURES } from "./fixtures.mjs";
+import { WALLPRINT_FIXTURES, WALLPRINT_VOCABULARY } from "./wallprint-fixtures.mjs";
 import { renderPage, renderView } from "./render.mjs";
 
 export class ExplorerInputError extends Error {
@@ -49,9 +50,16 @@ function defaultSelection(bundle) {
 }
 
 export function normalizeInput(input) {
-  if (!isObject(input)) throw new ExplorerInputError("Provide either `fixture`, or `bundle` with `evaluatedAt`.");
-  for (const k of Object.keys(input)) if (!["fixture", "bundle", "evaluatedAt", "assertionId"].includes(k)) throw new ExplorerInputError(`Unknown input field: ${k}`);
+  if (!isObject(input)) throw new ExplorerInputError("Provide either `fixture`, `wallprint`, or `bundle` with `evaluatedAt`.");
+  for (const k of Object.keys(input)) if (!["fixture", "wallprint", "bundle", "evaluatedAt", "assertionId"].includes(k)) throw new ExplorerInputError(`Unknown input field: ${k}`);
   if (input.assertionId !== undefined && typeof input.assertionId !== "string") throw new ExplorerInputError("`assertionId` must be a string.");
+  if (input.wallprint !== undefined) {
+    // A WallPrint disclosure lineage: a serialized engine output, shown as a disclosure record instead of a bundle. It is
+    // never combined with a bundle input, evaluates nothing, and carries no assertion selection.
+    if (input.fixture !== undefined || input.bundle !== undefined || input.evaluatedAt !== undefined || input.assertionId !== undefined) throw new ExplorerInputError("`wallprint` cannot be combined with `fixture`, `bundle`, `evaluatedAt` or `assertionId`.");
+    if (typeof input.wallprint !== "string" || !Object.hasOwn(WALLPRINT_FIXTURES, input.wallprint)) throw new ExplorerInputError(`Unknown wallprint fixture. Available: ${Object.keys(WALLPRINT_FIXTURES).join(", ")}`);
+    return { wallprint: input.wallprint, source: `wallprint:${input.wallprint}` };
+  }
   if (input.fixture !== undefined) {
     if (typeof input.fixture !== "string" || !Object.hasOwn(FIXTURES, input.fixture)) throw new ExplorerInputError(`Unknown fixture. Available: ${Object.keys(FIXTURES).join(", ")}`);
     const fx = FIXTURES[input.fixture];
@@ -110,7 +118,9 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
 
   function buildView(inst) {
     if (inst.error) return { status: "error", error: inst.error };
-    if (!inst.input) return { status: "empty", fixtures: Object.entries(FIXTURES).map(([name, f]) => ({ name, title: f.title })) };
+    if (!inst.input) return { status: "empty", fixtures: Object.entries(FIXTURES).map(([name, f]) => ({ name, title: f.title })), wallprints: Object.entries(WALLPRINT_FIXTURES).map(([name, f]) => ({ name, title: f.title })) };
+    // The WallPrint view: the serialized disclosure lineage and the engine's vocabulary, verbatim. No MCP call, no evaluation.
+    if (inst.input.wallprint !== undefined) return { status: "wallprint", source: inst.input.source, fixture: inst.input.wallprint, disclosure: WALLPRINT_FIXTURES[inst.input.wallprint], vocabulary: WALLPRINT_VOCABULARY };
     const { bundle } = inst.input;
     const evalById = new Map((inst.inspect?.assertions ?? []).map((e) => [e.assertionId, e]));
     return {
@@ -134,6 +144,7 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
   /** What an agent needs to describe the panel without re-deriving anything: the returned MCP results, verbatim. */
   function summary(inst) {
     const view = buildView(inst);
+    if (view.status === "wallprint") return wallPrintSummary(view);
     if (view.status !== "ready") return view.status === "error" ? { status: "error", error: view.error } : { status: "empty" };
     return {
       status: "ready",
@@ -152,10 +163,44 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
     for (const res of inst.clients) res.write("data: update\n\n");
   }
 
+  /**
+   * What an agent needs to describe a WallPrint disclosure without re-deriving anything: the focal record's lifecycle
+   * state, the recorded assessments (every one, never merged), the digest check, the receipt verification, the replay
+   * result and the lineage, all copied from the engine's outputs in the fixture.
+   */
+  function wallPrintSummary(view) {
+    const f = view.disclosure;
+    const records = Array.isArray(f.records) ? f.records : [];
+    const focus = records.find((r) => r.id === f.focus) ?? records[0] ?? null;
+    // A fresh copy: a consumer that edits the summary must never reach the module's fixture data.
+    return structuredClone({
+      status: "wallprint",
+      source: view.source,
+      fixture: view.fixture,
+      title: f.title,
+      recordId: focus ? focus.id : null,
+      lifecycle: focus ? focus.lifecycle.state : null,
+      lineage: focus ? focus.lineage : null,
+      digest: focus ? { embedded: focus.record.digest, matches: focus.digest.matches, computedDigest: focus.digest.computedDigest } : null,
+      assessments: focus ? focus.record.assessments.map((a) => ({ assessor: a.assessor, assessorRole: a.assessorRole, assessment: a.assessment, policy: a.policy, policyVersion: a.policyVersion })) : [],
+      receipt: focus ? { issued: focus.receipt.issued !== null, matches: focus.receipt.verification ? focus.receipt.verification.matches : null, reasons: focus.receipt.verification ? focus.receipt.verification.reasons : [] } : null,
+      replay: focus ? { outcome: focus.replay.outcome, reasons: focus.replay.reasons, mismatches: focus.replay.mismatches } : null,
+      versions: focus ? focus.record.versions : null,
+      selectedAssertionId: null,
+    });
+  }
+
   async function load(inst, input) {
     inst.error = null;
     try {
       inst.input = normalizeInput(input);
+      if (inst.input.wallprint !== undefined) {
+        // A disclosure lineage replaces the bundle entirely: no evaluation, no selection, no readiness.
+        inst.inspect = inst.invariants = inst.provenance = inst.readiness = null;
+        inst.selectedId = null;
+        broadcast(inst);
+        return summary(inst);
+      }
       inst.selectedId = inst.input.assertionId ?? defaultSelection(inst.input.bundle);
       if (inst.selectedId !== null && !(Array.isArray(inst.input.bundle.assertions) && inst.input.bundle.assertions.some((a) => isObject(a) && a.id === inst.selectedId))) inst.selectedId = defaultSelection(inst.input.bundle);
       await evaluate(inst, true);
@@ -170,7 +215,8 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
   }
 
   async function select(inst, assertionId) {
-    if (!inst.input || typeof assertionId !== "string" || !inst.input.bundle.assertions.some((a) => a.id === assertionId)) return summary(inst);
+    // A WallPrint disclosure has no bundle and no assertion selection: select is a no-op there.
+    if (!inst.input || !isObject(inst.input.bundle) || typeof assertionId !== "string" || !inst.input.bundle.assertions.some((a) => a.id === assertionId)) return summary(inst);
     inst.selectedId = assertionId;
     try {
       await evaluate(inst, false);

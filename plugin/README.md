@@ -26,6 +26,7 @@ It needs no WalletWall account, no WalletWall backend, no GitHub App authenticat
 - Addresses are shown in full with their chain ID and Copy controls that copy exactly the full value.
 - It writes nothing to disk, stores nothing in the browser, and contacts no remote service. See `docs/PLUGIN_PATH_PRIVACY.md` for what is tested and what is not.
 - `fixtures.mjs` is generated from the conformance corpus by `npm run gen:canvas` (synthetic data only).
+- **WallPrint disclosure view** (`wallprint-render.mjs`, `wallprint-styles.mjs`, `wallprint-client.mjs`): opened with `{ "wallprint": "<lineage>" }`, the same page shows one bundled synthetic WallPrint disclosure lineage as a disclosure document: the record, its lifecycle, every assessment as recorded, provenance, corrections and supersessions with the engine's semantic diff, and the receipt and replay results with their boundary. `wallprint-fixtures.mjs` is generated from the canonical WallPrint engine by `npm run gen:wallprint`; the page decides nothing. Contract: `canvas/README.md`, items 11 to 14.
 
 ## Installing
 

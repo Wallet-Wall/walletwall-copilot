@@ -17,8 +17,11 @@ import { esc, renderWall } from "./wall.mjs";
 import { FONT_FACES, MARK, WALLABY } from "./brand.mjs";
 import { CSS } from "./styles.mjs";
 import { CLIENT_JS } from "./client.mjs";
+import { renderWallPrint, renderWallPrintList } from "./wallprint-render.mjs";
+import { WALLPRINT_CSS } from "./wallprint-styles.mjs";
+import { WALLPRINT_JS } from "./wallprint-client.mjs";
 
-export { esc, CSS, CLIENT_JS };
+export { esc, CSS, CLIENT_JS, WALLPRINT_CSS, WALLPRINT_JS };
 
 export const SUPPORT_STATES = ["ESTABLISHED", "SUPPORTED", "PARTIAL", "CONFLICTING", "STALE", "SUPERSEDED", "UNKNOWN", "NOT_ESTABLISHED"];
 export const FRESHNESS_STATES = ["CURRENT", "STALE", "PINNED", "UNKNOWN_FRESHNESS"];
@@ -604,8 +607,11 @@ const KNOWN_CLASS = READINESS_CLASSES;
 export function renderView(view) {
   if (view.status === "empty") {
     const fx = (view.fixtures ?? []).map((f) => `<li><code>${esc(f.name)}</code> <span class="muted">${esc(f.title)}</span></li>`).join("");
-    return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header></div><p class="note">Nothing is loaded. Ask Copilot to inspect a WWEP evidence bundle and open it here, or open WalletWall with one of the bundled synthetic fixtures:</p><ul class="limits">${fx}</ul><p class="muted small">This panel only displays results returned by the local WalletWall MCP server. It computes nothing itself.</p>`;
+    return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header></div><p class="note">Nothing is loaded. Ask Copilot to inspect a WWEP evidence bundle and open it here, or open WalletWall with one of the bundled synthetic fixtures:</p><ul class="limits">${fx}</ul>${renderWallPrintList(view.wallprints)}<p class="muted small">This panel only displays results returned by the local WalletWall MCP server, or a WallPrint disclosure record exactly as the WallPrint engine produced it. It computes nothing itself.</p>`;
   }
+  // The WallPrint disclosure view: a fixture-backed canonical record, its lifecycle, assessments, provenance, lineage and
+  // verification data, printed as the engine recorded them with the same state hints and limitation descriptions as The Wall.
+  if (view.status === "wallprint") return renderWallPrint(view, { SUPPORT_HINTS, FRESHNESS_HINTS, FINALITY_HINTS, LIMITATION_LABELS });
   if (view.status === "error") {
     return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1></div></header></div><p class="note" data-attention="true" role="alert">The evidence could not be evaluated: <code>${esc(view.error.code)}</code>. ${esc(view.error.message)} No states are shown.</p>`;
   }
@@ -649,5 +655,5 @@ ${model ? guideCues(view, model) : ""}`;
 
 export function renderPage({ nonce }) {
   const brandCss = `.ww-mark{background-image:url("${MARK}")}.ww-wallaby-art[data-pose="inspect"]{background-image:url("${WALLABY.inspect}")}.ww-wallaby-art[data-pose="perch"]{background-image:url("${WALLABY.perch}")}`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>WalletWall</title><link rel="icon" type="image/png" sizes="96x96" href="${MARK}"><style nonce="${esc(nonce)}">${FONT_FACES}\n${brandCss}\n${CSS}</style></head><body><main id="app" data-mode="overview" data-motion="full"><p class="muted">Loading…</p></main><p id="view-status" class="ww-sr" role="status" aria-live="polite"></p><aside id="wallaby" class="ww-wallaby" hidden data-peek="out" aria-label="WalletWallaby, the WalletWall guide"><span id="wallaby-art" class="ww-wallaby-art" data-pose="inspect" aria-hidden="true"></span><div class="ww-wallaby-bubble"><p class="ww-eyebrow">WalletWallaby</p><p id="wallaby-text"></p></div></aside><p id="copy-status" class="copy-status" role="status" aria-live="polite"></p><script nonce="${esc(nonce)}">${CLIENT_JS}</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>WalletWall</title><link rel="icon" type="image/png" sizes="96x96" href="${MARK}"><style nonce="${esc(nonce)}">${FONT_FACES}\n${brandCss}\n${CSS}\n${WALLPRINT_CSS}</style></head><body><main id="app" data-mode="overview" data-motion="full"><p class="muted">Loading…</p></main><p id="view-status" class="ww-sr" role="status" aria-live="polite"></p><aside id="wallaby" class="ww-wallaby" hidden data-peek="out" aria-label="WalletWallaby, the WalletWall guide"><span id="wallaby-art" class="ww-wallaby-art" data-pose="inspect" aria-hidden="true"></span><div class="ww-wallaby-bubble"><p class="ww-eyebrow">WalletWallaby</p><p id="wallaby-text"></p></div></aside><p id="copy-status" class="copy-status" role="status" aria-live="polite"></p><script nonce="${esc(nonce)}">${CLIENT_JS}</script><script nonce="${esc(nonce)}">${WALLPRINT_JS}</script></body></html>`;
 }
