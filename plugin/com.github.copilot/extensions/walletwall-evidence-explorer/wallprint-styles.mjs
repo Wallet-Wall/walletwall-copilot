@@ -58,6 +58,14 @@ export const WALLPRINT_CSS = `
 .wp-fixture{margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid var(--ww-cut)}
 .wp-record{min-width:0;outline:none}
 .wp-record[hidden]{display:none}
+/* Public mode (the public resolver): the publication line and statement, the standing block, and lineage links in the chip material. */
+.wp-publication-statement{margin:0 0 12px}
+.wp-standing-now{margin:0 0 14px;padding:10px 12px;border:1px solid var(--ww-cut);border-radius:var(--ww-radius-panel)}
+.wp-standing-title{font-size:15px;margin:0 0 6px}
+.wp-version-static{cursor:default}
+.wp-version.wp-lineage-link,.wp-published-link{color:var(--ww-umber-deep);text-decoration:underline;text-underline-offset:2px}
+.wp-version.wp-lineage-link:hover,.wp-published-link:hover{color:var(--ww-brick-low)}
+.wp-version.wp-lineage-link:focus-visible,.wp-published-link:focus-visible{outline:2px solid var(--ww-accent);outline-offset:2px}
 .wp h2,.wp h3,.wp h4{margin:0}
 .wp h3{font:600 15px/1.25 var(--font-display);letter-spacing:-0.01em;color:var(--ww-charcoal);text-transform:none;padding:8px 0 6px;margin-top:14px;border-top:1px solid var(--ww-cut-strong)}
 .wp h4{font-size:10.5px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:var(--ww-brick-low);margin:12px 0 4px}

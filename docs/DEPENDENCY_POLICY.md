@@ -19,9 +19,9 @@ The bundle imports only `node:crypto` and `node:process`. Nothing is installed o
 | Class | Count | Notes |
 | --- | --- | --- |
 | Direct runtime dependencies (`packages/mcp`) | 2 | `@modelcontextprotocol/sdk`, `zod` (exact versions) |
-| Direct development dependencies | 6 | `@eslint/js`, `@types/node`, `esbuild`, `eslint`, `typescript`, `typescript-eslint` (exact versions) |
+| Direct development dependencies | 7 | `@eslint/js`, `@types/node`, `esbuild`, `eslint`, `jsqr`, `typescript`, `typescript-eslint` (exact versions). `jsqr` (Apache-2.0, no dependencies) is used only by tests, as an independent decoder of the QR codes the repository's own encoder draws; nothing of it ships |
 | Packages in the production install tree | 97 | The SDK's own dependencies. Most are HTTP-server libraries (`express`, `hono`, `cors`, `body-parser`, `eventsource`, `jose`, ...) that exist only because the SDK package declares them. **None is bundled or imported by WalletWall code** (`PRIV-015`: the bundle's module graph is checked against an allow-list) |
-| Third-party lockfile entries | 213 (97 production tree, 116 development only) | `lockfileVersion` 3, committed; plus two workspace entries for `packages/mcp` |
+| Third-party lockfile entries | 214 (97 production tree, 117 development only) | `lockfileVersion` 3, committed; plus the workspace entries for `packages/mcp` and `packages/wallprint-web` (the public WallPrint resolver, no dependencies of its own, not published) |
 | Install scripts | 1 | `esbuild` (development only). It verifies its platform binary; it does not run for plugin users |
 | Native / platform-specific packages | 26 | The `@esbuild/*` binaries, optional, development only. Nothing native is shipped |
 | Lockfile registry | `registry.npmjs.org` only | Every third-party entry has an `integrity` hash; no git, tarball-URL or other-registry source |

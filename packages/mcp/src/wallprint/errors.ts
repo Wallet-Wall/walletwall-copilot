@@ -20,7 +20,8 @@ export type WallPrintErrorCode =
   | "MANUFACTURED_ASSURANCE"
   | "SUSPECTED_SECRET"
   | "ASSESSOR_IDENTITY_RESERVED"
-  | "INVALID_REFERENCE";
+  | "INVALID_REFERENCE"
+  | "INVALID_PUBLICATION";
 
 const MESSAGES: Readonly<Record<WallPrintErrorCode, string>> = {
   INVALID_RECORD: "WallPrint record failed validation.",
@@ -41,6 +42,7 @@ const MESSAGES: Readonly<Record<WallPrintErrorCode, string>> = {
   SUSPECTED_SECRET: "Text looks like a credential or secret and cannot enter a WallPrint record.",
   ASSESSOR_IDENTITY_RESERVED: "That assessor identity is reserved.",
   INVALID_REFERENCE: "WallPrint portable reference failed validation.",
+  INVALID_PUBLICATION: "WallPrint publication failed validation; nothing was published.",
 };
 
 export interface Finding {

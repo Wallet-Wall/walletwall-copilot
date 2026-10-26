@@ -95,14 +95,19 @@
       "bytes": 38076
     },
     {
+      "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/labels.mjs",
+      "sha512": "76220a683dcd368c73454bca3aeb4629f2bf6a6a4e798ea99ca7ca6a22b9841225751f4dfba687d3bcb6ed19fe0789325260723c85d891371d4f1aeb41bf535b",
+      "bytes": 4798
+    },
+    {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/mcp-client.mjs",
       "sha512": "14e4803fbd043a3741df32b4adf4a7a79cce812fd5dacca0c743cb53b3482cc00eaad2f0950bf06d3619feb996bb30376d407f8b33fa7263db38bfc26d5ee414",
       "bytes": 4516
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/render.mjs",
-      "sha512": "769f0768dba885ebfffa5e50d44cdc98b47803df2dd4dfe05b9b3b2de3e6ba225e2065d84abfc9f5111b178aa0d5e36814e096870065fd0e0f31ba9150b88c3c",
-      "bytes": 64639
+      "sha512": "5bc5822680bd7f7eb123fda7881b903dfb94060cad1c3ed6c783a00857d4badcdb41802a5c094685e61520388b6598f0add63a49b7ab8f2373c32ec45f5475d9",
+      "bytes": 60638
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/styles.mjs",
@@ -116,8 +121,8 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-client.mjs",
-      "sha512": "d0245148f016a06614afa298b60e686f146c43efb7a014a0550c3c4f8c402e89b547be1f45598a0e08ac84cc1c9bddae51bbfd9067c825115f3887113ae9270f",
-      "bytes": 8102
+      "sha512": "8748ee337a4b4431260592c2a44dfb7143adcdd20088cb57e8e7ce60f9587e30695da521b4f4a1ab658ad8c3ec4f63b7ec314a97bd2de7fcb655d5ee11269ed3",
+      "bytes": 8562
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-fixtures.mjs",
@@ -131,18 +136,18 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-reference.mjs",
-      "sha512": "a98651304b579e05b3ad9685c07aa5ab355c0259a1b87535bc4d231701dc8e257e6030ef2bbef5a953af4012e4734bfa020fc746fe07a05365eeb69f58d749cd",
-      "bytes": 15179
+      "sha512": "28bffe9bdb053d859cbf1de55f3086f599655f029e4118f8e7b83f07e55552c82000d0d689d87afefe4db7cc508a340be252dfa3a0836f18145e1b1ee710c5cb",
+      "bytes": 17227
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-render.mjs",
-      "sha512": "aacb5a2dc58638503bdbebb08677d028cf18a65ef4f5a387813d3051acbc4dbfacbb2f99ae03df394e317c8ef82f13f4c4d71420903fa67a1980829c66752f2b",
-      "bytes": 86800
+      "sha512": "b68fce9c0486a1bfd64dc4d647c4ff34b980bfe6362818694efcb62eabd03ee9dfc9ea90261d3ad7e28f53b5ae24aaa898c6038b996aa4d183f21c39d2565aaf",
+      "bytes": 107347
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-styles.mjs",
-      "sha512": "35ad1671cde5809ee33bb74921aa3c830c457bc9afda4d3f18deb3936d97a1ac23819ae18b411fe4da7bb837f3e4bdcf1c24226b93526b3fb1848d25557b9d56",
-      "bytes": 18860
+      "sha512": "99deef379c998ee468820a1861c8c3ad7e7aef98f312ffb3be0b4f5cd417e9650f5fa8c8eb1a922cb009c9e5c88d1f0684f7b1d3b416ebdb5d3249c6f2b2d9a2",
+      "bytes": 19588
     },
     {
       "path": "plugin/mcp.json",

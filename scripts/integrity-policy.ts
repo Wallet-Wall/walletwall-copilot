@@ -14,14 +14,14 @@ interface IntegrityPolicy {
   };
   sha256Exceptions: {
     compatibility: { mcpRegistryArtifact: string };
-    protocol: { evidenceDigestImplementation: string; resourceDigestImplementation: string };
+    protocol: { evidenceDigestImplementation: string; resourceDigestImplementation: string; publicResolverDigestImplementation: string; publicResolverArtifactReader: string; publicResolverLedgerVerifier: string };
     provenance: {
       brandSources: string;
       agentFinderDraft: string;
       agentFinderRegression: string;
       apacheReferenceRegression: string;
     };
-    testOnly: { fingerprintHarness: string; canonicalRegression: string; mcpbRegression: string };
+    testOnly: { fingerprintHarness: string; canonicalRegression: string; mcpbRegression: string; publicResolverCanonicalParity: string };
     historical: { pluginV030: string; releaseV030: string };
   };
   historicalDocuments: string[];
@@ -86,11 +86,11 @@ function parsePolicy(): IntegrityPolicy {
   const compatibility = record(exceptions["compatibility"], "sha256Exceptions.compatibility");
   exactKeys(compatibility, ["mcpRegistryArtifact"], "sha256Exceptions.compatibility");
   const protocol = record(exceptions["protocol"], "sha256Exceptions.protocol");
-  exactKeys(protocol, ["evidenceDigestImplementation", "resourceDigestImplementation"], "sha256Exceptions.protocol");
+  exactKeys(protocol, ["evidenceDigestImplementation", "resourceDigestImplementation", "publicResolverDigestImplementation", "publicResolverArtifactReader", "publicResolverLedgerVerifier"], "sha256Exceptions.protocol");
   const provenance = record(exceptions["provenance"], "sha256Exceptions.provenance");
   exactKeys(provenance, ["brandSources", "agentFinderDraft", "agentFinderRegression", "apacheReferenceRegression"], "sha256Exceptions.provenance");
   const testOnly = record(exceptions["testOnly"], "sha256Exceptions.testOnly");
-  exactKeys(testOnly, ["fingerprintHarness", "canonicalRegression", "mcpbRegression"], "sha256Exceptions.testOnly");
+  exactKeys(testOnly, ["fingerprintHarness", "canonicalRegression", "mcpbRegression", "publicResolverCanonicalParity"], "sha256Exceptions.testOnly");
   const historical = record(exceptions["historical"], "sha256Exceptions.historical");
   exactKeys(historical, ["pluginV030", "releaseV030"], "sha256Exceptions.historical");
 
@@ -99,6 +99,9 @@ function parsePolicy(): IntegrityPolicy {
     protocol: {
       evidenceDigestImplementation: repoPath(protocol["evidenceDigestImplementation"], "sha256Exceptions.protocol.evidenceDigestImplementation"),
       resourceDigestImplementation: repoPath(protocol["resourceDigestImplementation"], "sha256Exceptions.protocol.resourceDigestImplementation"),
+      publicResolverDigestImplementation: repoPath(protocol["publicResolverDigestImplementation"], "sha256Exceptions.protocol.publicResolverDigestImplementation"),
+      publicResolverArtifactReader: repoPath(protocol["publicResolverArtifactReader"], "sha256Exceptions.protocol.publicResolverArtifactReader"),
+      publicResolverLedgerVerifier: repoPath(protocol["publicResolverLedgerVerifier"], "sha256Exceptions.protocol.publicResolverLedgerVerifier"),
     },
     provenance: {
       brandSources: repoPath(provenance["brandSources"], "sha256Exceptions.provenance.brandSources"),
@@ -110,6 +113,7 @@ function parsePolicy(): IntegrityPolicy {
       fingerprintHarness: repoPath(testOnly["fingerprintHarness"], "sha256Exceptions.testOnly.fingerprintHarness"),
       canonicalRegression: repoPath(testOnly["canonicalRegression"], "sha256Exceptions.testOnly.canonicalRegression"),
       mcpbRegression: repoPath(testOnly["mcpbRegression"], "sha256Exceptions.testOnly.mcpbRegression"),
+      publicResolverCanonicalParity: repoPath(testOnly["publicResolverCanonicalParity"], "sha256Exceptions.testOnly.publicResolverCanonicalParity"),
     },
     historical: {
       pluginV030: repoPath(historical["pluginV030"], "sha256Exceptions.historical.pluginV030"),

@@ -55,6 +55,10 @@ jobs:
         run: npm run verify:wallprint
       - name: WallPrint portable reference codec in the canvas is the build of the canonical module
         run: npm run verify:wallprint-reference
+      - name: WallPrint publication store proves itself (artifacts, standings, index)
+        run: npm run verify:wallprint-publication
+      - name: WallPrint public resolver builds and its bundle is inert and bounded
+        run: npm run verify:wallprint-public
       - name: Plugin structure
         run: npm run verify:plugin
       - name: Claude Directory package structure and size limits
@@ -101,6 +105,8 @@ jobs:
           npm run verify:canvas
           npm run verify:wallprint
           npm run verify:wallprint-reference
+          npm run verify:wallprint-publication
+          npm run verify:wallprint-public
           npm run verify:plugin
           npm run verify:claude-directory
           npm run verify:plugin-manifest

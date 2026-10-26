@@ -24,7 +24,8 @@ var MESSAGES = {
   MANUFACTURED_ASSURANCE: "WalletWall-authored text may not use reserved assurance language.",
   SUSPECTED_SECRET: "Text looks like a credential or secret and cannot enter a WallPrint record.",
   ASSESSOR_IDENTITY_RESERVED: "That assessor identity is reserved.",
-  INVALID_REFERENCE: "WallPrint portable reference failed validation."
+  INVALID_REFERENCE: "WallPrint portable reference failed validation.",
+  INVALID_PUBLICATION: "WallPrint publication failed validation; nothing was published."
 };
 var WallPrintError = class extends Error {
   code;
@@ -230,6 +231,40 @@ function parseReference(input) {
   }
   return parseText(input);
 }
+var RESOLVER_ROUTE = "/wallprint/";
+var RESOLVER_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+var PUNYCODE_LABEL_RE = /(?:^|\.)xn--/;
+var RESOLVER_BASE_MAX_LENGTH = 256;
+function isResolverBase(base) {
+  if (typeof base !== "string" || base === "" || base.length > RESOLVER_BASE_MAX_LENGTH) return false;
+  let parsed;
+  try {
+    parsed = new URL(base);
+  } catch {
+    return false;
+  }
+  return parsed.origin === base && parsed.protocol === "https:" && parsed.port === "" && RESOLVER_HOST_RE.test(parsed.host) && !PUNYCODE_LABEL_RE.test(parsed.host);
+}
+function toResolverPath(ref) {
+  return `${RESOLVER_ROUTE}${encodeReference(ref).slice(REFERENCE_PREFIX.length)}`;
+}
+function toHttpsUrl(ref, resolverBase) {
+  if (!isResolverBase(resolverBase)) throw new WallPrintError("INVALID_REFERENCE", [finding("INVALID_RESOLVER_BASE", "resolverBase")]);
+  return `${resolverBase}${toResolverPath(ref)}`;
+}
+function parseResolverPath(pathAndQuery) {
+  if (typeof pathAndQuery !== "string" || pathAndQuery === "") return bad("MALFORMED_REFERENCE", "text");
+  if (pathAndQuery.length > REFERENCE_MAX_LENGTH) return bad("MALFORMED_REFERENCE", "length");
+  if (!pathAndQuery.startsWith(RESOLVER_ROUTE)) return bad("MALFORMED_REFERENCE", "resolver");
+  return parseReference(`${REFERENCE_PREFIX}${pathAndQuery.slice(RESOLVER_ROUTE.length)}`);
+}
+function parseHttpsUrl(url, resolverBase) {
+  if (!isResolverBase(resolverBase)) return bad("MALFORMED_REFERENCE", "resolver");
+  if (typeof url !== "string" || url === "") return bad("MALFORMED_REFERENCE", "text");
+  if (url.length > resolverBase.length + REFERENCE_MAX_LENGTH) return bad("MALFORMED_REFERENCE", "length");
+  if (!url.startsWith(`${resolverBase}${RESOLVER_ROUTE}`)) return bad("MALFORMED_REFERENCE", "resolver");
+  return parseResolverPath(url.slice(resolverBase.length));
+}
 function resolveReference(ref, found) {
   assertReference(ref);
   if (found === null || found.recordId !== ref.recordId) return { outcome: "UNAVAILABLE", recordId: ref.recordId };
@@ -248,14 +283,20 @@ export {
   REFERENCE_PREFIX,
   REFERENCE_TARGETS,
   REFERENCE_VERSION,
+  RESOLVER_ROUTE,
   SUPPORTED_WALLPRINT_VERSIONS,
   encodeReference,
   encodeReferenceEnvelope,
+  isResolverBase,
+  parseHttpsUrl,
   parseReference,
   parseReferenceEnvelope,
+  parseResolverPath,
   referenceEnvelope,
   referenceFindings,
   referenceOf,
   resolveReference,
+  toHttpsUrl,
+  toResolverPath,
   tryReference
 };

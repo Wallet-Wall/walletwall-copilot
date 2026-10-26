@@ -28,7 +28,9 @@ describe("plugin path privacy: Copilot plugin + MCP + Canvas (PRIV-017, PRIV-018
       "extension.mjs": ["node:url", "@github/copilot-sdk/extension", "./explorer.mjs", "./fixtures.mjs", "./wallprint-fixtures.mjs"],
       "explorer.mjs": ["node:crypto", "node:http", "./mcp-client.mjs", "./fixtures.mjs", "./wallprint-fixtures.mjs", "./wallprint-reference.mjs", "./render.mjs"],
       "mcp-client.mjs": ["node:child_process"],
-      "render.mjs": ["./coinstellation-model.mjs", "./wall.mjs", "./brand.mjs", "./styles.mjs", "./client.mjs", "./wallprint-render.mjs", "./wallprint-styles.mjs", "./wallprint-client.mjs"],
+      "render.mjs": ["./coinstellation-model.mjs", "./wall.mjs", "./brand.mjs", "./styles.mjs", "./client.mjs", "./wallprint-render.mjs", "./wallprint-styles.mjs", "./wallprint-client.mjs", "./labels.mjs"],
+      // The state hints and limitation descriptions: data only, shared with the public WallPrint page.
+      "labels.mjs": [],
       "client.mjs": ["./wall.mjs"],
       "wall.mjs": ["./coinstellation-model.mjs"],
       "coinstellation-model.mjs": [],
@@ -69,7 +71,7 @@ describe("plugin path privacy: Copilot plugin + MCP + Canvas (PRIV-017, PRIV-018
 
   test("PRIV-017 the canvas persists nothing in the browser and the page only talks to its own origin", () => {
     const client = extFiles.find((f) => f.name === "client.mjs")?.code ?? "";
-    const browserSide = extFiles.filter((f) => ["client.mjs", "render.mjs", "styles.mjs", "wall.mjs", "wallprint-render.mjs", "wallprint-styles.mjs", "wallprint-client.mjs"].includes(f.name)).map((f) => f.code).join("\n");
+    const browserSide = extFiles.filter((f) => ["client.mjs", "render.mjs", "styles.mjs", "wall.mjs", "labels.mjs", "wallprint-render.mjs", "wallprint-styles.mjs", "wallprint-client.mjs"].includes(f.name)).map((f) => f.code).join("\n");
     assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie|caches\.|serviceWorker|navigator\.(?!clipboard\.writeText\()/.test(browserSide));
     const fetches = [...browserSide.matchAll(/fetch\(([^)]*)\)/g)].map((m) => m[1] as string);
     assert.ok(fetches.length >= 2);

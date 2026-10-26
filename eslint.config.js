@@ -8,7 +8,7 @@ const FORBIDDEN_MODULES = [
 ].flatMap((m) => [m, `node:${m}`]);
 
 export default defineConfig(
-  { ignores: ["node_modules/**", "plugin/server/**", "plugin/com.github.copilot/**/fixtures.mjs", "plugin/com.github.copilot/**/wallprint-fixtures.mjs", "plugin/com.github.copilot/**/wallprint-reference.mjs", "packages/mcp/src/generated/**", "conformance/**"] },
+  { ignores: ["node_modules/**", "dist/**", "plugin/server/**", "plugin/com.github.copilot/**/fixtures.mjs", "plugin/com.github.copilot/**/wallprint-fixtures.mjs", "plugin/com.github.copilot/**/wallprint-reference.mjs", "packages/mcp/src/generated/**", "conformance/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -82,7 +82,38 @@ export default defineConfig(
     },
   },
   {
-    files: ["scripts/**/*.ts", "evals/**/*.ts", "packages/mcp/test/**/*.ts"],
+    // The public WallPrint resolver (packages/wallprint-web): a static page over an injected store. The library is
+    // DOM-free and never reaches the network itself; the page module may fetch same-origin paths only. Neither may read
+    // the clock, generate identifiers, persist anything in the browser or evaluate code.
+    files: ["packages/wallprint-web/lib/**/*.ts", "packages/wallprint-web/browser/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: FORBIDDEN_MODULES.map((name) => ({ name, message: "The public resolver runs in a browser and must not use this module." })) }],
+      "no-restricted-globals": [
+        "error",
+        { name: "XMLHttpRequest", message: "No network access beyond the page's own same-origin fetch." },
+        { name: "WebSocket", message: "No network access beyond the page's own same-origin fetch." },
+        { name: "EventSource", message: "No network access beyond the page's own same-origin fetch." },
+        { name: "localStorage", message: "No persistence." },
+        { name: "sessionStorage", message: "No persistence." },
+        { name: "indexedDB", message: "No persistence." },
+      ],
+      "no-restricted-properties": [
+        "error",
+        { object: "Date", property: "now", message: "No clock reads." },
+        { object: "Math", property: "random", message: "No generated identifiers." },
+        { object: "process", property: "env", message: "The resolver reads no environment." },
+      ],
+      "no-eval": "error",
+      "no-new-func": "error",
+      "no-console": "error",
+    },
+  },
+  {
+    files: ["packages/wallprint-web/lib/**/*.ts"],
+    rules: { "no-restricted-globals": ["error", { name: "fetch", message: "The library never fetches; the page injects a store." }, { name: "document", message: "The library is DOM-free." }, { name: "window", message: "The library is DOM-free." }, { name: "location", message: "The library is DOM-free." }] },
+  },
+  {
+    files: ["scripts/**/*.ts", "evals/**/*.ts", "packages/mcp/test/**/*.ts", "packages/wallprint-web/test/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",

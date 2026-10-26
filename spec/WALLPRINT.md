@@ -5,8 +5,9 @@ Profile (WWEP 0.1, `EVIDENCE_PROFILE.md`). It is not an industry standard and ha
 This module is the domain contract and its tests. The canvas renders a fixture-backed disclosure view of these records
 (`canvas/README.md`, items 11 to 15) that adds no presentation field to the record and computes nothing, and prints
 each record's portable reference (a locator: record id, committed digest, WallPrint version) as text and as a locally
-drawn QR code. There is no public resolver, no external assessor import, no hosted service, no chain write and no
-signature system.
+drawn QR code. A public HTTPS resolver ("Public resolver" below) serves deliberately published disclosures as static
+files and proves their bytes before showing them; it is a locator, not an authority. There is no external assessor
+import, no hosted compute, no chain write and no signature system.
 
 ## Principle
 
@@ -271,6 +272,92 @@ draws the QR code locally from that text (`canvas/README.md`, item 15), and open
 input against the bundled lineages. The codec the canvas runs is this module, bundled unchanged by
 `scripts/gen-wallprint-reference.ts` (checked by `npm run verify:wallprint-reference`).
 
+## Public resolver
+
+**A resolver locates a disclosure. It does not make that disclosure authoritative.** WalletWall's public resolver gives
+a portable reference a stable HTTPS form on the canonical product domain and resolves it to the exact published record
+and digest. Every public page carries the principle and this sentence: *This page resolves a published WallPrint
+disclosure. Publication and resolution do not establish factual truth, safety, solvency, compliance, or investment
+merit.* (`PUBLICATION_STATEMENT`, `publication-vocabulary.ts`).
+
+**The HTTPS form** (`reference.ts`: `toHttpsUrl`, `parseHttpsUrl`, `toResolverPath`, `parseResolverPath`,
+`isResolverBase`) is a representation of the reference, not a second identity: the text form with its scheme and host
+replaced by a resolver base and the route, a prefix substitution that is deterministic and lossless and carries the
+reference's own versions:
+
+```text
+<resolverBase>/wallprint/<recordId>?reference=0.1&wallprint=<wallprintVersion>&digest=<hex64>[&target=<target>]
+```
+
+A resolver base is exactly one spelling of an HTTPS origin (WHATWG origin equality: no path, query, fragment, userinfo,
+port, upper-case letter, IP literal, single label or punycode label). No base is named in the engine; the canonical
+public domain is a publication setting (`index.json`, `resolverBase`), and the public QR code encodes the HTTPS form
+while the canonical `walletwall:` reference is printed beside it as the same locator. Parsing an HTTPS URL is the text
+form's own strict grammar after the substitution is undone, plus one fixed problem code, `resolver`, for a path not under
+the base and route. No percent-decoding, no case folding, no fragment, no duplicate or unknown parameter, no target
+outside the closed table, and nothing from the URL is ever echoed.
+
+**Publication** (`publication.ts`, `scripts/wallprint-publish.ts`) is deliberate, never ambient: nothing becomes public
+because it was generated. One export of one record, exactly as the engine produced it (record, canonical preimage,
+validation, digest check, lifecycle ledger, lineage, receipt and verification, replay, diff), is admitted only when the
+record validates, its canonical preimage digests to its digest, every carried engine result agrees with the record, the
+record id is one path segment on every filesystem (`[a-z0-9][a-z0-9_-]{2,63}`, and no Windows reserved device name:
+`isPublishableId`), and the privacy gate finds nothing credential-, path-, address-, environment- or control-shaped,
+no e-mail or IP address, no URL and (outside the record's own content) no host name or wallet address, and no
+private-metadata key name; the closed schemas admit no other field. The store is also checked as a graph
+(`storeGraphFindings`): standings that name each other must bind each other, a predecessor published beside its
+successor must already name it, one record per id, at most one successor per predecessor. The result is an **immutable public disclosure**, a pure
+function of the export serialized in RFC 8785 form and identified by record id and digest: the same disclosure always
+publishes to the same bytes, different bytes under the same id and digest are a conflict and never overwrite, and the
+bytes carry no lifecycle standing, no successor, no lineage and no instant, because those change after commit. Beside it
+the record's **standing** (lifecycle ledger, successor, lineage, publication instants) only ever extends: events append,
+a successor is set once, the lineage grows at its end, the first publication instant of a digest is kept; a rewritten
+history is refused. A corrected, superseded or withdrawn record stays published at its own URL and nothing redirects it
+to a successor; its standing names the successor, and the page links to it as a choice.
+
+**The store** is static files under the route, served by the existing product deployment with no compute:
+`records/<id>/<digest>.json` (immutable bytes, long-lived immutable caching), `records/<id>/index.json` (the standing,
+short caching), `index.json` (the publication index: base, route, one small entry per publication, short caching). The
+page (`packages/wallprint-web`) fetches exactly the standing and one artifact of the record named, same origin, without
+credentials, refusing redirects, and proves the bytes itself: the artifact is one canonical-form JSON object of the fixed
+fields for that record id, its canonical preimage is in canonical form (the browser canonicalizer is pinned against the
+engine's over every published record) and names the same id and version, the results carried beside it (validation,
+digest check, receipt and verification, replay, diff, supersedes) are consistent with it as the publication contract
+requires, and the SHA-256 of the preimage is compared with the artifact's digest and the URL's through
+`resolveReference`. The standing is then checked against its own hash-chained ledger by the engine's history rules
+(`lib/ledger.ts`) and against the proved record and digest; a standing that fails is not read. Only then is the record
+rendered, by the canvas's own renderer in public mode (`canvas/README.md`, item 16).
+
+**What the digest covers.** The URL's digest covers the record's canonical bytes and nothing else. The title, the
+registry's point-in-time names and the engine's receipt, replay and diff results travel beside the record in the
+published artifact as they were recorded at publication; the page checks that they are consistent with the record and
+says, on every resolved page, that the digest does not cover them. The standing is the store's index; it is checked
+against its own ledger, and nothing signs it, so an authentic but stale ledger and a well-formed extension appended by
+whoever controls the store are both printed as the index records them. Binding these to an identity is a signing
+question for a later lane.
+
+**Outcomes** are the codec's six plus one, never collapsed: `RESOLVED`; `UNAVAILABLE` (no standing for that record id:
+"Record unavailable", not invalid, not false); `DIGEST_MISMATCH` (the record is published under other bytes, or the
+artifact fails its own digest check, which is flagged; every digest is printed, no record content is shown, the published
+version is offered only as an explicit link); `NOT_COMPARED` (the artifact is not a disclosure the page reads; nothing was
+compared, nothing is shown); `MALFORMED_REFERENCE` and `UNSUPPORTED_VERSION` (the store is never asked); and
+`UNREACHABLE` (the store could not be read, or its standing for the record is not one the page reads; nothing is said
+about the record). A page never repairs what it reads, never redirects, never renders what it did not prove, stores
+nothing in the browser, reads no clock and carries no analytics. A copy served from another origin than the resolver
+base says so, naming the base and never the serving origin; the bare route is a landing sentence; an unforeseen failure
+ends in a fixed sentence written as text.
+
+**What it is not.** The resolver does not recompute evidence state, authority, receipt or replay semantics, assessor
+independence or factual correctness: it prints the engine's recorded results as published. Resolution is an integrity
+check, not a signature: a digest match proves bytes, not who published them or whether any claim is true. There is no
+public write endpoint, no search endpoint, no signing, no assessor import. Record ids are intentionally public, and the
+publication index lists them: enumeration of deliberately published disclosures is not a leak. The deployment of the
+store on the product domain is described in `docs/WALLPRINT_PUBLIC_RESOLVER.md`; the engine repository holds the
+publisher, the page and the published store, and no hosted runtime. Modules: `packages/mcp/src/wallprint/publication.ts`,
+`packages/mcp/src/wallprint/publication-vocabulary.ts`, `packages/wallprint-web/lib/*.ts`, `packages/wallprint-web/browser/page.ts`,
+`scripts/wallprint-publish.ts`, `scripts/build-wallprint-public.ts`; tests `publication.test.ts`, `public-url.test.ts`,
+`packages/wallprint-web/test/*.test.ts`, `packages/mcp/test/canvas/wallprint-public.test.ts`.
+
 ## Versioning
 
 `WALLPRINT_VERSION` is `0.1` and is versioned independently from the application, from WWEP (`wwepVersion`), from the
@@ -348,11 +435,22 @@ UNREPLAYABLE != INCORRECT
   replay and diff) is defined in `packages/mcp/test/support/wallprint-disclosures.ts`, and `ReplayResult` has a
   TypeScript interface but no runtime schema, so the view re-states their consistency rules in its own projections. A
   canonical runtime schema for both is a contract follow-up.
-- A portable reference resolves only against a compatible WalletWall disclosure store. No public resolver exists: the
-  canvas has no stable URL (its listener is a per-instance loopback port and path key, which a reference never encodes),
-  and no public route for WallPrint records exists in any WalletWall product. The text form is therefore a `walletwall:`
-  URI that nothing registers a handler for; scanning it opens nothing by itself, and the printed text is the reference.
-  A public HTTPS form is a product decision outside this repository and must not weaken these rules.
+- A portable reference resolves against a compatible WalletWall disclosure store: the canvas's bundled lineages, or
+  WalletWall's public resolver for records that were deliberately published ("Public resolver"). The canvas has no
+  stable URL (its listener is a per-instance loopback port and path key, which a reference never encodes), so its QR
+  code carries the `walletwall:` text, which nothing registers a handler for; the public page's QR code carries the HTTPS
+  form of the same reference. A record that was never published resolves nowhere public, and publication is a deliberate
+  act, never ambient. The public store's immutable artifact carries the engine's receipt, replay and diff results as
+  published; re-publishing a record with different results is a conflict, not an update, and a later lane may add a
+  versioned result record if that is wanted.
+- The public page proves bytes (canonical form and SHA-256) and does not re-run the engine's record validation; a
+  published artifact that validated at publication is rendered as published. Admitting a record is the publisher's act.
+  The results carried beside the record (receipt, replay, diff) and the standing are checked for consistency with the
+  record, not re-derived: a replay outcome changed together with its fields, or a well-formed ledger extension, cannot
+  be told apart from the engine's own without a signature, and the page says the digest does not cover them.
+- `UNAVAILABLE` depends on the host answering 404 for a record whose standing is not published. A host that answers
+  200 with another page for every unknown path turns every unpublished record into "Store unreachable" (never into a
+  record, and never into "invalid"); `docs/WALLPRINT_PUBLIC_RESOLVER.md` states the host requirement.
 - A reference identifies a record by id and committed digest and nothing else; it is not a signature, and a digest match
   on resolution proves bytes, not who committed them or whether any claim is true. Signing, attestation keys and any
   trust model are a separate decision; `DIGEST_MISMATCH` is reported as an integrity finding and never as forgery.

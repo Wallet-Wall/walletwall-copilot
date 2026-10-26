@@ -1,3 +1,4 @@
+/* global document, navigator, window, MutationObserver */
 // The browser-side script of the WallPrint disclosure view, served inline under the page's CSP nonce beside client.mjs.
 //
 // It keeps three pieces of presentation state, all in the DOM: which version of a lineage is in view (every version is
@@ -6,7 +7,10 @@
 // (identifiers, digests, the canonical payload), which copies exactly the printed text. It talks to no origin, stores
 // nothing, computes no state, and leaves the canvas's own selection model (client.mjs) untouched: a WallPrint version
 // or section is a local view choice, never an assertion selection.
-export const WALLPRINT_JS = `(() => {
+//
+// The same function serves the public resolver page, which imports it as a module and calls it after rendering (its CSP
+// admits no inline script); the canvas serves it inline as `WALLPRINT_JS`, the function's own source text, unchanged.
+export function wallPrintClient() {
   const app = document.getElementById("app");
   const status = document.getElementById("copy-status");
   const announcer = document.getElementById("view-status");
@@ -67,15 +71,15 @@ export const WALLPRINT_JS = `(() => {
     if (!node) return;
     const text = node.textContent;
     const label = (button.getAttribute("aria-label") || "Copy the full value").replace(/^Copy the full /, "");
-    let ok = false;
-    try { await navigator.clipboard.writeText(text); ok = true; } catch (_) { ok = false; }
+    let ok;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch { ok = false; }
     if (!ok) {
       const range = document.createRange();
       range.selectNodeContents(node);
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-      try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
     }
     if (status) status.textContent = ok ? "Copied the full " + label + " (" + text.length + " characters)." : "Copy was not permitted here. The full " + label + " is selected: press Ctrl+C.";
     if (ok && typeof button.textContent === "string") {
@@ -117,4 +121,7 @@ export const WALLPRINT_JS = `(() => {
   }
   if (typeof MutationObserver === "function" && app.nodeType) new MutationObserver(openReference).observe(app, { childList: true });
   openReference();
-})();`;
+}
+
+/** The same function as inline script text for the canvas page (served under its CSP nonce beside client.mjs). */
+export const WALLPRINT_JS = `(${wallPrintClient.toString()})();`;
