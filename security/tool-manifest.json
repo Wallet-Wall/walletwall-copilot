@@ -10,7 +10,7 @@
     {
       "name": "assess_vault_readiness",
       "title": "Assess vault technical readiness",
-      "description": "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only.",
+      "description": "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims (ASSET_IDENTITY and TOKEN_BALANCE_AT_BLOCK) and walletwall://policies/authority; worked inputs: walletwall://examples/vault-readiness-established (CRITERIA_MET) and walletwall://examples/vault-readiness-not-established (NOT_ESTABLISHED).",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -549,7 +549,7 @@
     {
       "name": "check_invariants",
       "title": "Check evidence invariants",
-      "description": "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only.",
+      "description": "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims and walletwall://policies/authority.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1078,7 +1078,7 @@
     {
       "name": "inspect_evidence",
       "title": "Inspect evidence bundle",
-      "description": "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only.",
+      "description": "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only. Input contract: walletwall://schemas/evidence (bundle), walletwall://schemas/claims (per-claim subject, value and observation shapes), walletwall://policies/authority and walletwall://spec/wwep; worked inputs: walletwall://examples/identity-established. Shape failures carry structured diagnostics beside the limitation code.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1607,7 +1607,7 @@
     {
       "name": "normalize_observation",
       "title": "Normalize balance observation",
-      "description": "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data.",
+      "description": "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data. The returned observation has the TOKEN_BALANCE_AT_BLOCK shape published at walletwall://schemas/claims and can be placed directly in a bundle's observations.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1705,7 +1705,7 @@
     {
       "name": "resolve_asset",
       "title": "Resolve stablecoin deployment",
-      "description": "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity.",
+      "description": "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity. The registry itself is served as walletwall://registry/stablecoins and walletwall://registry/chains.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1736,7 +1736,7 @@
     {
       "name": "trace_provenance",
       "title": "Trace assertion provenance",
-      "description": "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only.",
+      "description": "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims and walletwall://policies/authority.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -2284,9 +2284,17 @@
       "uri": "walletwall://schemas/evidence",
       "name": "schema-evidence",
       "title": "WWEP 0.1 evidence bundle JSON Schema",
-      "description": "JSON Schema for the WWEP 0.1 evidence bundle accepted by the evidence tools.",
+      "description": "JSON Schema for the WWEP 0.1 evidence bundle accepted by the evidence tools. Per-claim subject, value and observation shapes are in walletwall://schemas/claims.",
       "mimeType": "application/schema+json",
       "sha256": "d3007c89090e362a50132e2a360f0da13ba0ff75f151cdf1afb6d6eaa995544a"
+    },
+    {
+      "uri": "walletwall://schemas/claims",
+      "name": "schema-claims",
+      "title": "Per-claim-type contract: subject, value, observation linkage and authority",
+      "description": "For every claim type: the required subject and value keys with their formats, which observation origins and source kinds may establish or corroborate the claim, how observations link to assertions, the registry and derivation relationships, and the structured diagnostics attached to shape failures. Generated from the bundled authority policies and the evaluator's own rules.",
+      "mimeType": "application/json",
+      "sha256": "655553f33b6a99b790970b54d4f4396d1f137825f4d8ff7832b2d0cc6e184079"
     },
     {
       "uri": "walletwall://policies/authority",
@@ -2302,7 +2310,7 @@
       "title": "WalletWall Evidence Profile 0.1 (draft)",
       "description": "Normative draft text of the WalletWall Evidence Profile 0.1. Not an industry standard.",
       "mimeType": "text/markdown",
-      "sha256": "bf515f0db536df61e7e507011a5c8e435d99d2f68a7a8c3bf6f144f6caa0838b"
+      "sha256": "d3eec0c4e9a5ab907b936c1713d097009e22003d83b599abef9d776eb5d5910a"
     },
     {
       "uri": "walletwall://conformance/version",
@@ -2310,7 +2318,39 @@
       "title": "Engine, rules and data versions",
       "description": "Versions and content digests of the bundled engine, registry, policies, rules and specification.",
       "mimeType": "application/json",
-      "sha256": "f75d75b694cb6547cb84072f15eb60cd8df7a428f0e05af36b826f776fc574db"
+      "sha256": "ddb97d16b88dd6d2c29d904ea369032f7ef614dbd8ebaf545f42e7772e3ba627"
+    },
+    {
+      "uri": "walletwall://examples/identity-established",
+      "name": "example-identity-established",
+      "title": "Established asset identity (synthetic)",
+      "description": "The exact ASSET_IDENTITY assertion and attesting observation shape that evaluates to ESTABLISHED against the registry. Synthetic, illustrative evidence that conforms to the bundle schema; not a claim about any real wallet or chain state.",
+      "mimeType": "application/json",
+      "sha256": "2baf2ea05fa9a76f714e23aab3179d7f0f015abc6e6ac80701a3121bcd4170a0"
+    },
+    {
+      "uri": "walletwall://examples/balance-established",
+      "name": "example-balance-established",
+      "title": "Established balance at a finalized block (synthetic)",
+      "description": "The exact TOKEN_BALANCE_AT_BLOCK assertion and chain-state observation shape that evaluates to ESTABLISHED and FINALIZED. Synthetic, illustrative evidence that conforms to the bundle schema; not a claim about any real wallet or chain state.",
+      "mimeType": "application/json",
+      "sha256": "551fd7100ade44bb658d6b97336de3c15e2cc78c662d165532d18ce88a36d96b"
+    },
+    {
+      "uri": "walletwall://examples/vault-readiness-established",
+      "name": "example-vault-readiness-established",
+      "title": "Vault technical readiness: CRITERIA_MET (synthetic)",
+      "description": "A complete assess_vault_readiness call over an established identity and an established balance that classifies as CRITERIA_MET. Synthetic, illustrative evidence that conforms to the bundle schema; not a claim about any real wallet or chain state.",
+      "mimeType": "application/json",
+      "sha256": "cfdab241bcfe4a7242fbdc1a56b5c785e39507e38d907ccdd251e337f50473c2"
+    },
+    {
+      "uri": "walletwall://examples/vault-readiness-not-established",
+      "name": "example-vault-readiness-not-established",
+      "title": "Vault technical readiness: NOT_ESTABLISHED (synthetic, incomplete evidence)",
+      "description": "A well-formed assess_vault_readiness call whose identity is only chain-observed: no issuer attestation exists, the identity is PARTIAL and readiness fails closed to NOT_ESTABLISHED. Synthetic, illustrative evidence that conforms to the bundle schema; not a claim about any real wallet or chain state.",
+      "mimeType": "application/json",
+      "sha256": "61d180c0f11a7ba0cdf562ce4fcbddbb860ee2673e6930bb7deffac9319239f7"
     }
   ]
 }

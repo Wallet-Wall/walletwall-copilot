@@ -17,7 +17,7 @@ WalletWall does not sign, custody, trade, broadcast transactions, provide invest
 | Part | What it is |
 | --- | --- |
 | **WalletWall** (plugin) | The Copilot plugin in `plugin/`: manifest, skill, bundled MCP server and canvas |
-| **WalletWall MCP** | A local, offline, read-only MCP server (stdio only) with six tools and six static resources. Exact contract: `security/tool-manifest.json` |
+| **WalletWall MCP** | A local, offline, read-only MCP server (stdio only) with six tools and eleven static resources. Exact contract: `security/tool-manifest.json` |
 | **WalletWall** (canvas) | A panel that shows one bundle: Sources, Support, Freshness, Conflicts, Limitations and "Why WalletWall says this", exactly as WalletWall MCP returned them |
 | Skill | Tells the model to report what the sources support, surface limitations and never over-claim |
 

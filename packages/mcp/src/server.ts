@@ -10,7 +10,7 @@ import { TOOLS, TOOL_ANNOTATIONS, callTool, inputJsonSchema } from "./tools.ts";
 import { ENGINE_NAME, ENGINE_TITLE, ENGINE_VERSION } from "./version.ts";
 
 const INSTRUCTIONS =
-  "WalletWall evidence engine. Local, offline and read-only. It evaluates structured WWEP evidence you supply; it does not fetch chain data, hold keys, sign, or route transactions. Support states describe evidence sufficiency under published policy, not the truth of upstream data.";
+  "WalletWall evidence engine. Local, offline and read-only. It evaluates structured WWEP evidence you supply; it does not fetch chain data, hold keys, sign, or route transactions. Support states describe evidence sufficiency under published policy, not the truth of upstream data. Input shapes: walletwall://schemas/claims (per claim type) and walletwall://schemas/evidence (bundle); worked synthetic inputs: walletwall://examples/vault-readiness-established.";
 
 /**
  * Tool and resource definitions are static. Nothing is loaded remotely and nothing is registered dynamically.

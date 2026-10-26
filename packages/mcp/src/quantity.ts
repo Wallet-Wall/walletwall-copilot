@@ -4,8 +4,8 @@ import { WwError } from "./errors.ts";
 export const UINT256_MAX = (1n << 256n) - 1n;
 export const MAX_DECIMALS = 36;
 
-const ATOMIC_RE = /^(0|[1-9][0-9]{0,77})$/;
-const DECIMALS_RE = /^(0|[1-9][0-9]?)$/;
+export const ATOMIC_RE = /^(0|[1-9][0-9]{0,77})$/;
+export const DECIMALS_RE = /^(0|[1-9][0-9]?)$/;
 
 function bad(): never {
   throw new WwError("INVALID_QUANTITY", "Quantity is not a canonical atomic-unit decimal string.");
@@ -36,7 +36,7 @@ export function formatAtomic(amount: bigint, decimals: number): string {
   return frac.length === 0 ? whole : `${whole}.${frac}`;
 }
 
-const PRICE_RE = /^(0|[1-9][0-9]{0,40})(\.[0-9]{1,18})?$/;
+export const PRICE_RE = /^(0|[1-9][0-9]{0,40})(\.[0-9]{1,18})?$/;
 
 /** Parses a USD price decimal string into an integer scaled by 10^18. */
 export function parsePriceScaled18(text: string): bigint {

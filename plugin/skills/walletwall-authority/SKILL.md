@@ -10,7 +10,7 @@ Authority answers **who or what is entitled to establish a claim**. Provenance a
 ## Method
 
 1. Identify the exact claim being evaluated.
-2. Read `walletwall://policies/authority` when exact authority semantics matter.
+2. Read `walletwall://policies/authority` when exact authority semantics matter, and `walletwall://schemas/claims` for which observation origins and source kinds may establish or only corroborate each claim type.
 3. Call `trace_provenance` for the relevant assertion.
 4. Identify the upstream authority and every derivation/transport step.
 5. Determine whether apparently separate evidence records share an upstream source.

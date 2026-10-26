@@ -22,7 +22,7 @@ The optional bridge:
 - reads no environment variables;
 - stores no credentials;
 - adds no outbound network access to the WalletWall evidence engine;
-- reuses the same six WalletWall tools and six static resources.
+- reuses the same six WalletWall tools and eleven static resources.
 
 ## Run from a source checkout
 

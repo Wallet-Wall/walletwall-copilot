@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "walletwall",
   "display_name": "WalletWall",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Stablecoin intelligence and vault readiness through WalletWall MCP.",
   "long_description": "WalletWall MCP is a local, offline, read-only stdio server for inspecting stablecoin identity, source lineage, conflicts and vault technical readiness over structured WWEP 0.1 evidence that you supply. It makes no network calls, keeps no query history, holds no keys, does not sign, does not custody and does not execute transactions. It does not provide investment advice or certify regulatory compliance.",
   "author": {

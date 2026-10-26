@@ -37,6 +37,14 @@ Entries are stored (not compressed), sorted by path, with a fixed timestamp and 
 
 Published to the official MCP Registry on 2026-10-24 (UTC) from the `v0.2.0` tag with `mcp-publisher publish server.json`, authenticated for the `Wallet-Wall` organization namespace (a fine-grained token with organization Members read-only; the token was not stored). Query: `https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Wallet-Wall/walletwall`. The registry did not validate `fileSha256`; MCP clients do.
 
+## Package version in the development tree
+
+The MCPB contains the server bundle, so a bundle change changes the package bytes and both recorded digests. The tree then
+carries the next package version in `mcpb/manifest.json` and `server.json` (currently `0.2.1`, after the bundle gained the
+claim-contract and example resources and structured shape diagnostics). Publishing that version is a release step: build the
+asset from the tagged commit with `pack-mcpb.ts --out --ref`, attach it to the `v<version>` GitHub Release named in
+`server.json`, and re-run `mcp-publisher publish server.json`. Until then the Registry lists the previously published version.
+
 ## What this is not
 
 Publishing server metadata to a registry is discovery, not endorsement or certification. The registry hosts metadata only; the artifact is the GitHub Release asset named in `server.json`. The MCPB is not signed.

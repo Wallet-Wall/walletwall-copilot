@@ -65,6 +65,10 @@ canonical atomic-unit decimal strings (section 7). Every object is closed: unkno
   `issuer-publication`, `walletwall-rules`.
 - **AuthorityPolicy** — the per-claim-type rules for authority, corroboration, finality, freshness and required
   dependencies (`authority-policies/policies.json`, see `AUTHORITY_MODEL.md`).
+- **ClaimContract** — the per-claim-type subject and value shape (required keys and their formats), the observation
+  origins and source kinds that may establish or corroborate the claim, and the observation-to-assertion linkage. An
+  assertion's `subject` and each supporting observation's `subject` share one shape; an assertion's `value` and each
+  supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.
 - **SupportState**, **FreshnessState**, **FinalityState** — section 5.
 - **Conflict** — `{id, assertionIds, reason}` declared by an author, or detected by the engine when two
   non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.
@@ -131,6 +135,14 @@ explicit input; the engine never reads a clock. Procedure and per-claim policies
 3. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively).
 4. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations.
 5. Independently check the invariants and report violations without mutating results.
+
+A shape failure is an evaluation state, not a schema rejection: an assertion whose subject or value, or whose supporting
+observation's subject or payload, does not meet the claim contract is reported `NOT_ESTABLISHED` with the limitation
+`INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`. Each such limitation carries a structured
+`diagnostics` entry naming the record checked, the required keys and the missing, invalid, unexpected or mismatched keys.
+Diagnostics are deterministic and bounded (one entry per distinct observation), never include record values (only
+observation ids already present in the evaluation), and report key names outside the contract vocabulary as `*`. The
+limitation codes are the stable machine-facing reason; diagnostics only explain them.
 
 ## 9. Provenance alignment
 

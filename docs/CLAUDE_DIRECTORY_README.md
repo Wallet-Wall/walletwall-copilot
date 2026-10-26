@@ -83,6 +83,22 @@ transport, derivation, and independent corroboration.
 | `trace_provenance` | Trace authority, derivation, independence, and provenance relationships. |
 | `assess_vault_readiness` | Evaluate the published Vault technical-readiness rules over supplied identity and balance evidence. |
 
+## MCP resources
+
+The server publishes its own contract, so no source access is needed to construct valid input:
+
+| Resource | Contents |
+| --- | --- |
+| `walletwall://schemas/evidence` | Closed JSON Schema of the WWEP 0.1 evidence bundle. |
+| `walletwall://schemas/claims` | Per-claim-type contract: required subject and value keys with formats, which observation origins and source kinds may establish a claim, observation-to-assertion linkage, registry and derivation relationships. |
+| `walletwall://policies/authority` | Claim-specific authority policies. |
+| `walletwall://spec/wwep` | The WalletWall Evidence Profile 0.1 draft text. |
+| `walletwall://registry/stablecoins`, `walletwall://registry/chains` | The bundled point-in-time registries. |
+| `walletwall://conformance/version` | Engine, registry, policy, rules and specification versions and digests. |
+| `walletwall://examples/identity-established`, `walletwall://examples/balance-established`, `walletwall://examples/vault-readiness-established`, `walletwall://examples/vault-readiness-not-established` | Complete synthetic tool inputs with the engine's expected result. Illustrative evidence only; not claims about any real wallet or chain state. |
+
+When a shape problem makes an assertion `INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`, `inspect_evidence` attaches structured `diagnostics` (required, missing, invalid, unexpected and mismatched keys) beside the stable limitation code. Record values are never echoed.
+
 ## Fail-closed semantics
 
 WalletWall preserves uncertainty rather than smoothing it away.

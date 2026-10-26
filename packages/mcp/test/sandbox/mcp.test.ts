@@ -75,6 +75,11 @@ describe("MCP server contract (in-process)", () => {
       "walletwall://policies/authority",
       "walletwall://spec/wwep",
       "walletwall://conformance/version",
+      "walletwall://schemas/claims",
+      "walletwall://examples/identity-established",
+      "walletwall://examples/balance-established",
+      "walletwall://examples/vault-readiness-established",
+      "walletwall://examples/vault-readiness-not-established",
     ]) {
       const r = await c.readResource({ uri });
       const body = (r.contents[0] as { text: string }).text;

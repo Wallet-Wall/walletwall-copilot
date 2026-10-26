@@ -85,7 +85,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     name: "resolve_asset",
     title: "Resolve stablecoin deployment",
     description:
-      "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity.",
+      "Look up a stablecoin deployment in the bundled WalletWall registry by chain ID and contract address, or list candidate deployments for a symbol. Offline and read-only. A registry match is a WalletWall-derived lookup without issuer attestation, so it is reported as PARTIAL. Symbols are never treated as identity. The registry itself is served as walletwall://registry/stablecoins and walletwall://registry/chains.",
     input: ResolveAssetInput,
     run: (args) => resolveAsset(args),
   }),
@@ -93,7 +93,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     name: "normalize_observation",
     title: "Normalize balance observation",
     description:
-      "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data.",
+      "Normalize a balance-at-block observation draft into a canonical WWEP observation. Validates atomic-unit decimal strings with BigInt, lowercases addresses and hashes, returns the RFC 8785 canonical JSON, SHA-256 evidence digest, content digest and exact decimal rendering. Offline and read-only; it does not fetch chain data. The returned observation has the TOKEN_BALANCE_AT_BLOCK shape published at walletwall://schemas/claims and can be placed directly in a bundle's observations.",
     input: NormalizeInput,
     run: (args) => normalizeObservation(args),
   }),
@@ -101,7 +101,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     name: "inspect_evidence",
     title: "Inspect evidence bundle",
     description:
-      "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only.",
+      "Evaluate every assertion in a WWEP 0.1 evidence bundle against the bundled authority policies at the supplied evaluation time. Returns support, freshness and finality states, claim-specific authority, limitations, conflicts, supersession and digests. States describe how well the presented evidence satisfies policy; they do not verify that upstream evidence is true. Offline and read-only. Input contract: walletwall://schemas/evidence (bundle), walletwall://schemas/claims (per-claim subject, value and observation shapes), walletwall://policies/authority and walletwall://spec/wwep; worked inputs: walletwall://examples/identity-established. Shape failures carry structured diagnostics beside the limitation code.",
     input: BundleAtInput,
     run: (args) => {
       const evaluation = evaluateBundle(args.bundle, args.evaluatedAt);
@@ -120,7 +120,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     name: "check_invariants",
     title: "Check evidence invariants",
     description:
-      "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only.",
+      "Check a WWEP 0.1 evidence bundle against the thirteen mandatory evidence invariants plus the rule that declared states must not exceed computed states. Returns violations by invariant ID and assertion ID. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims and walletwall://policies/authority.",
     input: BundleAtInput,
     run: (args) => {
       const evaluation = evaluateBundle(args.bundle, args.evaluatedAt);
@@ -137,7 +137,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     name: "trace_provenance",
     title: "Trace assertion provenance",
     description:
-      "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only.",
+      "Return a W3C PROV-JSON-shaped provenance graph for one assertion and all of its ancestors in a WWEP 0.1 bundle. Transport such as retrievedVia is recorded as an attribute and never as authority. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims and walletwall://policies/authority.",
     input: TraceInput,
     run: (args) => traceProvenance(args.bundle, args.assertionId),
   }),
@@ -145,7 +145,7 @@ export const TOOLS: readonly ToolDefinition[] = [
     name: "assess_vault_readiness",
     title: "Assess vault technical readiness",
     description:
-      "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only.",
+      "Evaluate WalletWall's published VAULT_TECHNICAL_READINESS rules 0.1.0-draft over an asset-identity assertion and a balance-at-block assertion. Returns CRITERIA_MET, CRITERIA_NOT_MET or NOT_ESTABLISHED with a per-criterion breakdown. It does not establish investment merit, solvency, creditworthiness, legal status, regulatory compliance, absence of fraud or future performance. Offline and read-only. Input contract: walletwall://schemas/evidence, walletwall://schemas/claims (ASSET_IDENTITY and TOKEN_BALANCE_AT_BLOCK) and walletwall://policies/authority; worked inputs: walletwall://examples/vault-readiness-established (CRITERIA_MET) and walletwall://examples/vault-readiness-not-established (NOT_ESTABLISHED).",
     input: ReadinessInput,
     run: (args) => {
       const evaluation = evaluateBundle(args.bundle, args.evaluatedAt);
