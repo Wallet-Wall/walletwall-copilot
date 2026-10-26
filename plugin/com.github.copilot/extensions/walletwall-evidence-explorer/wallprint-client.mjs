@@ -50,7 +50,8 @@ export const WALLPRINT_JS = `(() => {
     if (!target) return;
     if (root.dataset) root.dataset.wpFocus = id;
     for (const b of all("[data-wp-version]")) { if (b.dataset.wpVersion === id) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); }
-    const shown = "Showing " + (target.dataset.version || "record") + " of this lineage: " + id + ".";
+    // The lifecycle the server recorded on the article is announced with the version, so a predecessor is never heard as current.
+    const shown = "Showing " + (target.dataset.version || "record") + " of this lineage: " + id + "." + (target.dataset.lifecycle ? " Lifecycle " + target.dataset.lifecycle + "." : "");
     if (known(then) && reachSection(target, then)) { announce(shown + " " + SECTIONS[then] + " section. The other versions stay available."); return; }
     const h = target.querySelector ? target.querySelector("h2") : null;
     if (h && h.focus) { h.setAttribute("tabindex", "-1"); h.focus(); }

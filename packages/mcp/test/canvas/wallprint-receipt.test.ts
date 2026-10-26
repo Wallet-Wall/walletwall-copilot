@@ -118,7 +118,7 @@ describe("semantic projection: every status word is a 1:1 label of the engine's 
       [{ hasDigest: false, matches: false, computedDigest: null }, "NO_DIGEST"],
       [{ hasDigest: true, matches: true, computedDigest: hex }, "MATCH"],
       [{ hasDigest: true, matches: false, computedDigest: hex }, "MISMATCH"],
-      [{ hasDigest: true, matches: false, computedDigest: null }, "MISMATCH"],
+      [{ hasDigest: true, matches: false, computedDigest: null }, "NOT_COMPUTABLE"],
       [{ hasDigest: true, matches: "true", computedDigest: hex }, "UNRECOGNISED"],
       [{ hasDigest: true, matches: true, computedDigest: null }, "UNRECOGNISED"],
       [{ hasDigest: false, matches: true, computedDigest: null }, "UNRECOGNISED"],
@@ -134,7 +134,23 @@ describe("semantic projection: every status word is a 1:1 label of the engine's 
       [{ outcome: "CORRECT" }, "UNRECOGNISED"],
       [{ reasons: [] }, "UNRECOGNISED"],
       ["REPRODUCED", "UNRECOGNISED"],
+      // The engine's shape rules (replay.ts): an outcome whose fields contradict it is not that outcome.
+      [{ outcome: "REPRODUCED", reasons: ["CLAIM_MISMATCH"], recomputedDigest: hex, mismatches: ["claims"] }, "UNRECOGNISED"],
+      [{ outcome: "REPRODUCED", reasons: [], recomputedDigest: null, mismatches: [] }, "UNRECOGNISED"],
+      [{ outcome: "REPRODUCED" }, "UNRECOGNISED"],
+      [{ outcome: "REPRODUCED", reasons: "none", recomputedDigest: hex, mismatches: [] }, "UNRECOGNISED"],
+      [{ outcome: "UNREPLAYABLE", reasons: ["MISSING_EVIDENCE"], recomputedDigest: hex, mismatches: [] }, "UNRECOGNISED"],
+      [{ outcome: "UNREPLAYABLE", reasons: ["MISSING_EVIDENCE"], recomputedDigest: null, mismatches: ["claims"] }, "UNRECOGNISED"],
+      [{ outcome: "UNREPLAYABLE", reasons: [], recomputedDigest: null, mismatches: [] }, "UNRECOGNISED"],
+      [{ outcome: "MISMATCH", reasons: [], recomputedDigest: hex, mismatches: [] }, "UNRECOGNISED"],
+      [{ outcome: "MISMATCH", reasons: ["DIGEST_MISMATCH", "CLAIM_MISMATCH"], recomputedDigest: null, mismatches: ["claims"] }, "UNRECOGNISED"],
     ] as [unknown, string][]) assert.equal(wp.replayStatusOf(input, outcomes), expected, `replay ${JSON.stringify(input)}`);
+    // With the vocabulary's unreplayable reasons, an UNREPLAYABLE outcome may only carry those.
+    const unreplayable = (WALLPRINT_VOCABULARY as unknown as { unreplayableReasons: string[] }).unreplayableReasons;
+    assert.equal(wp.replayStatusOf({ outcome: "UNREPLAYABLE", reasons: ["CLAIM_MISMATCH"], recomputedDigest: null, mismatches: [] }, outcomes, unreplayable), "UNRECOGNISED");
+    assert.equal(wp.replayStatusOf({ outcome: "UNREPLAYABLE", reasons: ["MISSING_EVIDENCE"], recomputedDigest: null, mismatches: [] }, outcomes, unreplayable), "UNREPLAYABLE");
+    // A digest check that could not canonicalize the record compared nothing: its own state, never MISMATCH.
+    assert.equal(wp.digestStatusOf({ hasDigest: true, matches: false, computedDigest: null }), "NOT_COMPUTABLE");
   });
 
   test("a malformed verification renders as not recognised: no MATCH and no MISMATCH chip in the receipt check, and the reason is said", () => {
@@ -331,7 +347,135 @@ describe("registration readout and derivation chain", () => {
     const receipt = chain.slice(chain.indexOf('data-step="receipt"'));
     assert.ok(receipt.includes(`<code class="wp-exact">${r.receipt.issued!.digest}</code>`) && receipt.includes('data-state="MISMATCH"'));
     const none = articleOf(fragment("unreplayable"), focusOf("unreplayable").id);
-    assert.ok(none.slice(none.indexOf('data-step="receipt"')).includes("No receipt is carried, so there is no commitment to compare against."));
+    assert.ok(none.slice(none.indexOf('data-step="receipt"')).includes("No receipt is carried in this disclosure, so nothing here represents the commitment to compare against."));
+  });
+});
+
+describe("adversarial review fixes: inconsistent results fail closed everywhere, no fact is synthesized, no label is invented", () => {
+  const hex = "b".repeat(64);
+  const mutate = (name: string, f: (r: Record<string, unknown>) => void): string => {
+    const fx = structuredClone(WALLPRINT_FIXTURES[name]!) as unknown as { focus: string; records: Record<string, unknown>[] };
+    const r = fx.records.find((x) => x["id"] === fx.focus)!;
+    f(r);
+    return articleOf(fragment(name, fx as unknown as DisclosureFixture), fx.focus);
+  };
+
+  test("an unrecognised receipt verification shows no engine result and no reason list: the optimistic half of an inconsistent result never leaks", () => {
+    const a = mutate("receipt-valid", (r) => ((r["receipt"] as { verification: unknown }).verification = { matches: true, reasons: ["DIGEST_MISMATCH"] }));
+    const block = receiptBlock(a);
+    assert.ok(block.includes('data-receipt="UNRECOGNISED"'));
+    assert.ok(!block.includes("matches: true") && !block.includes("matches: false"), "no engine result row for a result the document does not recognise");
+    assert.ok(!block.includes("<code>DIGEST_MISMATCH</code>"), "no reason list either");
+    assert.ok(block.includes('<dt>Engine result</dt><dd><span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span>'));
+  });
+
+  test("a replay result whose fields contradict its outcome is not recognised: no calm REPRODUCED over mismatch sections, no fields printed", () => {
+    const a = mutate("receipt-valid", (r) => (r["replay"] = { outcome: "REPRODUCED", reasons: ["CLAIM_MISMATCH"], recomputedDigest: hex, mismatches: ["claims"] }));
+    const block = replayBlock(a);
+    assert.ok(block.includes('data-replay="UNRECOGNISED"') && block.includes('<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span>'));
+    assert.ok(!/data-state="REPRODUCED"|CLAIM_MISMATCH|Sections that differ|Recomputed digest/.test(block), "nothing of an inconsistent result is shown as if recognised");
+    assert.ok(block.includes("not in a form this document recognises"));
+    const bare = replayBlock(mutate("receipt-valid", (r) => (r["replay"] = { outcome: "REPRODUCED" })));
+    assert.ok(bare.includes('data-replay="UNRECOGNISED"'));
+  });
+
+  test("a receipt the engine refused to compare (RECORD_INVALID / RECEIPT_INVALID) is told as not compared, never as a non-match", () => {
+    const shipped = receiptBlock(articleOf(fragment("receipt-mismatch"), focusOf("receipt-mismatch").id));
+    assert.ok(shipped.includes('data-receipt="MISMATCH"') && shipped.includes("<code>RECORD_INVALID</code>"));
+    assert.ok(shipped.includes("The engine reports matches: false without comparing") && shipped.includes("no comparison with the commitment was made"));
+    assert.ok(!shipped.includes("does not match the commitment"), "nothing was compared, so nothing is said not to match");
+    const compared = receiptBlock(mutate("receipt-valid", (r) => ((r["receipt"] as { verification: unknown }).verification = { matches: false, reasons: ["DIGEST_MISMATCH"] })));
+    assert.ok(compared.includes("The disclosed record does not match the commitment this receipt represents.") && compared.includes("<code>DIGEST_MISMATCH</code>"));
+    const malformedReceipt = receiptBlock(mutate("receipt-valid", (r) => ((r["receipt"] as { verification: unknown }).verification = { matches: false, reasons: ["RECEIPT_INVALID"] })));
+    assert.ok(malformedReceipt.includes("without comparing") && !malformedReceipt.includes("does not match the commitment"));
+  });
+
+  test("currency is never synthesized from an absent or unrecognised lifecycle: only CORRECTED, SUPERSEDED and WITHDRAWN say not current", () => {
+    const absent = mutate("receipt-valid", (r) => ((r["lifecycle"] as { state: unknown }).state = null));
+    assert.ok(absent.includes('<p class="wp-eyebrow">WalletWall assessment as recorded (lifecycle not carried)</p>'));
+    assert.ok(!absent.includes("not the current record") && !absent.includes("wp-standing") && !absent.includes("wp-receipt-standing"), "absence is not a lifecycle fact");
+    const odd = mutate("receipt-valid", (r) => ((r["lifecycle"] as { state: unknown }).state = "FOO"));
+    assert.ok(odd.includes('<p class="wp-eyebrow">WalletWall assessment as recorded (lifecycle not recognised)</p>') && odd.includes("not recognised: FOO"));
+    assert.ok(!odd.includes("not the current record") && !odd.includes("wp-standing") && !odd.includes("wp-receipt-standing"));
+    for (const name of ["current-supported", "receipt-valid", "unreplayable"]) assert.ok(articleOf(fragment(name), focusOf(name).id).includes('<p class="wp-eyebrow">Current WalletWall assessment</p>'), name);
+    for (const name of ["withdrawn", "corrected"]) assert.ok(articleOf(fragment(name), WALLPRINT_FIXTURES[name]!.records[0]!.id).includes("not the current record"), name);
+  });
+
+  test("the receipt check of a lineage lists the other versions' receipts, never their replay results, and the standing note comes right after the answer", () => {
+    for (const [name, label, r] of records()) {
+      const block = receiptBlock(articleOf(fragment(name), r.id));
+      assert.ok(!/data-state="(REPRODUCED|UNREPLAYABLE)"/.test(block), `${label}: no replay chip in the receipt check`);
+      const lineage = block.indexOf('class="wp-receipt-lineage"');
+      if (lineage >= 0) assert.ok(!/replay/i.test(block.slice(lineage, block.indexOf("</ul>", lineage))), `${label}: no replay word in a lineage row`);
+      const standing = block.indexOf("wp-receipt-standing");
+      if (standing >= 0) assert.ok(standing < block.indexOf("wp-receipt-fields") && standing > block.indexOf('class="wp-check-a"'), `${label}: the standing note follows the answer and precedes the fields`);
+    }
+  });
+
+  test("a version control announces the lifecycle of the version it shows, so a predecessor's receipt is never heard as current", async () => {
+    const script = render.WALLPRINT_JS;
+    let onClick: ((e: unknown) => void) | undefined;
+    const announcer = { textContent: "" };
+    const el = (dataset: Record<string, string>, hidden = false) => {
+      const e = { dataset, hidden, attrs: {} as Record<string, string>, setAttribute: (k: string, v: string) => (e.attrs[k] = v), removeAttribute: (k: string) => delete e.attrs[k], querySelector: () => null as unknown, focus: () => undefined };
+      return e;
+    };
+    const target = el({ wpTarget: "receipt" });
+    const h = el({});
+    target.querySelector = () => h;
+    const v1 = el({ recordId: "v1", version: "v1", lifecycle: "CORRECTED" }, true);
+    v1.querySelector = ((s: string) => (s === '[data-wp-target="receipt"]' ? target : null)) as unknown as () => unknown;
+    const v2 = el({ recordId: "v2", version: "v2", lifecycle: "DISCLOSED" });
+    const app = { dataset: {}, addEventListener: (t: string, f: (e: unknown) => void) => (t === "click" ? (onClick = f) : undefined), querySelector: (s: string) => (s === ".wp" ? el({}) : null), querySelectorAll: (s: string) => (s === ".wp-record" ? [v1, v2] : []) };
+    runInNewContext(script, { document: { getElementById: (id: string) => (id === "app" ? app : id === "view-status" ? announcer : null) }, navigator: {}, window: {}, setTimeout: () => 0, clearTimeout: () => undefined });
+    const button = { dataset: { wpVersion: "v1", wpThen: "receipt" } };
+    onClick!({ target: { closest: (s: string) => (s === "[data-wp-version]" ? button : null) } });
+    assert.equal(announcer.textContent, "Showing v1 of this lineage: v1. Lifecycle CORRECTED. Receipt section. The other versions stay available.");
+    assert.equal(v1.hidden, false);
+  });
+
+  test("prototype keys and unknown codes never receive a label: no function source, no [object Object], anywhere", () => {
+    const a = mutate("receipt-valid", (r) => {
+      (r["receipt"] as { verification: unknown }).verification = { matches: false, reasons: ["constructor", "__proto__", "toString", "DIGEST_MISMATCH"] };
+      r["replay"] = { outcome: "MISMATCH", reasons: ["constructor", "DIGEST_MISMATCH"], recomputedDigest: hex, mismatches: ["claims"] };
+      ((r["record"] as { subject: { claimType: string } }).subject).claimType = "constructor";
+      const focal = (r["record"] as { claims: { assertionId: string; limitations: string[]; supportState: string }[]; subject: { focalAssertionId: string } }).claims.find((c) => c.assertionId === (r["record"] as { subject: { focalAssertionId: string } }).subject.focalAssertionId)!;
+      focal.limitations = ["constructor", "valueOf"];
+      ((r["record"] as { assessments: { assessorRole: string }[] }).assessments[0] as { assessorRole: string }).assessorRole = "toString";
+    });
+    assert.ok(!/native code|\[object Object\]|function \w*\(/.test(a), "no label is invented for an unknown code");
+    assert.ok(a.includes("not recognised: constructor") && a.includes("<code>DIGEST_MISMATCH</code>"));
+    const fx = structuredClone(WALLPRINT_FIXTURES["receipt-valid"]!) as unknown as { scenario: { kind: string } };
+    fx.scenario.kind = "toString";
+    assert.ok(!/native code/.test(fragment("receipt-valid", fx as unknown as DisclosureFixture)));
+  });
+
+  test("direction and control characters inside an exact value are isolated in the stylesheet and announced beside the value; the copied value stays byte-exact", () => {
+    assert.ok(/\.wp-exact,\.wp-raw-text\{[^}]*unicode-bidi:isolate;direction:ltr/.test(render.WALLPRINT_CSS));
+    const hostile = `wp-${String.fromCharCode(8238)}abc${String.fromCharCode(1)}`;
+    const fxh = structuredClone(WALLPRINT_FIXTURES["receipt-valid"]!) as unknown as { focus: string; records: { id: string; record: { id: string } }[] };
+    fxh.records[0]!.id = hostile;
+    fxh.records[0]!.record.id = hostile;
+    fxh.focus = hostile;
+    const a = articleOf(fragment("receipt-valid", fxh as unknown as DisclosureFixture), hostile);
+    assert.ok(a.includes(`<code class="wp-exact">${hostile}</code>`), "the value is carried as recorded, never rewritten");
+    assert.ok(a.includes('<span class="wp-controls muted small">contains 2 control or direction characters, shown as carried</span>'));
+    assert.ok(!articleOf(fragment("receipt-valid"), focusOf("receipt-valid").id).includes("wp-controls"), "a clean value gets no note");
+  });
+
+  test("an unrecognised enumeration value longer than the chip's cut is printed in full beside it, so two such values stay distinguishable", () => {
+    const long = (s: string): string => replayBlock(mutate("receipt-valid", (r) => (r["replay"] = { outcome: s, reasons: [], recomputedDigest: hex, mismatches: [] })));
+    const x = long("REPRODUCED_BY_ENGINE_X_BUT_NOT_Y");
+    const z = long("REPRODUCED_BY_ENGINE_X_BUT_NOT_Z");
+    assert.ok(x.includes('<code class="wp-unrecognised">REPRODUCED_BY_ENGINE_X_BUT_NOT_Y</code>') && z.includes('<code class="wp-unrecognised">REPRODUCED_BY_ENGINE_X_BUT_NOT_Z</code>'));
+    assert.notEqual(x, z);
+  });
+
+  test("a digest check that could not canonicalize the record is its own state: not a mismatch, nothing compared", () => {
+    const a = mutate("receipt-valid", (r) => (r["digest"] = { hasDigest: true, matches: false, computedDigest: null }));
+    assert.ok(a.includes('data-check="digest" data-result="NOT_COMPUTABLE"') && a.includes('<span class="chip" data-attention="true" data-state="NOT_COMPUTABLE">not computable</span>'));
+    assert.ok(a.includes("could not be canonicalized, so no digest was computed and nothing was compared"));
+    assert.ok(!a.includes("is not the SHA-256 of the disclosed canonical record"), "no mismatch sentence when nothing was compared");
   });
 });
 
@@ -345,7 +489,8 @@ describe("local section focus: a deterministic action inside the document, never
       assert.ok(navStart >= 0, `${label}: jump nav`);
       const nav = a.slice(navStart, a.indexOf("</nav>", navStart));
       assert.ok(nav.includes('aria-label="Go to a section of this record"'), label);
-      const controls = [...nav.matchAll(/<button type="button" data-wp-jump="([a-z]+)" aria-controls="([^"]+)">([^<]+)<\/button>/g)].map((m) => [m[1], m[2], m[3]]);
+      const controls = [...nav.matchAll(/<button type="button" data-wp-jump="([a-z]+)" data-wp-for="([^"]+)">([^<]+)<\/button>/g)].map((m) => [m[1], m[2], m[3]]);
+      assert.ok(!nav.includes("aria-controls"), `${label}: a focus-moving button controls nothing`);
       assert.deepEqual(controls.map((c) => c[0]), SECTIONS, label);
       assert.deepEqual(controls.map((c) => c[2]), ["Receipt", "Replay", "History", "Assessments", "Provenance"], label);
       for (const [key, id] of controls) {

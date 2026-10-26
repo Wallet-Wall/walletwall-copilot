@@ -175,7 +175,7 @@ describe("the Verify readout is an instrument, not a badge: calm positive result
 
   test("attention is a dashed brick edge on a mismatch, an invalid record or an unrecognised result only; absence is a dotted neutral edge", () => {
     const attention = rules.filter(([s, d]) => /border-style:dashed/.test(d) && /wp-check/.test(s)).map(([s]) => s);
-    assert.deepEqual(attention, ['.wp-check[data-result="INVALID"],.wp-check[data-result="MISMATCH"],.wp-check[data-result="UNRECOGNISED"],.wp-check[data-receipt="MISMATCH"],.wp-check[data-receipt="UNRECOGNISED"],.wp-check[data-replay="MISMATCH"],.wp-check[data-replay="UNRECOGNISED"]']);
+    assert.deepEqual(attention, ['.wp-check[data-result="INVALID"],.wp-check[data-result="MISMATCH"],.wp-check[data-result="NOT_COMPUTABLE"],.wp-check[data-result="UNRECOGNISED"],.wp-check[data-receipt="MISMATCH"],.wp-check[data-receipt="UNRECOGNISED"],.wp-check[data-replay="MISMATCH"],.wp-check[data-replay="UNRECOGNISED"]']);
     const neutral = rules.filter(([, d]) => /border-style:dotted/.test(d)).map(([s]) => s);
     assert.deepEqual(neutral, ['.wp-check[data-result="NOT_CARRIED"],.wp-check[data-result="NO_DIGEST"],.wp-check[data-receipt="UNAVAILABLE"],.wp-check[data-receipt="UNCHECKED"],.wp-check[data-replay="UNREPLAYABLE"],.wp-check[data-replay="NOT_CARRIED"]']);
     for (const [name, html] of fragments) {

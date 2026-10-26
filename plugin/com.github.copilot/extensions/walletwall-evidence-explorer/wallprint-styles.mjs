@@ -93,7 +93,7 @@ export const WALLPRINT_CSS = `
 .wp-ref{display:block}
 /* Exact values: full, monospace, selectable, with an always-present copy control. */
 .wp-copyable{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;max-width:100%;min-width:0}
-.wp-exact,.wp-raw-text{user-select:all;-webkit-user-select:all;overflow-wrap:anywhere}
+.wp-exact,.wp-raw-text{user-select:all;-webkit-user-select:all;overflow-wrap:anywhere;unicode-bidi:isolate;direction:ltr}
 .wp-copyable button.copy{opacity:1}
 /* Tables keep their roles when stacked on a narrow plate (role attributes in the markup). */
 .wp-table{font-size:12.5px}
@@ -134,7 +134,7 @@ export const WALLPRINT_CSS = `
 .wp-checks{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .wp-check{min-width:0;padding:10px 12px;border:1px solid var(--ww-cut-strong);border-radius:var(--ww-radius-panel)}
 .wp-check[data-result="NOT_CARRIED"],.wp-check[data-result="NO_DIGEST"],.wp-check[data-receipt="UNAVAILABLE"],.wp-check[data-receipt="UNCHECKED"],.wp-check[data-replay="UNREPLAYABLE"],.wp-check[data-replay="NOT_CARRIED"]{border-style:dotted}
-.wp-check[data-result="INVALID"],.wp-check[data-result="MISMATCH"],.wp-check[data-result="UNRECOGNISED"],.wp-check[data-receipt="MISMATCH"],.wp-check[data-receipt="UNRECOGNISED"],.wp-check[data-replay="MISMATCH"],.wp-check[data-replay="UNRECOGNISED"]{border-style:dashed;border-color:var(--ww-brick-low)}
+.wp-check[data-result="INVALID"],.wp-check[data-result="MISMATCH"],.wp-check[data-result="NOT_COMPUTABLE"],.wp-check[data-result="UNRECOGNISED"],.wp-check[data-receipt="MISMATCH"],.wp-check[data-receipt="UNRECOGNISED"],.wp-check[data-replay="MISMATCH"],.wp-check[data-replay="UNRECOGNISED"]{border-style:dashed;border-color:var(--ww-brick-low)}
 .wp-check h4{margin:0;display:flex;align-items:baseline;gap:8px}
 .wp-check-no{font-size:10.5px;font-weight:700;letter-spacing:0.08em;line-height:14px;padding:0 4px;border:1px solid var(--ww-umber);color:var(--ww-umber-deep)}
 .wp-check-q{margin:6px 0 0;font-size:13px;font-weight:600;color:var(--ww-charcoal)}
