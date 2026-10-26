@@ -20,6 +20,7 @@ import { createServer } from "node:http";
 import { callTools } from "./mcp-client.mjs";
 import { FIXTURES } from "./fixtures.mjs";
 import { WALLPRINT_FIXTURES, WALLPRINT_VOCABULARY } from "./wallprint-fixtures.mjs";
+import { parseReference, resolveReference } from "./wallprint-reference.mjs";
 import { renderPage, renderView } from "./render.mjs";
 
 export class ExplorerInputError extends Error {
@@ -49,10 +50,49 @@ function defaultSelection(bundle) {
   return assertions.find(isObject)?.id ?? null;
 }
 
+/**
+ * The local disclosure store a portable reference resolves against: every record of every bundled lineage, by id. A
+ * corrected, superseded or withdrawn version is as addressable as the current one. Record ids are unique across the
+ * bundled lineages (pinned by test); were two lineages ever to share an id, the reference would be unresolvable here.
+ */
+const RECORDS_BY_ID = new Map();
+for (const [name, fixture] of Object.entries(WALLPRINT_FIXTURES)) {
+  for (const entry of Array.isArray(fixture.records) ? fixture.records : []) {
+    if (!isObject(entry) || typeof entry.id !== "string") continue;
+    RECORDS_BY_ID.set(entry.id, RECORDS_BY_ID.has(entry.id) ? null : { fixture: name, entry });
+  }
+}
+
+/**
+ * Open a portable WallPrint reference: parse it strictly (the canonical codec), look the record up by id in the local
+ * store, and compare the reference's digest with the digest the record carries and the digest the engine computed for
+ * it (both serialized in the fixture; nothing is hashed here). The raw text is used for parsing only and is never kept:
+ * what is stored is the fixed outcome, the parsed fields when parsing succeeded, and the lineage the record belongs to.
+ */
+export function openReference(text) {
+  const parsed = parseReference(text);
+  if (!parsed.ok) return { outcome: parsed.outcome, problem: parsed.problem, reference: null, fixture: null, resolution: null };
+  const ref = parsed.reference;
+  // An id two lineages share is recorded as null: the reference is UNAVAILABLE, told as ambiguous, and no record is shown.
+  const ambiguous = RECORDS_BY_ID.has(ref.recordId) && RECORDS_BY_ID.get(ref.recordId) === null;
+  const hit = RECORDS_BY_ID.get(ref.recordId) ?? null;
+  const found = hit === null ? null : { recordId: hit.entry.id, embeddedDigest: isObject(hit.entry.record) && typeof hit.entry.record.digest === "string" ? hit.entry.record.digest : null, computedDigest: isObject(hit.entry.digest) && typeof hit.entry.digest.computedDigest === "string" ? hit.entry.digest.computedDigest : null };
+  const resolution = resolveReference(ref, found);
+  return { outcome: resolution.outcome, problem: ambiguous ? "ambiguous" : null, reference: ref, fixture: resolution.outcome === "UNAVAILABLE" ? null : hit.fixture, resolution };
+}
+
 export function normalizeInput(input) {
-  if (!isObject(input)) throw new ExplorerInputError("Provide either `fixture`, `wallprint`, or `bundle` with `evaluatedAt`.");
-  for (const k of Object.keys(input)) if (!["fixture", "wallprint", "bundle", "evaluatedAt", "assertionId"].includes(k)) throw new ExplorerInputError(`Unknown input field: ${k}`);
+  if (!isObject(input)) throw new ExplorerInputError("Provide either `fixture`, `wallprint`, `reference`, or `bundle` with `evaluatedAt`.");
+  for (const k of Object.keys(input)) if (!["fixture", "wallprint", "reference", "bundle", "evaluatedAt", "assertionId"].includes(k)) throw new ExplorerInputError(`Unknown input field: ${k}`);
   if (input.assertionId !== undefined && typeof input.assertionId !== "string") throw new ExplorerInputError("`assertionId` must be a string.");
+  if (input.reference !== undefined) {
+    // A portable WallPrint reference, as scanned or copied. It names a record and a digest; it is not trusted input: it is
+    // parsed strictly, resolved only through the local store, and its digest is compared before anything is shown. It is
+    // never combined with any other input and the raw text is not kept.
+    if (input.fixture !== undefined || input.wallprint !== undefined || input.bundle !== undefined || input.evaluatedAt !== undefined || input.assertionId !== undefined) throw new ExplorerInputError("`reference` cannot be combined with `fixture`, `wallprint`, `bundle`, `evaluatedAt` or `assertionId`.");
+    if (typeof input.reference !== "string") throw new ExplorerInputError("`reference` must be a string: a portable WallPrint reference exactly as scanned or copied.");
+    return { reference: openReference(input.reference), source: "portable reference" };
+  }
   if (input.wallprint !== undefined) {
     // A WallPrint disclosure lineage: a serialized engine output, shown as a disclosure record instead of a bundle. It is
     // never combined with a bundle input, evaluates nothing, and carries no assertion selection.
@@ -120,7 +160,16 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
     if (inst.error) return { status: "error", error: inst.error };
     if (!inst.input) return { status: "empty", fixtures: Object.entries(FIXTURES).map(([name, f]) => ({ name, title: f.title })), wallprints: Object.entries(WALLPRINT_FIXTURES).map(([name, f]) => ({ name, title: f.title })) };
     // The WallPrint view: the serialized disclosure lineage and the engine's vocabulary, verbatim. No MCP call, no evaluation.
-    if (inst.input.wallprint !== undefined) return { status: "wallprint", source: inst.input.source, fixture: inst.input.wallprint, disclosure: WALLPRINT_FIXTURES[inst.input.wallprint], vocabulary: WALLPRINT_VOCABULARY };
+    if (inst.input.wallprint !== undefined) return { status: "wallprint", source: inst.input.source, fixture: inst.input.wallprint, disclosure: WALLPRINT_FIXTURES[inst.input.wallprint], vocabulary: WALLPRINT_VOCABULARY, reference: null, focus: null, target: null };
+    // A portable reference: the lineage of the record it resolved to (focused on that record, not on the lineage's current
+    // one) with the resolution printed above it, or, when nothing resolved, the outcome alone. The reference's own fields
+    // are shown only when it parsed; a malformed reference is described by its fixed problem code and never echoed.
+    if (inst.input.reference !== undefined) {
+      const r = inst.input.reference;
+      const summaryOf = () => ({ outcome: r.outcome, problem: r.problem, recordId: r.reference ? r.reference.recordId : null, digest: r.reference ? r.reference.digest : null, target: r.reference ? r.reference.target : null, wallprintVersion: r.reference ? r.reference.wallprintVersion : null, resolution: r.resolution });
+      if (r.fixture === null) return { status: "reference", source: inst.input.source, reference: summaryOf(), wallprints: Object.entries(WALLPRINT_FIXTURES).map(([name, f]) => ({ name, title: f.title })) };
+      return { status: "wallprint", source: inst.input.source, fixture: r.fixture, disclosure: WALLPRINT_FIXTURES[r.fixture], vocabulary: WALLPRINT_VOCABULARY, reference: summaryOf(), focus: r.reference.recordId, target: r.outcome === "RESOLVED" ? r.reference.target : null };
+    }
     const { bundle } = inst.input;
     const evalById = new Map((inst.inspect?.assertions ?? []).map((e) => [e.assertionId, e]));
     return {
@@ -145,6 +194,9 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
   function summary(inst) {
     const view = buildView(inst);
     if (view.status === "wallprint") return wallPrintSummary(view);
+    // An unavailable reference's id and digest are the caller's own text, not a store value: the page prints them back
+    // as written, the agent summary does not repeat them (the agent supplied the reference and can quote it itself).
+    if (view.status === "reference") return structuredClone({ status: "reference", source: view.source, reference: { ...view.reference, recordId: null, digest: null, resolution: view.reference.resolution === null ? null : { outcome: view.reference.resolution.outcome } }, selectedAssertionId: null });
     if (view.status !== "ready") return view.status === "error" ? { status: "error", error: view.error } : { status: "empty" };
     return {
       status: "ready",
@@ -171,13 +223,15 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
   function wallPrintSummary(view) {
     const f = view.disclosure;
     const records = Array.isArray(f.records) ? f.records : [];
-    const focus = records.find((r) => r.id === f.focus) ?? records[0] ?? null;
+    // Opened from a reference, the record in view is the one the reference named, whatever the lineage's current one is.
+    const focus = records.find((r) => r.id === (view.focus ?? f.focus)) ?? records[0] ?? null;
     // A fresh copy: a consumer that edits the summary must never reach the module's fixture data.
     return structuredClone({
       status: "wallprint",
       source: view.source,
       fixture: view.fixture,
       title: f.title,
+      reference: view.reference ?? null,
       recordId: focus ? focus.id : null,
       lifecycle: focus ? focus.lifecycle.state : null,
       lineage: focus ? focus.lineage : null,
@@ -194,8 +248,9 @@ export function createExplorer({ command = "node", serverArgs, serverStderr }) {
     inst.error = null;
     try {
       inst.input = normalizeInput(input);
-      if (inst.input.wallprint !== undefined) {
-        // A disclosure lineage replaces the bundle entirely: no evaluation, no selection, no readiness.
+      if (inst.input.wallprint !== undefined || inst.input.reference !== undefined) {
+        // A disclosure lineage (named, or reached through a portable reference) replaces the bundle entirely: no
+        // evaluation, no selection, no readiness.
         inst.inspect = inst.invariants = inst.provenance = inst.readiness = null;
         inst.selectedId = null;
         broadcast(inst);

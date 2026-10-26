@@ -106,7 +106,10 @@ describe("privacy static proofs", () => {
     assert.ok(pluginFiles.length >= 3);
     for (const f of pluginFiles) {
       const text = read(f);
-      assert.ok(!/(api[_-]?key|secret|token|password|bearer)\s*[:=]/i.test(text), `${relative(f)} looks like it holds a credential`);
+      // The generated reference codec carries the WallPrint error table, whose SUSPECTED_SECRET entry is the credential
+      // guard's own name (a fixed code followed by a fixed sentence, never a value); the guard itself is bundled with it.
+      const scanned = relative(f).endsWith("/wallprint-reference.mjs") ? text.replace(/SUSPECTED_SECRET: "Text looks like a credential or secret and cannot enter a WallPrint record\."/, "") : text;
+      assert.ok(!/(api[_-]?key|secret|token|password|bearer)\s*[:=]/i.test(scanned), `${relative(f)} looks like it holds a credential`);
       for (const m of text.matchAll(/https?:\/\/[^\s"')>]+/g)) {
         const loopbackOnly = relative(f).startsWith("plugin/com.github.copilot/") && /^http:\/\/127\.0\.0\.1(:\$\{[^}]+\})?/.test(m[0]);
         const licenseText = relative(f) === "plugin/THIRD_PARTY_NOTICES.md" && LICENSE_TEXT_URLS.has(m[0]);

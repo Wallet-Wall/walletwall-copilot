@@ -3,8 +3,10 @@
 Status: **draft, pre-release**. WallPrint is a WalletWall-defined disclosure record built on the WalletWall Evidence
 Profile (WWEP 0.1, `EVIDENCE_PROFILE.md`). It is not an industry standard and has not been reviewed outside WalletWall.
 This module is the domain contract and its tests. The canvas renders a fixture-backed disclosure view of these records
-(`canvas/README.md`, items 11 to 14) that adds no presentation field to the record and computes nothing. There is no
-QR code, no external assessor import, no hosted service, no chain write and no signature system.
+(`canvas/README.md`, items 11 to 15) that adds no presentation field to the record and computes nothing, and prints
+each record's portable reference (a locator: record id, committed digest, WallPrint version) as text and as a locally
+drawn QR code. There is no public resolver, no external assessor import, no hosted service, no chain write and no
+signature system.
 
 ## Principle
 
@@ -215,6 +217,60 @@ versions; `verifyReceipt(receipt, record)` reports whether the bytes match. The 
 truth, solvency, safety, regulatory compliance, issuer endorsement or investment merit (`RECEIPT_DOES_NOT_ESTABLISH`).
 No signature system exists in this lane.
 
+## Portable reference
+
+A portable reference (`packages/mcp/src/wallprint/reference.ts`) is a locator for one committed record. It answers
+which record (the record id), which bytes (the committed digest), which WallPrint contract version the record was
+committed under, and optionally which section of the disclosure to open (`record`, `receipt`, `replay`, `history`,
+`assessments`, `provenance`). It answers nothing else: not whether any claim is true, not whether the asset is safe, not
+whether an issuer endorsed the record, not who committed it (`REFERENCE_DOES_NOT_ESTABLISH`). **A reference is a locator,
+not authority.** It carries no signature, names no signer, and becomes no more authoritative by being printed, shared or
+scanned. `REFERENCE_IDENTIFIES` states the boundary a resolver must repeat: "This reference identifies the WallPrint
+record and digest. Resolution depends on a compatible WalletWall disclosure store or resolver."
+
+One value, two deterministic serializations (fixed field names, fixed order, fixed versions, no clock, no generated
+id, no path, no credential, no UI state), with `REFERENCE_VERSION` `0.1` versioned independently of the record:
+
+```text
+walletwall://wallprint/<recordId>?reference=0.1&wallprint=<wallprintVersion>&digest=<hex64>[&target=<target>]
+{"digest":"…","recordId":"…","target":"receipt","type":"walletwall.wallprint.reference","version":"0.1","wallprintVersion":"0.1"}
+```
+
+The text form is what a QR code encodes and what Copy puts on the clipboard; the envelope form is the structured
+export, in RFC 8785 key order (equal to the engine's `canonicalize()` of the envelope, pinned by test). The envelope is
+a locator envelope, never a second record format: it carries no record content. `encodeReference` and
+`encodeReferenceEnvelope` are deterministic; `referenceOf(record, target?)` builds the reference from a record's own
+`id`, `digest` and `wallprintVersion`, and `tryReference` does the same without throwing. Each form has exactly one
+admitted spelling on input as well: the envelope text must be the canonical text its own fields encode to (no
+whitespace, no reordered or repeated key), so one value never has two spellings in either direction.
+
+`parseReference(text)` reads either form, strictly, and never throws: the exact scheme and host, the exact parameter
+order, no duplicate or unknown parameter, no percent-encoding, no fragment, no character outside
+`[A-Za-z0-9:/?&=._-]` (the envelope adds JSON punctuation and never a backslash or whitespace), no case folding of ids
+or digests, versions in their one spelling (no leading zero), a target only from the closed table, a record id that is
+not address-shaped (`0x` + 40 hex), not credential-shaped and free of the reserved assurance terms (a resolver may print
+an unavailable id back, so it must never read as an address, a secret or a verdict), and at most 320 characters. A failed
+parse reports a fixed outcome, `MALFORMED_REFERENCE` or `UNSUPPORTED_VERSION` (a reference version, or a WallPrint
+version, this engine does not resolve), with a fixed problem code naming the part that failed, and never any part of the
+input. The version is checked first, deliberately: a reference that leads with an unsupported version is reported as
+such before its id or digest is read, because nothing is assumed about that version's grammar.
+
+`resolveReference(reference, found)` compares, and decides nothing else. The store looks the record up by id, any
+committed version (a corrected, superseded or withdrawn record is as valid a target as the current one; nothing
+redirects an old reference to the current record), and supplies the digest the record carries and the digest the engine
+computed over its bytes (`verifyWallPrintDigest`). The outcomes are distinct failure modes: `UNAVAILABLE` (no record
+with that id is available here; not invalid, not false), `NOT_COMPARED` (the store carries no digest, or no computed
+digest, for the record, so the reference's digest was compared with nothing; absence is absence, never a mismatch),
+`DIGEST_MISMATCH` (both digests were compared and the resolved record does not match the digest carried by the
+reference; every digest is reported and which record is the committed one is not decided), and `RESOLVED` (the record
+carries the reference's digest and the engine computed that digest over its bytes). `REFERENCE_OUTCOMES` lists the six.
+
+The canvas prints every disclosed record's reference, derived from the record id and the committed digest its
+`COMMITTED` lifecycle event recorded (never from a bundle digest, and not at all when no committed identity is carried),
+draws the QR code locally from that text (`canvas/README.md`, item 15), and opens a reference through its `reference`
+input against the bundled lineages. The codec the canvas runs is this module, bundled unchanged by
+`scripts/gen-wallprint-reference.ts` (checked by `npm run verify:wallprint-reference`).
+
 ## Versioning
 
 `WALLPRINT_VERSION` is `0.1` and is versioned independently from the application, from WWEP (`wwepVersion`), from the
@@ -230,7 +286,12 @@ Assessments (one row per assessor, never merged); Record (`view.lifecycle.events
 and the `evidence` references); Corrections & supersessions (`view.supersedes`, `view.supersededBy`, `lineage`,
 `diffWallPrints`); Verify (four separate questions, each a 1:1 projection of one engine result and never combined: Record from
 `validateWallPrintRecord`, Digest from `verifyWallPrintDigest`, Receipt from `verifyReceipt`, Replay from
-`replayWallPrint`; then a registration readout and the canonical payload). Its input is `wallprint-fixtures.mjs`,
+`replayWallPrint`; then a registration readout, the portable reference with its QR code, and the canonical payload).
+Opened through a portable reference (`{ "reference": "…" }`), the view shows the record the reference named, whichever
+version of its lineage that is, with the resolution printed above it, or the outcome alone when nothing resolved
+(`UNAVAILABLE` is told as "Record unavailable", never as invalid, with the id and digest printed back as written and
+not repeated in the agent summary; a malformed reference is described by its problem code and never echoed). Its input
+is `wallprint-fixtures.mjs`,
 generated from this module by `scripts/gen-wallprint-fixtures.ts` through
 `packages/mcp/test/support/wallprint-disclosures.ts`: synthetic lineages whose every verdict is an engine output. One
 lineage carries its issued receipt without the verification result; the view shows that as unchecked, a
@@ -287,6 +348,21 @@ UNREPLAYABLE != INCORRECT
   replay and diff) is defined in `packages/mcp/test/support/wallprint-disclosures.ts`, and `ReplayResult` has a
   TypeScript interface but no runtime schema, so the view re-states their consistency rules in its own projections. A
   canonical runtime schema for both is a contract follow-up.
+- A portable reference resolves only against a compatible WalletWall disclosure store. No public resolver exists: the
+  canvas has no stable URL (its listener is a per-instance loopback port and path key, which a reference never encodes),
+  and no public route for WallPrint records exists in any WalletWall product. The text form is therefore a `walletwall:`
+  URI that nothing registers a handler for; scanning it opens nothing by itself, and the printed text is the reference.
+  A public HTTPS form is a product decision outside this repository and must not weaken these rules.
+- A reference identifies a record by id and committed digest and nothing else; it is not a signature, and a digest match
+  on resolution proves bytes, not who committed them or whether any claim is true. Signing, attestation keys and any
+  trust model are a separate decision; `DIGEST_MISMATCH` is reported as an integrity finding and never as forgery.
+- Only reference version `0.1` and WallPrint version `0.1` resolve. A reference to a later version is
+  `UNSUPPORTED_VERSION`; nothing is guessed about its grammar.
+- A self-contained reference (the record's canonical payload inside the code) is deliberately not offered: a record is
+  tens of kilobytes, a copy goes stale while the reference does not, and the payload is already printed and copyable in
+  the disclosure document. The reference-only form is the only form.
+- Opening a reference in the canvas is an agent action (`set_bundle` with `reference`), since the page accepts no typed
+  input under its CSP; the page itself offers Copy, not Open.
 
 ## Prototype reconciliation
 

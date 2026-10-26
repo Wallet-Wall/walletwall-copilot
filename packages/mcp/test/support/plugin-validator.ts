@@ -136,6 +136,8 @@ const EXTENSION_FILES = new Set([
   "wallprint-render.mjs",
   "wallprint-styles.mjs",
   "wallprint-client.mjs",
+  "wallprint-reference.mjs",
+  "wallprint-qr.mjs",
   "copilot-extension.json",
 ]);
 

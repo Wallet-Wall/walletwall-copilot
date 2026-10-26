@@ -15,16 +15,18 @@ export const WALLPRINT_JS = `(() => {
   const one = (sel) => (app.querySelector ? app.querySelector(sel) : null);
   function announce(text) { if (announcer) announcer.textContent = text; }
 
-  // The sections a jump may name, with the words a reader hears. A key outside this table is refused and never echoed.
-  const SECTIONS = { receipt: "Receipt", replay: "Replay", history: "History", assessments: "Assessments", provenance: "Provenance" };
+  // The sections a jump or a portable reference may name, with the words a reader hears. A key outside this table is
+  // refused and never echoed; "record" is the record itself (its heading), the target a reference without a section opens.
+  const SECTIONS = { record: "Record", receipt: "Receipt", replay: "Replay", history: "History", assessments: "Assessments", provenance: "Provenance" };
   const known = (key) => typeof key === "string" && Object.prototype.hasOwnProperty.call(SECTIONS, key);
 
   // Finds the server-rendered target of one section inside one record, brings it into view and focuses its heading.
-  // Returns false when the record does not carry that section; nothing is created in its place.
+  // Returns false when the record does not carry that section; nothing is created in its place. The key is only ever one
+  // of the fixed table's own words, so it is never used to build a selector from input.
   function reachSection(record, key) {
-    const target = record && record.querySelector ? record.querySelector('[data-wp-target="' + key + '"]') : null;
+    const target = key === "record" ? record : record && record.querySelector ? record.querySelector('[data-wp-target="' + key + '"]') : null;
     if (!target) return false;
-    const h = (target.querySelector ? target.querySelector("h3, h4") : null) || target;
+    const h = (target.querySelector ? target.querySelector(key === "record" ? "h2" : "h3, h4") : null) || target;
     if (h.setAttribute) h.setAttribute("tabindex", "-1");
     if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "start" });
     if (h.focus) h.focus();
@@ -96,4 +98,23 @@ export const WALLPRINT_JS = `(() => {
     const version = e.target.closest("[data-wp-version]");
     if (version) showVersion(version.dataset.wpVersion, version.dataset.wpThen);
   });
+
+  // A document opened from a portable reference names, on its root, the record the reference resolved to and the section
+  // it asked for (data-wp-open, only ever one of the fixed table's keys, written by the server after a successful
+  // resolution and a digest match). Once per rendered document, focus moves there and the move is announced. The server
+  // renders the record; this only moves focus, exactly as a jump control does.
+  function openReference() {
+    const root = one(".wp[data-wp-open]");
+    if (!root || !root.dataset || root.dataset.wpOpened === "true") return;
+    root.dataset.wpOpened = "true";
+    const key = root.dataset.wpOpen;
+    if (!known(key)) return;
+    // Focus must land on a visible section: the document opened from a reference shows at once, as a version choice does.
+    root.dataset.wpRevealed = "true";
+    const record = all(".wp-record").find((a) => a.dataset && a.dataset.recordId === root.dataset.wpFocus) || null;
+    if (!record || !reachSection(record, key)) { announce("The referenced section is not in this record."); return; }
+    announce("Opened from a portable reference: " + SECTIONS[key] + " of " + (record.dataset.version || "this record") + ": " + (record.dataset.recordId || "") + "." + (record.dataset.lifecycle ? " Lifecycle " + record.dataset.lifecycle + "." : ""));
+  }
+  if (typeof MutationObserver === "function" && app.nodeType) new MutationObserver(openReference).observe(app, { childList: true });
+  openReference();
 })();`;

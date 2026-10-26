@@ -32,6 +32,8 @@ import { findReservedAssuranceTerms, findSecretLike, isReservedIdentity, isReser
 import {
   ASSESSOR_ROLES,
   EVIDENCE_ITEM_KINDS,
+  HEX64_RE,
+  RECORD_ID_RE,
   SUPERSESSION_KINDS,
   WALLETWALL_ASSESSOR_ID,
   WALLPRINT_CANONICALIZATION,
@@ -79,9 +81,8 @@ import {
 
 // ─── patterns and caps ───────────────────────────────────────────────────────
 
-/** WalletWall-authored record ids are lower case so case variants of one id cannot coexist. */
-export const RECORD_ID_RE = /^[a-z0-9][a-z0-9_.:-]{2,63}$/;
-export const HEX64_RE = /^[0-9a-f]{64}$/;
+/** The record id and digest shapes are defined in vocabulary.ts (shared with the portable reference codec) and re-exported here. */
+export { HEX64_RE, RECORD_ID_RE };
 export const POLICY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,95}$/;
 /** An attributed assessment code, recorded exactly as the assessor stated it. */
 export const ASSESSMENT_CODE_RE = /^[A-Z][A-Z0-9_-]{0,47}$/;

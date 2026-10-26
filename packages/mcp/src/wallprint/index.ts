@@ -67,3 +67,25 @@ export type { DiffChange, WallPrintDiff } from "./diff.ts";
 
 export { RECEIPT_DOES_NOT_ESTABLISH, RECEIPT_ESTABLISHES, WallPrintReceiptSchema, verifyReceipt, wallPrintReceipt } from "./receipt.ts";
 export type { ReceiptReason, ReceiptVerification, WallPrintReceipt } from "./receipt.ts";
+
+export {
+  REFERENCE_DOES_NOT_ESTABLISH,
+  REFERENCE_ENVELOPE_TYPE,
+  REFERENCE_IDENTIFIES,
+  REFERENCE_MAX_LENGTH,
+  REFERENCE_OUTCOMES,
+  REFERENCE_PREFIX,
+  REFERENCE_TARGETS,
+  REFERENCE_VERSION,
+  SUPPORTED_WALLPRINT_VERSIONS,
+  encodeReference,
+  encodeReferenceEnvelope,
+  parseReference,
+  parseReferenceEnvelope,
+  referenceEnvelope,
+  referenceFindings,
+  referenceOf,
+  resolveReference,
+  tryReference,
+} from "./reference.ts";
+export type { FoundRecord, ReferenceOutcome, ReferenceParse, ReferenceProblem, ReferenceResolution, ReferenceTarget, WallPrintPortableReference, WallPrintReferenceEnvelope } from "./reference.ts";

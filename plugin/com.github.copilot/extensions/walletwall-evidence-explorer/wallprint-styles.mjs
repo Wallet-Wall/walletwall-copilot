@@ -43,7 +43,9 @@ const NARROW = `
 .wp-lineage-arrow{display:none}
 .wp-lineage-node[data-link]::before{content:"";display:block;width:1px;height:12px;margin:0 0 2px 16px;background:var(--ww-umber)}
 .wp-checks{grid-template-columns:1fr}
-.wp-check-fields>div,.wp-receipt-fields>div{grid-template-columns:1fr}
+.wp-check-fields>div,.wp-receipt-fields>div,.wp-portable-fields>div,.wp-reference-fields>div{grid-template-columns:1fr}
+.wp-portable-block{grid-template-columns:1fr}
+.wp-qr-code{width:160px;height:160px}
 ${STACKED(".wp-table")}`;
 
 export const WALLPRINT_CSS = `
@@ -157,6 +159,26 @@ export const WALLPRINT_CSS = `
 .wp-step::before{content:"";position:absolute;left:-20px;top:8px;width:11px;height:11px;border:1px solid var(--ww-umber-deep);background:var(--ww-rail)}
 .wp-step-title{display:block;font-size:10.5px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:var(--ww-umber-deep)}
 .wp-step p{margin:4px 0 0;font-size:12.5px}
+/* Portable reference: a registration block of the plate, not a seal. The code is a plain path in the ink on the paper
+   inside a hairline frame, its quiet zone drawn in the viewBox so it survives any scale; the exact text sits beside it.
+   The code never grows past a locator's size, never shrinks below a scannable one, and carries no colour of success. */
+.wp-portable{margin-top:14px}
+.wp-portable-block{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px 18px;align-items:start;margin-top:8px}
+.wp-qr{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.wp-qr-code{display:block;width:176px;height:176px;max-width:100%;border:1px solid var(--ww-cut-strong);border-radius:var(--ww-radius-panel)}
+.wp-qr-quiet{fill:var(--ww-cream)}
+.wp-qr-dark{fill:var(--ww-shell)}
+.wp-qr-caption{margin:2px 0 0;font-size:10.5px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;color:var(--ww-umber-deep)}
+.wp-qr-meta{margin:0}
+.wp-portable-text{min-width:0}
+.wp-portable-fields>div,.wp-reference-fields>div{grid-template-columns:150px minmax(0,1fr)}
+.wp-portable-targets li{overflow-wrap:anywhere}
+/* The resolution readout of a document opened from a reference: a quiet row of the plate for a resolved reference, the
+   dashed brick edge for a digest mismatch (an integrity finding, not a verdict), never a fill, never a seal. */
+.wp-reference-result{margin:0 0 12px;padding:10px 12px;border:1px solid var(--ww-cut-strong);border-left-width:2px;border-radius:var(--ww-radius-panel)}
+.wp-reference-result[data-outcome="DIGEST_MISMATCH"],.wp-reference-result[data-outcome="MALFORMED_REFERENCE"],.wp-reference-result[data-outcome="UNSUPPORTED_VERSION"],.wp-reference-result[data-outcome="UNRECOGNISED"]{border-style:dashed;border-color:var(--ww-brick-low)}
+.wp-reference-result .wp-title{margin:4px 0 0;font-size:22px}
+.wp-reference-line{margin:6px 0 0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:12.5px}
 .wp-raw-body{display:block}
 .wp-raw-text{display:block;white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto;padding:8px;background:var(--ww-node);border:1px solid var(--ww-cut)}
 .wp-invariants{margin-top:14px}
@@ -185,7 +207,7 @@ export const WALLPRINT_CSS = `
 .wp-facts>div{grid-template-columns:120px minmax(0,1fr)}
 .wp-verify-grid>div{grid-template-columns:160px minmax(0,1fr)}
 .wp-checks{gap:10px}
-.wp-check-fields>div,.wp-receipt-fields>div{grid-template-columns:120px minmax(0,1fr)}
+.wp-check-fields>div,.wp-receipt-fields>div,.wp-portable-fields>div,.wp-reference-fields>div{grid-template-columns:120px minmax(0,1fr)}
 }
 /* The eight-column assessments table stacks its rows well before the plate is narrow, so no id wraps mid-word. */
 @container wp (min-width:720px) and (max-width:959px){${STACKED(".wp-assessments .wp-table")}}

@@ -19,6 +19,14 @@ export const WALLPRINT_VERSION = "0.1";
 export const WALLPRINT_CANONICALIZATION = "RFC8785";
 export const WALLPRINT_DIGEST_ALGORITHM = "SHA-256";
 
+/**
+ * The shape of a record id and of a digest, defined here (the module with no imports) so the portable reference codec
+ * (reference.ts), which is also bundled into the canvas, shares one definition with the record (record.ts re-exports both).
+ * WalletWall-authored record ids are lower case so case variants of one id cannot coexist.
+ */
+export const RECORD_ID_RE = /^[a-z0-9][a-z0-9_.:-]{2,63}$/;
+export const HEX64_RE = /^[0-9a-f]{64}$/;
+
 export const LIFECYCLE_STATES = ["COMMITTED", "DISCLOSED", "CORRECTED", "SUPERSEDED", "WITHDRAWN"] as const;
 export type LifecycleState = (typeof LIFECYCLE_STATES)[number];
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { SUPPORT_STATES } from "../../src/schemas.ts";
+import { REFERENCE_IDENTIFIES, REFERENCE_OUTCOMES, REFERENCE_TARGETS } from "../../src/wallprint/reference.ts";
 import { LIFECYCLE_STATES, WALLPRINT_INVARIANTS, WALLPRINT_PRINCIPLE, WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
 import { ROOT } from "../support/harness.ts";
 
@@ -40,6 +41,19 @@ describe("WallPrint specification document", () => {
     assert.ok(flat.includes("packages/mcp/src/wallprint/identity.ts"));
     assert.ok(/does not normalise case/.test(flat));
     assert.ok(/EVIDENCE_PROFILE\.md.*section 11/.test(flat));
+  });
+
+  test("states the portable reference as a locator: both forms, the five outcomes, the resolver prerequisite and no signing", () => {
+    assert.ok(flat.includes("A reference is a locator, not authority."));
+    assert.ok(flat.includes(REFERENCE_IDENTIFIES));
+    assert.ok(doc.includes("walletwall://wallprint/<recordId>?reference=0.1&wallprint=<wallprintVersion>&digest=<hex64>[&target=<target>]"));
+    assert.ok(doc.includes('"type":"walletwall.wallprint.reference"'));
+    for (const o of REFERENCE_OUTCOMES) assert.ok(doc.includes(`\`${o}\``), o);
+    for (const t of REFERENCE_TARGETS) assert.ok(doc.includes(`\`${t}\``), t);
+    assert.ok(/No public resolver exists/.test(flat) && /not a signature/.test(flat) && /never as forgery/.test(flat));
+    assert.ok(/a corrected, superseded or withdrawn record is as valid a target as the current one/.test(flat));
+    assert.ok(flat.includes("packages/mcp/src/wallprint/reference.ts") && flat.includes("scripts/gen-wallprint-reference.ts"));
+    assert.ok(existsSync(`${ROOT}packages/mcp/src/wallprint/reference.ts`) && existsSync(`${ROOT}scripts/gen-wallprint-reference.ts`) && existsSync(`${ROOT}packages/mcp/test/wallprint/reference.test.ts`));
   });
 
   test("the modules and tests it names exist", () => {
