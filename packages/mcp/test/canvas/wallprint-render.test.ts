@@ -89,6 +89,9 @@ describe("rendering: every fixture becomes one disclosure document per record, i
     assert.ok(altered.includes('data-scenario="ALTERED_AFTER_COMMIT"') && altered.includes("changed afterwards without re-digesting (changed: <code>assessments[reviewer-y].statement</code>)"));
     const elsewhere = fragment("replay-mismatch");
     assert.ok(elsewhere.includes('data-scenario="COMMITTED_ELSEWHERE"') && elsewhere.includes("(changed: <code>claims[a-price].supportState</code>)"));
+    const unverified = fragment("receipt-unverified");
+    assert.ok(unverified.includes('data-scenario="VERIFICATION_NOT_CARRIED">Construction: every record of this lineage was built by the engine and its receipt was issued by the engine; the receipt&#39;s verification result was left out of this disclosure, so no check result is carried (changed: <code>receipt.verification</code>).'));
+    assert.ok(!unverified.includes("not recognised: VERIFICATION_NOT_CARRIED"));
   });
 
   test("a focus that names no record shows the first record instead of hiding every article, and the version labels follow the recorded lineage", () => {

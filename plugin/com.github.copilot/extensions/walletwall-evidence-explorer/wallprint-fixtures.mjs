@@ -4990,5 +4990,749 @@ export const WALLPRINT_FIXTURES = {
         }
       }
     ]
+  },
+  "receipt-unreplayable": {
+    "title": "A disclosed record whose receipt matches the committed bytes while its historical evidence bundle was not retained: replay is UNREPLAYABLE (MISSING_EVIDENCE) and nothing is recomputed. Receipt integrity and replayability are separate questions; the two results stand side by side.",
+    "focus": "wp-identity-unretained-v1",
+    "scenario": {
+      "kind": "ENGINE_BUILT",
+      "patched": []
+    },
+    "registry": {
+      "asset": {
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "issuerName": "Circle",
+        "authorityId": "issuer:circle"
+      },
+      "chain": {
+        "chainId": "1",
+        "name": "Ethereum Mainnet"
+      }
+    },
+    "records": [
+      {
+        "id": "wp-identity-unretained-v1",
+        "record": {
+          "wallprintVersion": "0.1",
+          "id": "wp-identity-unretained-v1",
+          "subject": {
+            "focalAssertionId": "a-identity",
+            "claimType": "ASSET_IDENTITY",
+            "temporality": "CURRENT",
+            "identity": {
+              "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+              "chainId": "1"
+            }
+          },
+          "snapshotAt": "2026-10-23T12:00:30Z",
+          "evidence": {
+            "bundleDigest": "9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082",
+            "items": [
+              {
+                "kind": "ASSERTION",
+                "id": "a-balance",
+                "digest": "135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273"
+              },
+              {
+                "kind": "ASSERTION",
+                "id": "a-identity",
+                "digest": "1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f"
+              },
+              {
+                "kind": "ASSERTION",
+                "id": "a-price",
+                "digest": "21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-balance",
+                "digest": "8f47a2811a02769ed92d2491dcf8da2cf1ea418ba1635fa9c45569572cdc3631"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-identity",
+                "digest": "fb73aca3c8e9511b34fec137b24a27d433a01edf7161c2c5483027b0cec1083e"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-price-a",
+                "digest": "22c1038b21b530b851a80ee27c29295e952229d7d261df07e8374b8961e94c1f"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-price-b",
+                "digest": "a70076f18a2bb9e6dba2dc3af19174500d560098a4a0c3686c9d8805a50139d1"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-chain",
+                "digest": "7c91a5dc1fedfa60348f2831e60fef43d5961f1adf6563766b9b74ca0fc848cb"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-issuer",
+                "digest": "705553a8258255748ad197ecd85c4540a3f83a5b355fba69027c9c93ab8231c6"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-prov-a",
+                "digest": "53b1631a796919577d18481cc98261244486c979a227c5291cc63092bbf00352"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-prov-b",
+                "digest": "63422bbfbb6c7bff2e3017f0f669a98fa0e2efc7c32e0259d0824ed80a95b4bc"
+              }
+            ]
+          },
+          "claims": [
+            {
+              "assertionId": "a-balance",
+              "claimType": "TOKEN_BALANCE_AT_BLOCK",
+              "origin": "CHAIN_OBSERVED",
+              "temporality": "PINNED",
+              "subject": {
+                "blockHash": "0xabababababababababababababababababababababababababababababababab",
+                "blockNumber": "21000000",
+                "chainId": "1",
+                "holder": "0x1234567890123456789012345678901234567890",
+                "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+              },
+              "value": {
+                "balanceAtomic": "1500000",
+                "decimals": "6"
+              },
+              "supportState": "ESTABLISHED",
+              "freshnessState": "PINNED",
+              "finalityState": "FINALIZED",
+              "authority": {
+                "authorityId": "canonical-chain-state",
+                "kind": "CANONICAL_CHAIN_STATE",
+                "satisfied": true
+              },
+              "limitations": [
+                "REGISTRY_VERIFIED_POINT_IN_TIME",
+                "TRANSPORT_FIDELITY_NOT_VERIFIED"
+              ],
+              "diagnostics": [],
+              "independentCorroboration": "1",
+              "conflictsWith": [],
+              "supersededBy": null,
+              "dependencies": {
+                "observationIds": [
+                  "obs-balance"
+                ],
+                "assertionIds": []
+              },
+              "policyId": "wwap/token-balance-at-block/0.1",
+              "digest": "135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273"
+            },
+            {
+              "assertionId": "a-identity",
+              "claimType": "ASSET_IDENTITY",
+              "origin": "AUTHORITY_ATTESTED",
+              "temporality": "CURRENT",
+              "subject": {
+                "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                "chainId": "1"
+              },
+              "value": {
+                "decimals": "6",
+                "issuerAuthorityId": "issuer:circle",
+                "symbol": "USDC"
+              },
+              "supportState": "ESTABLISHED",
+              "freshnessState": "CURRENT",
+              "finalityState": null,
+              "authority": {
+                "authorityId": "issuer-publication",
+                "kind": "ISSUER_PUBLICATION",
+                "satisfied": true
+              },
+              "limitations": [
+                "REGISTRY_VERIFIED_POINT_IN_TIME"
+              ],
+              "diagnostics": [],
+              "independentCorroboration": "1",
+              "conflictsWith": [],
+              "supersededBy": null,
+              "dependencies": {
+                "observationIds": [
+                  "obs-identity"
+                ],
+                "assertionIds": []
+              },
+              "policyId": "wwap/asset-identity/0.1",
+              "digest": "1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f"
+            },
+            {
+              "assertionId": "a-price",
+              "claimType": "TOKEN_USD_PRICE",
+              "origin": "PROVIDER_OBSERVED",
+              "temporality": "CURRENT",
+              "subject": {
+                "chainId": "1",
+                "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+              },
+              "value": {
+                "priceUsd": "1.0001"
+              },
+              "supportState": "SUPPORTED",
+              "freshnessState": "CURRENT",
+              "finalityState": null,
+              "authority": {
+                "authorityId": "none",
+                "kind": "NONE",
+                "satisfied": false
+              },
+              "limitations": [
+                "NO_AUTHORITATIVE_OBSERVATION",
+                "PRICE_IS_PROVIDER_OBSERVATION",
+                "REGISTRY_VERIFIED_POINT_IN_TIME"
+              ],
+              "diagnostics": [],
+              "independentCorroboration": "2",
+              "conflictsWith": [],
+              "supersededBy": null,
+              "dependencies": {
+                "observationIds": [
+                  "obs-price-a",
+                  "obs-price-b"
+                ],
+                "assertionIds": []
+              },
+              "policyId": "wwap/token-usd-price/0.1",
+              "digest": "21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c"
+            }
+          ],
+          "assessments": [
+            {
+              "assessor": "issuer:circle",
+              "assessorRole": "ISSUER",
+              "assessment": "CONFIRMED",
+              "statement": "Deployment confirmed for the stated period.",
+              "policy": "issuer-attestation",
+              "policyVersion": "2026-Q3",
+              "assessedAt": "2026-10-23T12:00:00Z",
+              "evidenceRefs": [
+                "obs-identity"
+              ],
+              "limitations": []
+            },
+            {
+              "assessor": "walletwall-rules",
+              "assessorRole": "WALLETWALL",
+              "assessment": "ESTABLISHED",
+              "statement": null,
+              "policy": "wwap/asset-identity/0.1",
+              "policyVersion": "0.1.0-draft",
+              "assessedAt": "2026-10-23T12:00:30Z",
+              "evidenceRefs": [
+                "obs-identity"
+              ],
+              "limitations": [
+                "REGISTRY_VERIFIED_POINT_IN_TIME"
+              ]
+            }
+          ],
+          "provenance": {
+            "target": "a-identity",
+            "lineage": [
+              {
+                "id": "a-identity",
+                "kind": "assertion",
+                "depth": "0"
+              },
+              {
+                "id": "obs-identity",
+                "kind": "observation",
+                "depth": "1"
+              }
+            ],
+            "issues": []
+          },
+          "limitations": [
+            "NO_AUTHORITATIVE_OBSERVATION",
+            "PRICE_IS_PROVIDER_OBSERVATION",
+            "REGISTRY_VERIFIED_POINT_IN_TIME",
+            "TRANSPORT_FIDELITY_NOT_VERIFIED"
+          ],
+          "conflicts": [],
+          "violations": [],
+          "policyVersions": {
+            "wwap/asset-identity/0.1": "0.1.0-draft",
+            "wwap/token-balance-at-block/0.1": "0.1.0-draft",
+            "wwap/token-usd-price/0.1": "0.1.0-draft"
+          },
+          "ruleVersions": {},
+          "versions": {
+            "wwep": "0.1",
+            "registry": "0.2.0",
+            "policies": "0.1.0-draft",
+            "rules": "0.1.0-draft",
+            "registryDigest": "ee59e7940b0b66aa0fa33b81dfb353f2dd5347cbaeba758e0d65183289a8da87",
+            "policiesDigest": "0457e5a8272d3443766b24852b1752baf38ec13e766ea6e5fd88cafefde7f3ce"
+          },
+          "supersedes": null,
+          "canonicalization": "RFC8785",
+          "digestAlgorithm": "SHA-256",
+          "digest": "1973188706f09487e905a9ec33485c742e1403827af37f3f3b7d12bc33664dd2"
+        },
+        "canonical": "{\"assessments\":[{\"assessedAt\":\"2026-10-23T12:00:00Z\",\"assessment\":\"CONFIRMED\",\"assessor\":\"issuer:circle\",\"assessorRole\":\"ISSUER\",\"evidenceRefs\":[\"obs-identity\"],\"limitations\":[],\"policy\":\"issuer-attestation\",\"policyVersion\":\"2026-Q3\",\"statement\":\"Deployment confirmed for the stated period.\"},{\"assessedAt\":\"2026-10-23T12:00:30Z\",\"assessment\":\"ESTABLISHED\",\"assessor\":\"walletwall-rules\",\"assessorRole\":\"WALLETWALL\",\"evidenceRefs\":[\"obs-identity\"],\"limitations\":[\"REGISTRY_VERIFIED_POINT_IN_TIME\"],\"policy\":\"wwap/asset-identity/0.1\",\"policyVersion\":\"0.1.0-draft\",\"statement\":null}],\"canonicalization\":\"RFC8785\",\"claims\":[{\"assertionId\":\"a-balance\",\"authority\":{\"authorityId\":\"canonical-chain-state\",\"kind\":\"CANONICAL_CHAIN_STATE\",\"satisfied\":true},\"claimType\":\"TOKEN_BALANCE_AT_BLOCK\",\"conflictsWith\":[],\"dependencies\":{\"assertionIds\":[],\"observationIds\":[\"obs-balance\"]},\"diagnostics\":[],\"digest\":\"135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273\",\"finalityState\":\"FINALIZED\",\"freshnessState\":\"PINNED\",\"independentCorroboration\":\"1\",\"limitations\":[\"REGISTRY_VERIFIED_POINT_IN_TIME\",\"TRANSPORT_FIDELITY_NOT_VERIFIED\"],\"origin\":\"CHAIN_OBSERVED\",\"policyId\":\"wwap/token-balance-at-block/0.1\",\"subject\":{\"blockHash\":\"0xabababababababababababababababababababababababababababababababab\",\"blockNumber\":\"21000000\",\"chainId\":\"1\",\"holder\":\"0x1234567890123456789012345678901234567890\",\"token\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"},\"supersededBy\":null,\"supportState\":\"ESTABLISHED\",\"temporality\":\"PINNED\",\"value\":{\"balanceAtomic\":\"1500000\",\"decimals\":\"6\"}},{\"assertionId\":\"a-identity\",\"authority\":{\"authorityId\":\"issuer-publication\",\"kind\":\"ISSUER_PUBLICATION\",\"satisfied\":true},\"claimType\":\"ASSET_IDENTITY\",\"conflictsWith\":[],\"dependencies\":{\"assertionIds\":[],\"observationIds\":[\"obs-identity\"]},\"diagnostics\":[],\"digest\":\"1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f\",\"finalityState\":null,\"freshnessState\":\"CURRENT\",\"independentCorroboration\":\"1\",\"limitations\":[\"REGISTRY_VERIFIED_POINT_IN_TIME\"],\"origin\":\"AUTHORITY_ATTESTED\",\"policyId\":\"wwap/asset-identity/0.1\",\"subject\":{\"address\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\"chainId\":\"1\"},\"supersededBy\":null,\"supportState\":\"ESTABLISHED\",\"temporality\":\"CURRENT\",\"value\":{\"decimals\":\"6\",\"issuerAuthorityId\":\"issuer:circle\",\"symbol\":\"USDC\"}},{\"assertionId\":\"a-price\",\"authority\":{\"authorityId\":\"none\",\"kind\":\"NONE\",\"satisfied\":false},\"claimType\":\"TOKEN_USD_PRICE\",\"conflictsWith\":[],\"dependencies\":{\"assertionIds\":[],\"observationIds\":[\"obs-price-a\",\"obs-price-b\"]},\"diagnostics\":[],\"digest\":\"21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c\",\"finalityState\":null,\"freshnessState\":\"CURRENT\",\"independentCorroboration\":\"2\",\"limitations\":[\"NO_AUTHORITATIVE_OBSERVATION\",\"PRICE_IS_PROVIDER_OBSERVATION\",\"REGISTRY_VERIFIED_POINT_IN_TIME\"],\"origin\":\"PROVIDER_OBSERVED\",\"policyId\":\"wwap/token-usd-price/0.1\",\"subject\":{\"chainId\":\"1\",\"token\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"},\"supersededBy\":null,\"supportState\":\"SUPPORTED\",\"temporality\":\"CURRENT\",\"value\":{\"priceUsd\":\"1.0001\"}}],\"conflicts\":[],\"digestAlgorithm\":\"SHA-256\",\"evidence\":{\"bundleDigest\":\"9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082\",\"items\":[{\"digest\":\"135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273\",\"id\":\"a-balance\",\"kind\":\"ASSERTION\"},{\"digest\":\"1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f\",\"id\":\"a-identity\",\"kind\":\"ASSERTION\"},{\"digest\":\"21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c\",\"id\":\"a-price\",\"kind\":\"ASSERTION\"},{\"digest\":\"8f47a2811a02769ed92d2491dcf8da2cf1ea418ba1635fa9c45569572cdc3631\",\"id\":\"obs-balance\",\"kind\":\"OBSERVATION\"},{\"digest\":\"fb73aca3c8e9511b34fec137b24a27d433a01edf7161c2c5483027b0cec1083e\",\"id\":\"obs-identity\",\"kind\":\"OBSERVATION\"},{\"digest\":\"22c1038b21b530b851a80ee27c29295e952229d7d261df07e8374b8961e94c1f\",\"id\":\"obs-price-a\",\"kind\":\"OBSERVATION\"},{\"digest\":\"a70076f18a2bb9e6dba2dc3af19174500d560098a4a0c3686c9d8805a50139d1\",\"id\":\"obs-price-b\",\"kind\":\"OBSERVATION\"},{\"digest\":\"7c91a5dc1fedfa60348f2831e60fef43d5961f1adf6563766b9b74ca0fc848cb\",\"id\":\"src-chain\",\"kind\":\"SOURCE\"},{\"digest\":\"705553a8258255748ad197ecd85c4540a3f83a5b355fba69027c9c93ab8231c6\",\"id\":\"src-issuer\",\"kind\":\"SOURCE\"},{\"digest\":\"53b1631a796919577d18481cc98261244486c979a227c5291cc63092bbf00352\",\"id\":\"src-prov-a\",\"kind\":\"SOURCE\"},{\"digest\":\"63422bbfbb6c7bff2e3017f0f669a98fa0e2efc7c32e0259d0824ed80a95b4bc\",\"id\":\"src-prov-b\",\"kind\":\"SOURCE\"}]},\"id\":\"wp-identity-unretained-v1\",\"limitations\":[\"NO_AUTHORITATIVE_OBSERVATION\",\"PRICE_IS_PROVIDER_OBSERVATION\",\"REGISTRY_VERIFIED_POINT_IN_TIME\",\"TRANSPORT_FIDELITY_NOT_VERIFIED\"],\"policyVersions\":{\"wwap/asset-identity/0.1\":\"0.1.0-draft\",\"wwap/token-balance-at-block/0.1\":\"0.1.0-draft\",\"wwap/token-usd-price/0.1\":\"0.1.0-draft\"},\"provenance\":{\"issues\":[],\"lineage\":[{\"depth\":\"0\",\"id\":\"a-identity\",\"kind\":\"assertion\"},{\"depth\":\"1\",\"id\":\"obs-identity\",\"kind\":\"observation\"}],\"target\":\"a-identity\"},\"ruleVersions\":{},\"snapshotAt\":\"2026-10-23T12:00:30Z\",\"subject\":{\"claimType\":\"ASSET_IDENTITY\",\"focalAssertionId\":\"a-identity\",\"identity\":{\"address\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\"chainId\":\"1\"},\"temporality\":\"CURRENT\"},\"supersedes\":null,\"versions\":{\"policies\":\"0.1.0-draft\",\"policiesDigest\":\"0457e5a8272d3443766b24852b1752baf38ec13e766ea6e5fd88cafefde7f3ce\",\"registry\":\"0.2.0\",\"registryDigest\":\"ee59e7940b0b66aa0fa33b81dfb353f2dd5347cbaeba758e0d65183289a8da87\",\"rules\":\"0.1.0-draft\",\"wwep\":\"0.1\"},\"violations\":[],\"wallprintVersion\":\"0.1\"}",
+        "validation": {
+          "ok": true,
+          "findings": []
+        },
+        "digest": {
+          "hasDigest": true,
+          "matches": true,
+          "computedDigest": "1973188706f09487e905a9ec33485c742e1403827af37f3f3b7d12bc33664dd2"
+        },
+        "lifecycle": {
+          "state": "DISCLOSED",
+          "events": [
+            {
+              "seq": "0",
+              "recordId": "wp-identity-unretained-v1",
+              "recordDigest": "1973188706f09487e905a9ec33485c742e1403827af37f3f3b7d12bc33664dd2",
+              "state": "COMMITTED",
+              "at": "2026-10-23T12:10:00.000Z",
+              "reason": null,
+              "ref": null,
+              "previousEventDigest": null,
+              "eventDigest": "e552ef90e34a9e28c94e8f55fa640c8b7ef70d21ffc7b2fc79594b685963f740"
+            },
+            {
+              "seq": "1",
+              "recordId": "wp-identity-unretained-v1",
+              "recordDigest": "1973188706f09487e905a9ec33485c742e1403827af37f3f3b7d12bc33664dd2",
+              "state": "DISCLOSED",
+              "at": "2026-10-23T12:20:00.000Z",
+              "reason": null,
+              "ref": null,
+              "previousEventDigest": "e552ef90e34a9e28c94e8f55fa640c8b7ef70d21ffc7b2fc79594b685963f740",
+              "eventDigest": "c5af20beb5b2d849e18694c1f2ff432139c490143d8adebebd7e1d183d781840"
+            }
+          ]
+        },
+        "supersedes": null,
+        "supersededBy": null,
+        "lineage": {
+          "root": "wp-identity-unretained-v1",
+          "current": "wp-identity-unretained-v1",
+          "predecessor": null,
+          "successor": null,
+          "chain": [
+            "wp-identity-unretained-v1"
+          ]
+        },
+        "diff": null,
+        "receipt": {
+          "issued": {
+            "wallprintVersion": "0.1",
+            "recordId": "wp-identity-unretained-v1",
+            "canonicalization": "RFC8785",
+            "digestAlgorithm": "SHA-256",
+            "digest": "1973188706f09487e905a9ec33485c742e1403827af37f3f3b7d12bc33664dd2",
+            "bundleDigest": "9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082",
+            "versions": {
+              "wwep": "0.1",
+              "registry": "0.2.0",
+              "policies": "0.1.0-draft",
+              "rules": "0.1.0-draft"
+            }
+          },
+          "verification": {
+            "matches": true,
+            "reasons": []
+          }
+        },
+        "replay": {
+          "outcome": "UNREPLAYABLE",
+          "reasons": [
+            "MISSING_EVIDENCE"
+          ],
+          "recomputedDigest": null,
+          "mismatches": []
+        }
+      }
+    ]
+  },
+  "receipt-unverified": {
+    "title": "A disclosed record whose receipt is carried without a verification result: the document shows the receipt as UNCHECKED and runs no check of its own. Absence of a check is not a failed check.",
+    "focus": "wp-identity-unverified-v1",
+    "scenario": {
+      "kind": "VERIFICATION_NOT_CARRIED",
+      "patched": [
+        "receipt.verification"
+      ]
+    },
+    "registry": {
+      "asset": {
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "issuerName": "Circle",
+        "authorityId": "issuer:circle"
+      },
+      "chain": {
+        "chainId": "1",
+        "name": "Ethereum Mainnet"
+      }
+    },
+    "records": [
+      {
+        "id": "wp-identity-unverified-v1",
+        "record": {
+          "wallprintVersion": "0.1",
+          "id": "wp-identity-unverified-v1",
+          "subject": {
+            "focalAssertionId": "a-identity",
+            "claimType": "ASSET_IDENTITY",
+            "temporality": "CURRENT",
+            "identity": {
+              "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+              "chainId": "1"
+            }
+          },
+          "snapshotAt": "2026-10-23T12:00:30Z",
+          "evidence": {
+            "bundleDigest": "9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082",
+            "items": [
+              {
+                "kind": "ASSERTION",
+                "id": "a-balance",
+                "digest": "135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273"
+              },
+              {
+                "kind": "ASSERTION",
+                "id": "a-identity",
+                "digest": "1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f"
+              },
+              {
+                "kind": "ASSERTION",
+                "id": "a-price",
+                "digest": "21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-balance",
+                "digest": "8f47a2811a02769ed92d2491dcf8da2cf1ea418ba1635fa9c45569572cdc3631"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-identity",
+                "digest": "fb73aca3c8e9511b34fec137b24a27d433a01edf7161c2c5483027b0cec1083e"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-price-a",
+                "digest": "22c1038b21b530b851a80ee27c29295e952229d7d261df07e8374b8961e94c1f"
+              },
+              {
+                "kind": "OBSERVATION",
+                "id": "obs-price-b",
+                "digest": "a70076f18a2bb9e6dba2dc3af19174500d560098a4a0c3686c9d8805a50139d1"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-chain",
+                "digest": "7c91a5dc1fedfa60348f2831e60fef43d5961f1adf6563766b9b74ca0fc848cb"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-issuer",
+                "digest": "705553a8258255748ad197ecd85c4540a3f83a5b355fba69027c9c93ab8231c6"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-prov-a",
+                "digest": "53b1631a796919577d18481cc98261244486c979a227c5291cc63092bbf00352"
+              },
+              {
+                "kind": "SOURCE",
+                "id": "src-prov-b",
+                "digest": "63422bbfbb6c7bff2e3017f0f669a98fa0e2efc7c32e0259d0824ed80a95b4bc"
+              }
+            ]
+          },
+          "claims": [
+            {
+              "assertionId": "a-balance",
+              "claimType": "TOKEN_BALANCE_AT_BLOCK",
+              "origin": "CHAIN_OBSERVED",
+              "temporality": "PINNED",
+              "subject": {
+                "blockHash": "0xabababababababababababababababababababababababababababababababab",
+                "blockNumber": "21000000",
+                "chainId": "1",
+                "holder": "0x1234567890123456789012345678901234567890",
+                "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+              },
+              "value": {
+                "balanceAtomic": "1500000",
+                "decimals": "6"
+              },
+              "supportState": "ESTABLISHED",
+              "freshnessState": "PINNED",
+              "finalityState": "FINALIZED",
+              "authority": {
+                "authorityId": "canonical-chain-state",
+                "kind": "CANONICAL_CHAIN_STATE",
+                "satisfied": true
+              },
+              "limitations": [
+                "REGISTRY_VERIFIED_POINT_IN_TIME",
+                "TRANSPORT_FIDELITY_NOT_VERIFIED"
+              ],
+              "diagnostics": [],
+              "independentCorroboration": "1",
+              "conflictsWith": [],
+              "supersededBy": null,
+              "dependencies": {
+                "observationIds": [
+                  "obs-balance"
+                ],
+                "assertionIds": []
+              },
+              "policyId": "wwap/token-balance-at-block/0.1",
+              "digest": "135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273"
+            },
+            {
+              "assertionId": "a-identity",
+              "claimType": "ASSET_IDENTITY",
+              "origin": "AUTHORITY_ATTESTED",
+              "temporality": "CURRENT",
+              "subject": {
+                "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                "chainId": "1"
+              },
+              "value": {
+                "decimals": "6",
+                "issuerAuthorityId": "issuer:circle",
+                "symbol": "USDC"
+              },
+              "supportState": "ESTABLISHED",
+              "freshnessState": "CURRENT",
+              "finalityState": null,
+              "authority": {
+                "authorityId": "issuer-publication",
+                "kind": "ISSUER_PUBLICATION",
+                "satisfied": true
+              },
+              "limitations": [
+                "REGISTRY_VERIFIED_POINT_IN_TIME"
+              ],
+              "diagnostics": [],
+              "independentCorroboration": "1",
+              "conflictsWith": [],
+              "supersededBy": null,
+              "dependencies": {
+                "observationIds": [
+                  "obs-identity"
+                ],
+                "assertionIds": []
+              },
+              "policyId": "wwap/asset-identity/0.1",
+              "digest": "1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f"
+            },
+            {
+              "assertionId": "a-price",
+              "claimType": "TOKEN_USD_PRICE",
+              "origin": "PROVIDER_OBSERVED",
+              "temporality": "CURRENT",
+              "subject": {
+                "chainId": "1",
+                "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+              },
+              "value": {
+                "priceUsd": "1.0001"
+              },
+              "supportState": "SUPPORTED",
+              "freshnessState": "CURRENT",
+              "finalityState": null,
+              "authority": {
+                "authorityId": "none",
+                "kind": "NONE",
+                "satisfied": false
+              },
+              "limitations": [
+                "NO_AUTHORITATIVE_OBSERVATION",
+                "PRICE_IS_PROVIDER_OBSERVATION",
+                "REGISTRY_VERIFIED_POINT_IN_TIME"
+              ],
+              "diagnostics": [],
+              "independentCorroboration": "2",
+              "conflictsWith": [],
+              "supersededBy": null,
+              "dependencies": {
+                "observationIds": [
+                  "obs-price-a",
+                  "obs-price-b"
+                ],
+                "assertionIds": []
+              },
+              "policyId": "wwap/token-usd-price/0.1",
+              "digest": "21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c"
+            }
+          ],
+          "assessments": [
+            {
+              "assessor": "issuer:circle",
+              "assessorRole": "ISSUER",
+              "assessment": "CONFIRMED",
+              "statement": "Deployment confirmed for the stated period.",
+              "policy": "issuer-attestation",
+              "policyVersion": "2026-Q3",
+              "assessedAt": "2026-10-23T12:00:00Z",
+              "evidenceRefs": [
+                "obs-identity"
+              ],
+              "limitations": []
+            },
+            {
+              "assessor": "reviewer-y",
+              "assessorRole": "INDEPENDENT_REVIEWER",
+              "assessment": "NOT_AVAILABLE",
+              "statement": null,
+              "policy": "reviewer-y-review",
+              "policyVersion": "1",
+              "assessedAt": "2026-10-23T12:00:00Z",
+              "evidenceRefs": [],
+              "limitations": []
+            },
+            {
+              "assessor": "walletwall-rules",
+              "assessorRole": "WALLETWALL",
+              "assessment": "ESTABLISHED",
+              "statement": null,
+              "policy": "wwap/asset-identity/0.1",
+              "policyVersion": "0.1.0-draft",
+              "assessedAt": "2026-10-23T12:00:30Z",
+              "evidenceRefs": [
+                "obs-identity"
+              ],
+              "limitations": [
+                "REGISTRY_VERIFIED_POINT_IN_TIME"
+              ]
+            }
+          ],
+          "provenance": {
+            "target": "a-identity",
+            "lineage": [
+              {
+                "id": "a-identity",
+                "kind": "assertion",
+                "depth": "0"
+              },
+              {
+                "id": "obs-identity",
+                "kind": "observation",
+                "depth": "1"
+              }
+            ],
+            "issues": []
+          },
+          "limitations": [
+            "NO_AUTHORITATIVE_OBSERVATION",
+            "PRICE_IS_PROVIDER_OBSERVATION",
+            "REGISTRY_VERIFIED_POINT_IN_TIME",
+            "TRANSPORT_FIDELITY_NOT_VERIFIED"
+          ],
+          "conflicts": [],
+          "violations": [],
+          "policyVersions": {
+            "wwap/asset-identity/0.1": "0.1.0-draft",
+            "wwap/token-balance-at-block/0.1": "0.1.0-draft",
+            "wwap/token-usd-price/0.1": "0.1.0-draft"
+          },
+          "ruleVersions": {},
+          "versions": {
+            "wwep": "0.1",
+            "registry": "0.2.0",
+            "policies": "0.1.0-draft",
+            "rules": "0.1.0-draft",
+            "registryDigest": "ee59e7940b0b66aa0fa33b81dfb353f2dd5347cbaeba758e0d65183289a8da87",
+            "policiesDigest": "0457e5a8272d3443766b24852b1752baf38ec13e766ea6e5fd88cafefde7f3ce"
+          },
+          "supersedes": null,
+          "canonicalization": "RFC8785",
+          "digestAlgorithm": "SHA-256",
+          "digest": "ecd3881457b133fdf43ea7cc1b83cac47f7b0ac71f98c72f13c9bb7bb08d955d"
+        },
+        "canonical": "{\"assessments\":[{\"assessedAt\":\"2026-10-23T12:00:00Z\",\"assessment\":\"CONFIRMED\",\"assessor\":\"issuer:circle\",\"assessorRole\":\"ISSUER\",\"evidenceRefs\":[\"obs-identity\"],\"limitations\":[],\"policy\":\"issuer-attestation\",\"policyVersion\":\"2026-Q3\",\"statement\":\"Deployment confirmed for the stated period.\"},{\"assessedAt\":\"2026-10-23T12:00:00Z\",\"assessment\":\"NOT_AVAILABLE\",\"assessor\":\"reviewer-y\",\"assessorRole\":\"INDEPENDENT_REVIEWER\",\"evidenceRefs\":[],\"limitations\":[],\"policy\":\"reviewer-y-review\",\"policyVersion\":\"1\",\"statement\":null},{\"assessedAt\":\"2026-10-23T12:00:30Z\",\"assessment\":\"ESTABLISHED\",\"assessor\":\"walletwall-rules\",\"assessorRole\":\"WALLETWALL\",\"evidenceRefs\":[\"obs-identity\"],\"limitations\":[\"REGISTRY_VERIFIED_POINT_IN_TIME\"],\"policy\":\"wwap/asset-identity/0.1\",\"policyVersion\":\"0.1.0-draft\",\"statement\":null}],\"canonicalization\":\"RFC8785\",\"claims\":[{\"assertionId\":\"a-balance\",\"authority\":{\"authorityId\":\"canonical-chain-state\",\"kind\":\"CANONICAL_CHAIN_STATE\",\"satisfied\":true},\"claimType\":\"TOKEN_BALANCE_AT_BLOCK\",\"conflictsWith\":[],\"dependencies\":{\"assertionIds\":[],\"observationIds\":[\"obs-balance\"]},\"diagnostics\":[],\"digest\":\"135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273\",\"finalityState\":\"FINALIZED\",\"freshnessState\":\"PINNED\",\"independentCorroboration\":\"1\",\"limitations\":[\"REGISTRY_VERIFIED_POINT_IN_TIME\",\"TRANSPORT_FIDELITY_NOT_VERIFIED\"],\"origin\":\"CHAIN_OBSERVED\",\"policyId\":\"wwap/token-balance-at-block/0.1\",\"subject\":{\"blockHash\":\"0xabababababababababababababababababababababababababababababababab\",\"blockNumber\":\"21000000\",\"chainId\":\"1\",\"holder\":\"0x1234567890123456789012345678901234567890\",\"token\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"},\"supersededBy\":null,\"supportState\":\"ESTABLISHED\",\"temporality\":\"PINNED\",\"value\":{\"balanceAtomic\":\"1500000\",\"decimals\":\"6\"}},{\"assertionId\":\"a-identity\",\"authority\":{\"authorityId\":\"issuer-publication\",\"kind\":\"ISSUER_PUBLICATION\",\"satisfied\":true},\"claimType\":\"ASSET_IDENTITY\",\"conflictsWith\":[],\"dependencies\":{\"assertionIds\":[],\"observationIds\":[\"obs-identity\"]},\"diagnostics\":[],\"digest\":\"1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f\",\"finalityState\":null,\"freshnessState\":\"CURRENT\",\"independentCorroboration\":\"1\",\"limitations\":[\"REGISTRY_VERIFIED_POINT_IN_TIME\"],\"origin\":\"AUTHORITY_ATTESTED\",\"policyId\":\"wwap/asset-identity/0.1\",\"subject\":{\"address\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\"chainId\":\"1\"},\"supersededBy\":null,\"supportState\":\"ESTABLISHED\",\"temporality\":\"CURRENT\",\"value\":{\"decimals\":\"6\",\"issuerAuthorityId\":\"issuer:circle\",\"symbol\":\"USDC\"}},{\"assertionId\":\"a-price\",\"authority\":{\"authorityId\":\"none\",\"kind\":\"NONE\",\"satisfied\":false},\"claimType\":\"TOKEN_USD_PRICE\",\"conflictsWith\":[],\"dependencies\":{\"assertionIds\":[],\"observationIds\":[\"obs-price-a\",\"obs-price-b\"]},\"diagnostics\":[],\"digest\":\"21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c\",\"finalityState\":null,\"freshnessState\":\"CURRENT\",\"independentCorroboration\":\"2\",\"limitations\":[\"NO_AUTHORITATIVE_OBSERVATION\",\"PRICE_IS_PROVIDER_OBSERVATION\",\"REGISTRY_VERIFIED_POINT_IN_TIME\"],\"origin\":\"PROVIDER_OBSERVED\",\"policyId\":\"wwap/token-usd-price/0.1\",\"subject\":{\"chainId\":\"1\",\"token\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\"},\"supersededBy\":null,\"supportState\":\"SUPPORTED\",\"temporality\":\"CURRENT\",\"value\":{\"priceUsd\":\"1.0001\"}}],\"conflicts\":[],\"digestAlgorithm\":\"SHA-256\",\"evidence\":{\"bundleDigest\":\"9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082\",\"items\":[{\"digest\":\"135c5c0440d92d52a284d6ffa064dc4e57b20e1a9cdfff0bddb8873c7a2ec273\",\"id\":\"a-balance\",\"kind\":\"ASSERTION\"},{\"digest\":\"1fb9607758cee20b720d4145c2c4f7190395e1ced87373f3aa5b3db35c5c126f\",\"id\":\"a-identity\",\"kind\":\"ASSERTION\"},{\"digest\":\"21bdfd6320f3eae4940d3f9eefdec400ad1a02fe30ab5554b1105aab64abef0c\",\"id\":\"a-price\",\"kind\":\"ASSERTION\"},{\"digest\":\"8f47a2811a02769ed92d2491dcf8da2cf1ea418ba1635fa9c45569572cdc3631\",\"id\":\"obs-balance\",\"kind\":\"OBSERVATION\"},{\"digest\":\"fb73aca3c8e9511b34fec137b24a27d433a01edf7161c2c5483027b0cec1083e\",\"id\":\"obs-identity\",\"kind\":\"OBSERVATION\"},{\"digest\":\"22c1038b21b530b851a80ee27c29295e952229d7d261df07e8374b8961e94c1f\",\"id\":\"obs-price-a\",\"kind\":\"OBSERVATION\"},{\"digest\":\"a70076f18a2bb9e6dba2dc3af19174500d560098a4a0c3686c9d8805a50139d1\",\"id\":\"obs-price-b\",\"kind\":\"OBSERVATION\"},{\"digest\":\"7c91a5dc1fedfa60348f2831e60fef43d5961f1adf6563766b9b74ca0fc848cb\",\"id\":\"src-chain\",\"kind\":\"SOURCE\"},{\"digest\":\"705553a8258255748ad197ecd85c4540a3f83a5b355fba69027c9c93ab8231c6\",\"id\":\"src-issuer\",\"kind\":\"SOURCE\"},{\"digest\":\"53b1631a796919577d18481cc98261244486c979a227c5291cc63092bbf00352\",\"id\":\"src-prov-a\",\"kind\":\"SOURCE\"},{\"digest\":\"63422bbfbb6c7bff2e3017f0f669a98fa0e2efc7c32e0259d0824ed80a95b4bc\",\"id\":\"src-prov-b\",\"kind\":\"SOURCE\"}]},\"id\":\"wp-identity-unverified-v1\",\"limitations\":[\"NO_AUTHORITATIVE_OBSERVATION\",\"PRICE_IS_PROVIDER_OBSERVATION\",\"REGISTRY_VERIFIED_POINT_IN_TIME\",\"TRANSPORT_FIDELITY_NOT_VERIFIED\"],\"policyVersions\":{\"wwap/asset-identity/0.1\":\"0.1.0-draft\",\"wwap/token-balance-at-block/0.1\":\"0.1.0-draft\",\"wwap/token-usd-price/0.1\":\"0.1.0-draft\"},\"provenance\":{\"issues\":[],\"lineage\":[{\"depth\":\"0\",\"id\":\"a-identity\",\"kind\":\"assertion\"},{\"depth\":\"1\",\"id\":\"obs-identity\",\"kind\":\"observation\"}],\"target\":\"a-identity\"},\"ruleVersions\":{},\"snapshotAt\":\"2026-10-23T12:00:30Z\",\"subject\":{\"claimType\":\"ASSET_IDENTITY\",\"focalAssertionId\":\"a-identity\",\"identity\":{\"address\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\"chainId\":\"1\"},\"temporality\":\"CURRENT\"},\"supersedes\":null,\"versions\":{\"policies\":\"0.1.0-draft\",\"policiesDigest\":\"0457e5a8272d3443766b24852b1752baf38ec13e766ea6e5fd88cafefde7f3ce\",\"registry\":\"0.2.0\",\"registryDigest\":\"ee59e7940b0b66aa0fa33b81dfb353f2dd5347cbaeba758e0d65183289a8da87\",\"rules\":\"0.1.0-draft\",\"wwep\":\"0.1\"},\"violations\":[],\"wallprintVersion\":\"0.1\"}",
+        "validation": {
+          "ok": true,
+          "findings": []
+        },
+        "digest": {
+          "hasDigest": true,
+          "matches": true,
+          "computedDigest": "ecd3881457b133fdf43ea7cc1b83cac47f7b0ac71f98c72f13c9bb7bb08d955d"
+        },
+        "lifecycle": {
+          "state": "DISCLOSED",
+          "events": [
+            {
+              "seq": "0",
+              "recordId": "wp-identity-unverified-v1",
+              "recordDigest": "ecd3881457b133fdf43ea7cc1b83cac47f7b0ac71f98c72f13c9bb7bb08d955d",
+              "state": "COMMITTED",
+              "at": "2026-10-23T12:10:00.000Z",
+              "reason": null,
+              "ref": null,
+              "previousEventDigest": null,
+              "eventDigest": "9492ae4e8d24ddbe004b9d4c6c91f3d5d1370b1c2d07e4058e1d9ee4a09273ec"
+            },
+            {
+              "seq": "1",
+              "recordId": "wp-identity-unverified-v1",
+              "recordDigest": "ecd3881457b133fdf43ea7cc1b83cac47f7b0ac71f98c72f13c9bb7bb08d955d",
+              "state": "DISCLOSED",
+              "at": "2026-10-23T12:20:00.000Z",
+              "reason": null,
+              "ref": null,
+              "previousEventDigest": "9492ae4e8d24ddbe004b9d4c6c91f3d5d1370b1c2d07e4058e1d9ee4a09273ec",
+              "eventDigest": "bd2da4e4013bfe3c1c39513699f4fa8707940742b15d3c1000871b3f23a6ed0f"
+            }
+          ]
+        },
+        "supersedes": null,
+        "supersededBy": null,
+        "lineage": {
+          "root": "wp-identity-unverified-v1",
+          "current": "wp-identity-unverified-v1",
+          "predecessor": null,
+          "successor": null,
+          "chain": [
+            "wp-identity-unverified-v1"
+          ]
+        },
+        "diff": null,
+        "receipt": {
+          "issued": {
+            "wallprintVersion": "0.1",
+            "recordId": "wp-identity-unverified-v1",
+            "canonicalization": "RFC8785",
+            "digestAlgorithm": "SHA-256",
+            "digest": "ecd3881457b133fdf43ea7cc1b83cac47f7b0ac71f98c72f13c9bb7bb08d955d",
+            "bundleDigest": "9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082",
+            "versions": {
+              "wwep": "0.1",
+              "registry": "0.2.0",
+              "policies": "0.1.0-draft",
+              "rules": "0.1.0-draft"
+            }
+          },
+          "verification": null
+        },
+        "replay": {
+          "outcome": "REPRODUCED",
+          "reasons": [],
+          "recomputedDigest": "ecd3881457b133fdf43ea7cc1b83cac47f7b0ac71f98c72f13c9bb7bb08d955d",
+          "mismatches": []
+        }
+      }
+    ]
   }
 };

@@ -119,6 +119,7 @@ export const SCENARIO_LABELS = {
   ENGINE_BUILT: "every record of this lineage was built by the engine from its synthetic evidence",
   COMMITTED_ELSEWHERE: "this record was built by the engine, then one field was changed and the record re-digested before commit, as a record from another engine would be",
   ALTERED_AFTER_COMMIT: "this record was built and committed by the engine; the copy disclosed here was changed afterwards without re-digesting",
+  VERIFICATION_NOT_CARRIED: "every record of this lineage was built by the engine and its receipt was issued by the engine; the receipt's verification result was left out of this disclosure, so no check result is carried",
 };
 
 const ATTENTION_FREE = ["ESTABLISHED", "SUPPORTED", "CURRENT", "PINNED", "FINALIZED", "COMMITTED", "DISCLOSED", "REPRODUCED", "MATCH"];
