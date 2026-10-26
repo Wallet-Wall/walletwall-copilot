@@ -22,6 +22,13 @@ import { HEX64_RE, RECORD_ID_RE, WALLPRINT_VERSION } from "./vocabulary.ts";
  *   envelope form (structured export), in RFC 8785 key order, a locator envelope and not a second record format
  *     {"digest":"…","recordId":"…","target":"receipt","type":"walletwall.wallprint.reference","version":"0.1","wallprintVersion":"0.1"}
  *
+ * and one REPRESENTATION of the text form for a public HTTPS resolver, which is not a third identity: the same text with
+ * the scheme and host replaced by a resolver base and the route (`toHttpsUrl`, `parseHttpsUrl`), a prefix substitution
+ * that is deterministic and lossless and carries the reference's own versions
+ *
+ *   https form (what a public page's QR code and share control carry; the base is supplied by the caller, never named here)
+ *     <resolverBase>/wallprint/<recordId>?reference=0.1&wallprint=<wallprintVersion>&digest=<hex64>[&target=<target>]
+ *
  * Parsing is strict and fails closed: the exact scheme and host, the exact parameter order, no duplicate or unknown
  * parameter, no percent-encoding, no character outside a small ASCII set, no case folding of ids or digests, and a
  * target only from the closed table. A reference that fails to parse reports a fixed outcome and a fixed problem code,
@@ -67,8 +74,8 @@ export interface WallPrintReferenceEnvelope {
   readonly target?: ReferenceTarget;
 }
 
-/** Which fixed part of the input failed. Never a caller value. */
-export type ReferenceProblem = "text" | "length" | "characters" | "scheme" | "query" | "envelope" | "reference" | "wallprint" | "recordId" | "digest" | "target";
+/** Which fixed part of the input failed. Never a caller value. `resolver`: not this resolver's base and route. */
+export type ReferenceProblem = "text" | "length" | "characters" | "scheme" | "query" | "envelope" | "reference" | "wallprint" | "recordId" | "digest" | "target" | "resolver";
 
 export type ReferenceParse = { ok: true; reference: WallPrintPortableReference } | { ok: false; outcome: "MALFORMED_REFERENCE" | "UNSUPPORTED_VERSION"; problem: ReferenceProblem };
 
@@ -266,6 +273,63 @@ export function parseReference(input: unknown): ReferenceParse {
     return parsed;
   }
   return parseText(input);
+}
+
+// ─── https form ──────────────────────────────────────────────────────────────
+
+/** The route a public resolver serves references under. The text form's `walletwall://wallprint/` maps onto `<base>/wallprint/`. */
+export const RESOLVER_ROUTE = "/wallprint/";
+/** A dotted DNS host in lower case whose last label is alphabetic: never an IP literal, a single label or a non-ASCII name. (`host` equals the name alone once the port is required to be empty.) */
+const RESOLVER_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+/** No internationalised label either: a resolver base reads the same to a reader and to a machine, so look-alike bases are refused. */
+const PUNYCODE_LABEL_RE = /(?:^|\.)xn--/;
+const RESOLVER_BASE_MAX_LENGTH = 256;
+
+/**
+ * True for exactly one spelling of an HTTPS origin: the base equals its own parsed origin (so it carries no path, query,
+ * fragment, userinfo or default port and no upper-case letter), its scheme is HTTPS and its host is a dotted DNS name.
+ * No base is named in this module: a resolver base is a caller value, checked, never assumed.
+ */
+export function isResolverBase(base: unknown): base is string {
+  if (typeof base !== "string" || base === "" || base.length > RESOLVER_BASE_MAX_LENGTH) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(base);
+  } catch {
+    return false;
+  }
+  return parsed.origin === base && parsed.protocol === "https:" && parsed.port === "" && RESOLVER_HOST_RE.test(parsed.host) && !PUNYCODE_LABEL_RE.test(parsed.host);
+}
+
+/** The reference's path and query under the route: the text form with `walletwall://wallprint/` replaced by `/wallprint/`. Throws INVALID_REFERENCE. */
+export function toResolverPath(ref: WallPrintPortableReference): string {
+  return `${RESOLVER_ROUTE}${encodeReference(ref).slice(REFERENCE_PREFIX.length)}`;
+}
+
+/** The public HTTPS form: the resolver base plus the resolver path. Throws INVALID_REFERENCE for an invalid base (finding INVALID_RESOLVER_BASE) or reference. */
+export function toHttpsUrl(ref: WallPrintPortableReference, resolverBase: string): string {
+  if (!isResolverBase(resolverBase)) throw new WallPrintError("INVALID_REFERENCE", [finding("INVALID_RESOLVER_BASE", "resolverBase")]);
+  return `${resolverBase}${toResolverPath(ref)}`;
+}
+
+/**
+ * Parse a path and query as a public resolver receives it (`/wallprint/<recordId>?…`): the route is required exactly, and
+ * the rest is read by the text form's own strict grammar after the prefix substitution is undone. Never throws, never echoes.
+ */
+export function parseResolverPath(pathAndQuery: unknown): ReferenceParse {
+  if (typeof pathAndQuery !== "string" || pathAndQuery === "") return bad("MALFORMED_REFERENCE", "text");
+  if (pathAndQuery.length > REFERENCE_MAX_LENGTH) return bad("MALFORMED_REFERENCE", "length");
+  if (!pathAndQuery.startsWith(RESOLVER_ROUTE)) return bad("MALFORMED_REFERENCE", "resolver");
+  return parseReference(`${REFERENCE_PREFIX}${pathAndQuery.slice(RESOLVER_ROUTE.length)}`);
+}
+
+/** Parse a public HTTPS URL against one resolver base: the base and the route must match exactly; the rest is the text form's grammar. Never throws, never echoes. */
+export function parseHttpsUrl(url: unknown, resolverBase: unknown): ReferenceParse {
+  if (!isResolverBase(resolverBase)) return bad("MALFORMED_REFERENCE", "resolver");
+  if (typeof url !== "string" || url === "") return bad("MALFORMED_REFERENCE", "text");
+  if (url.length > resolverBase.length + REFERENCE_MAX_LENGTH) return bad("MALFORMED_REFERENCE", "length");
+  if (!url.startsWith(`${resolverBase}${RESOLVER_ROUTE}`)) return bad("MALFORMED_REFERENCE", "resolver");
+  return parseResolverPath(url.slice(resolverBase.length));
 }
 
 // ─── resolution ──────────────────────────────────────────────────────────────

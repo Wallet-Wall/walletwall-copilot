@@ -1,0 +1,8 @@
+{
+  "name": "@walletwall/wallprint-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The public WallPrint resolver: a static page that locates a published disclosure by URL, proves its bytes and renders it with the canvas's WallPrint renderer. Not published.",
+  "type": "module",
+  "license": "Apache-2.0"
+}

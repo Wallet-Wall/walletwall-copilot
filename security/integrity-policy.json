@@ -14,7 +14,10 @@
     },
     "protocol": {
       "evidenceDigestImplementation": "packages/mcp/src/canonical.ts",
-      "resourceDigestImplementation": "packages/mcp/src/resources.ts"
+      "resourceDigestImplementation": "packages/mcp/src/resources.ts",
+      "publicResolverDigestImplementation": "packages/wallprint-web/lib/digest.ts",
+      "publicResolverArtifactReader": "packages/wallprint-web/lib/artifact.ts",
+      "publicResolverLedgerVerifier": "packages/wallprint-web/lib/ledger.ts"
     },
     "provenance": {
       "brandSources": "canvas/brand/brand-sources.json",
@@ -25,7 +28,8 @@
     "testOnly": {
       "fingerprintHarness": "packages/mcp/test/support/harness.ts",
       "canonicalRegression": "packages/mcp/test/sandbox/canonical.test.ts",
-      "mcpbRegression": "packages/mcp/test/repo/mcpb.test.ts"
+      "mcpbRegression": "packages/mcp/test/repo/mcpb.test.ts",
+      "publicResolverCanonicalParity": "packages/wallprint-web/test/canonical-form.test.ts"
     },
     "historical": {
       "pluginV030": "security/history/v0.3.0/plugin-artifact.sha256",

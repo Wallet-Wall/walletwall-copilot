@@ -12,7 +12,7 @@
     "packages/*"
   ],
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p packages/wallprint-web/tsconfig.json --noEmit",
     "lint": "eslint .",
     "gen:content": "node scripts/gen-content.ts",
     "gen:manifest": "node scripts/gen-manifest.ts",
@@ -46,17 +46,22 @@
     "test:sandbox": "node --test --test-reporter=spec \"packages/mcp/test/sandbox/*.test.ts\"",
     "test:privacy": "node --test --test-reporter=spec \"packages/mcp/test/privacy/*.test.ts\" \"packages/mcp/test/canvas/plugin-path.test.ts\"",
     "test:canvas": "node --test --test-reporter=spec \"packages/mcp/test/canvas/*.test.ts\"",
-    "test": "node --test --test-reporter=spec \"packages/mcp/test/**/*.test.ts\"",
+    "test": "node --test --test-reporter=spec \"packages/mcp/test/**/*.test.ts\" \"packages/wallprint-web/test/**/*.test.ts\"",
     "eval:agent": "node evals/run-agent-evals.ts",
     "conformance:report": "node scripts/conformance-report.ts",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
-    "verify": "npm run typecheck && npm run lint && npm run verify:integrity-policy && npm run verify:content && npm run verify:conformance && npm run verify:manifest && npm run verify:bundle && npm run verify:notices && npm run verify:canvas && npm run verify:canvas-brand && npm run verify:wallprint && npm run verify:wallprint-reference && npm run verify:plugin && npm run verify:plugin-manifest && npm run verify:plugin-artifact && npm run verify:mcpb && npm run verify:claude-directory && npm test"
+    "verify": "npm run typecheck && npm run lint && npm run verify:integrity-policy && npm run verify:content && npm run verify:conformance && npm run verify:manifest && npm run verify:bundle && npm run verify:notices && npm run verify:canvas && npm run verify:canvas-brand && npm run verify:wallprint && npm run verify:wallprint-reference && npm run verify:wallprint-publication && npm run verify:wallprint-public && npm run verify:plugin && npm run verify:plugin-manifest && npm run verify:plugin-artifact && npm run verify:mcpb && npm run verify:claude-directory && npm test",
+    "wallprint:publish": "node scripts/wallprint-publish.ts",
+    "verify:wallprint-publication": "node scripts/wallprint-publish.ts --check",
+    "build:wallprint-public": "node scripts/build-wallprint-public.ts",
+    "verify:wallprint-public": "node scripts/build-wallprint-public.ts --check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.2",
     "esbuild": "0.28.2",
     "eslint": "10.13.0",
+    "jsqr": "1.4.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.0"
   }

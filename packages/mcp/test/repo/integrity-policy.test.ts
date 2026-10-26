@@ -29,6 +29,10 @@ const EXPECTED_SHA256_EXCEPTION_PATHS = Object.freeze([
   "packages/mcp/test/repo/public-release.test.ts",
   "packages/mcp/test/sandbox/canonical.test.ts",
   "packages/mcp/test/support/harness.ts",
+  "packages/wallprint-web/lib/digest.ts",
+  "packages/wallprint-web/lib/artifact.ts",
+  "packages/wallprint-web/lib/ledger.ts",
+  "packages/wallprint-web/test/canonical-form.test.ts",
   "security/history/v0.3.0/plugin-artifact.sha256",
   "security/mcpb.sha256",
 ] as const);
@@ -42,6 +46,13 @@ const ALLOWED_SHA256_COMPUTATION_FILES = new Set([
   "packages/mcp/test/repo/public-release.test.ts",
   "packages/mcp/test/sandbox/canonical.test.ts",
   "packages/mcp/test/support/harness.ts",
+  // The public WallPrint resolver computes the protocol digest (SHA-256 over RFC 8785 bytes) through Web Crypto for the
+  // record and for each lifecycle event of its standing's ledger, and its
+  // canonical-form parity test pins it against the engine.
+  "packages/wallprint-web/lib/digest.ts",
+  "packages/wallprint-web/lib/artifact.ts",
+  "packages/wallprint-web/lib/ledger.ts",
+  "packages/wallprint-web/test/canonical-form.test.ts",
 ]);
 
 const CURRENT_INTEGRITY_CONSUMERS = Object.freeze([

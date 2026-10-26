@@ -43,7 +43,9 @@ export const WallPrintReceiptSchema = z.strictObject({
 });
 export type WallPrintReceipt = Readonly<z.infer<typeof WallPrintReceiptSchema>>;
 
-export type ReceiptReason = "RECEIPT_INVALID" | "RECORD_INVALID" | "RECORD_ID_MISMATCH" | "DIGEST_MISMATCH" | "BUNDLE_DIGEST_MISMATCH" | "VERSION_MISMATCH";
+/** Why a receipt does not prove a record's bytes, in the order verifyReceipt reports them (sorted). A closed list. */
+export const RECEIPT_REASONS = ["BUNDLE_DIGEST_MISMATCH", "DIGEST_MISMATCH", "RECEIPT_INVALID", "RECORD_ID_MISMATCH", "RECORD_INVALID", "VERSION_MISMATCH"] as const;
+export type ReceiptReason = (typeof RECEIPT_REASONS)[number];
 
 export interface ReceiptVerification {
   /** Byte integrity only. */

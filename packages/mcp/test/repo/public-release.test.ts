@@ -11,7 +11,8 @@ import { PROHIBITED_CLAIM_PATTERNS } from "../support/claims.ts";
 const read = (p: string): string => readFileSync(`${ROOT}${p}`, "utf8").replace(/\r\n/g, "\n");
 const norm = (s: string): string => s.replace(/\s+/g, " ").trim();
 
-const SKIP_DIRS = new Set(["node_modules", ".git", ".playwright-mcp"]);
+// `dist/` is ignored build output (the Claude Directory package and the public WallPrint resolver), never tracked.
+const SKIP_DIRS = new Set(["node_modules", ".git", ".playwright-mcp", "dist"]);
 const BINARY = /\.(png|jpg|jpeg|gif|ico|woff2?|zip|gz)$/i;
 const SELF = "packages/mcp/test/repo/public-release.test.ts";
 

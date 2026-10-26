@@ -21,7 +21,7 @@
 //    registration block beside its exact text and never as a seal: they establish nothing about the record's claims.
 import { esc } from "./wall.mjs";
 import { encodeQr, qrPathData } from "./wallprint-qr.mjs";
-import { REFERENCE_DOES_NOT_ESTABLISH, REFERENCE_IDENTIFIES, REFERENCE_TARGETS, REFERENCE_VERSION, encodeReference, encodeReferenceEnvelope, tryReference } from "./wallprint-reference.mjs";
+import { REFERENCE_DOES_NOT_ESTABLISH, REFERENCE_IDENTIFIES, REFERENCE_TARGETS, REFERENCE_VERSION, encodeReference, encodeReferenceEnvelope, isResolverBase, parseResolverPath, toHttpsUrl, toResolverPath, tryReference } from "./wallprint-reference.mjs";
 
 export const ASSESSOR_ROLE_LABELS = {
   WALLETWALL: "WalletWall",
@@ -56,6 +56,27 @@ export const REFERENCE_PRESENTATION = {
   MALFORMED_REFERENCE: "The text is not a WallPrint portable reference in the form this document reads. Nothing was resolved and no part of the text is shown.",
   UNSUPPORTED_VERSION: "The reference declares a reference or WallPrint version this document does not read. Nothing was resolved.",
 };
+/**
+ * The same outcomes told by the PUBLIC resolver, which locates a published disclosure by URL and computes the digest of
+ * the bytes it fetched itself. None of these is a statement about the facts; none calls anything invalid, false or forged.
+ */
+export const PUBLIC_PRESENTATION = {
+  RESOLVED: "The record this URL names is published here; the digest its artifact carries and the SHA-256 this page computed over its canonical bytes both equal the digest the URL carries. What that establishes is only that: which record, which bytes, as published.",
+  UNAVAILABLE: "This resolver serves published WallPrint disclosures; the record this URL names is not published here. The URL is well formed and names a record and a digest. Unavailable is not invalid, and this says nothing about the record or its claims.",
+  UNREACHABLE: "The disclosure store could not be read, so this page could not look the record up. Nothing is said about the record; it may be published and reachable later.",
+  NOT_COMPARED: "The published artifact for this record is not in a form this page reads, so its digest was compared with nothing: nothing was compared and nothing from it is shown.",
+  DIGEST_MISMATCH: "The record this URL names is published here under other bytes: the digest the URL carries is not the digest its published artifact carries.",
+  DIGEST_MISMATCH_ARTIFACT: "The published artifact does not digest to the digest it carries: the store's copy failed its own check. Nothing from it is shown.",
+  MALFORMED_REFERENCE: "The URL is not a WallPrint portable reference in the form this resolver reads. Nothing was resolved and no part of the URL is shown.",
+  UNSUPPORTED_VERSION: "The URL declares a reference or WallPrint version this resolver does not read. Nothing was resolved.",
+};
+/** UNREACHABLE reasons, in words. Anything else is "not recognised". */
+export const UNREACHABLE_LABELS = {
+  NETWORK: "the request did not complete",
+  STATUS: "the store answered with a status other than found or not found",
+  STANDING_INVALID: "the store's index for this record is not in a form this page reads",
+  ARTIFACT_MISSING: "the store's index names a publication the store does not serve",
+};
 /** The fixed problem codes a failed parse can carry, in words. Anything else is "not recognised". */
 export const REFERENCE_PROBLEM_LABELS = {
   text: "not a non-empty text",
@@ -69,6 +90,7 @@ export const REFERENCE_PROBLEM_LABELS = {
   recordId: "the record id is not a lower-case record id of 3 to 64 characters",
   digest: "the digest is not 64 lower-case hexadecimal characters",
   target: "the target is not one of record, receipt, replay, history, assessments, provenance",
+  resolver: "not a path under this resolver's route",
 };
 
 export const CLAIM_LABELS = {
@@ -622,7 +644,20 @@ function diffGroups(m, vocabulary) {
     .join("")}</div>`;
 }
 
-function history(m, vm, vocabulary) {
+/**
+ * In public mode a page holds one record, so another version of the lineage is reached by its own public URL, never by a
+ * version toggle. A link is built only for a version whose id and digest this record carries (its predecessor through
+ * `supersedes`, its successor through `supersededBy`), through the reference codec, as a same-origin resolver path; any
+ * other version is named without a link. Nothing redirects: the reader chooses.
+ */
+function lineagePath(m, id) {
+  const digest = m.supersedes && m.supersedes.id === id ? m.supersedes.digest : m.supersededBy && m.supersededBy.id === id ? m.supersededBy.digest : null;
+  if (digest === null) return null;
+  const ref = tryReference({ recordId: id, digest, wallprintVersion: m.wallprintVersion });
+  return ref === null ? null : toResolverPath(ref);
+}
+
+function history(m, vm, vocabulary, pub = null) {
   const byId = new Map(vm.records.map((r) => [r.id, r]));
   const chain = m.lineageChain.length ? m.lineageChain : [m.id];
   const nodes = chain.map((id, i) => {
@@ -631,12 +666,20 @@ function history(m, vm, vocabulary) {
     const link = r && r.supersedes ? r.supersedes : null;
     const state = r ? r.lifecycle.state : null;
     const sr = link ? ` ${esc(linkVerb(link.kind, false))} ${esc(link.id)}` : i === 0 ? " root record" : "";
-    return `<li class="wp-lineage-node" data-current="${current}"${link ? ` data-link="${esc(link.kind)}"` : ""}>${link ? `<span class="wp-lineage-arrow" aria-hidden="true"></span>` : ""}<button type="button" class="wp-version" data-wp-version="${esc(id)}"${current ? ' aria-current="true"' : ""}><span class="wp-version-label">${esc(r ? r.version : id)}</span><span class="ww-sr">${sr}, lifecycle </span>${state ? chip(state, vocabulary.lifecycleStates) : '<span class="chip" data-state="NA">unknown</span>'}<span class="wp-version-id"><code>${esc(id)}</code></span></button>${link ? `<p class="wp-link"><code>${esc(link.kind)}</code>${link.reason ? ` <span class="wp-reason">${esc(link.reason)}</span>` : ' <span class="muted small">no reason stated</span>'}</p>` : ""}</li>`;
+    const inner = `<span class="wp-version-label">${esc(r ? r.version : id)}</span><span class="ww-sr">${sr}, lifecycle </span>${state ? chip(state, vocabulary.lifecycleStates) : `<span class="chip" data-state="NA">${pub ? "not carried here" : "unknown"}</span>`}<span class="wp-version-id"><code>${esc(id)}</code></span>`;
+    let control;
+    if (pub === null) control = `<button type="button" class="wp-version" data-wp-version="${esc(id)}"${current ? ' aria-current="true"' : ""}>${inner}</button>`;
+    else if (current) control = `<span class="wp-version wp-version-static" aria-current="true">${inner}</span>`;
+    else {
+      const path = lineagePath(m, id);
+      control = path === null ? `<span class="wp-version wp-version-static">${inner}<span class="muted small"> no link: this record carries no committed digest for it</span></span>` : `<a class="wp-version wp-lineage-link" href="${esc(path)}">${inner}<span class="ww-sr"> (opens that record's own public page)</span></a>`;
+    }
+    return `<li class="wp-lineage-node" data-current="${current}"${link ? ` data-link="${esc(link.kind)}"` : ""}>${link ? `<span class="wp-lineage-arrow" aria-hidden="true"></span>` : ""}${control}${link ? `<p class="wp-link"><code>${esc(link.kind)}</code>${link.reason ? ` <span class="wp-reason">${esc(link.reason)}</span>` : ' <span class="muted small">no reason stated</span>'}</p>` : ""}</li>`;
   });
   const own = m.supersedes ? `<p>This record <strong>${esc(linkVerb(m.supersedes.kind, false))}</strong> <code>${esc(m.supersedes.id)}</code> and binds that record's committed digest <code>${esc(m.supersedes.digest)}</code>${m.supersedes.reason ? `. Stated reason: <span class="wp-reason-inline">${esc(m.supersedes.reason)}</span>` : "."} The earlier record stays committed and selectable above.</p>` : "";
   const by = m.supersededBy ? `<p data-attention="true" class="note">This record was <strong>${esc(linkVerb(m.supersededBy.kind, true))}</strong> by <code>${esc(m.supersededBy.id)}</code> (successor digest <code>${esc(m.supersededBy.digest)}</code>). The history appended that event to this record; it did not rewrite or remove the record. Whether the bytes shown here are its committed bytes is checked under Verify.</p>` : "";
   return `<section class="wp-history wp-rise" data-wp-step="4" aria-labelledby="wp-hist-${esc(m.id)}" data-wp-target="history" id="wp-sec-history-${esc(m.id)}"><h3 id="wp-hist-${esc(m.id)}">Corrections and supersessions</h3>
-${chain.length > 1 ? '<p class="muted small">Every version of this lineage stays visible and selectable. A correction or supersession is a new record that binds the predecessor by digest; the predecessor is never edited or deleted.</p>' : '<p class="muted small">No correction or supersession is recorded for this lineage.</p>'}
+${chain.length > 1 ? `<p class="muted small">${pub ? "Every version of this lineage keeps its own public page; a predecessor or successor this record binds by digest is linked, nothing is redirected." : "Every version of this lineage stays visible and selectable."} A correction or supersession is a new record that binds the predecessor by digest; the predecessor is never edited or deleted.</p>` : '<p class="muted small">No correction or supersession is recorded for this lineage.</p>'}
 <ol class="wp-lineage" aria-label="Lineage, root first">${nodes.join("")}</ol>
 ${own}${by}${diffGroups(m, vocabulary)}
 </section>`;
@@ -647,7 +690,7 @@ ${own}${by}${diffGroups(m, vocabulary)}
  * then the registration readout (every identifier, digest, version and instant, exact and copyable) and the derivation
  * chain from the canonical payload to the commitment comparison. The questions are never combined into one state.
  */
-function verify(m, vm, vocabulary) {
+function verify(m, vm, vocabulary, pub = null) {
   const fact = (dt, dd) => `<div><dt>${dt}</dt><dd>${dd}</dd></div>`;
   const notStated = '<span class="muted">not stated</span>';
   const code = (v) => (typeof v === "string" && v !== "" ? `<code>${esc(v)}</code>` : notStated);
@@ -738,7 +781,7 @@ ${withdrawn ? fact("Withdrawn", instant(withdrawn.at)) : ""}
   // advanced fold inside the first step; every value is the engine's.
   const rawFold = `<details class="wp-more wp-raw"><summary>Raw canonical payload (advanced)</summary><p class="muted small">The digest preimage in RFC 8785 form, as the engine serialized it: the record without its own <code>digest</code>. Shown exactly; not reformatted.</p>${m.canonical ? `<div class="wp-copyable wp-raw-body"><code class="wp-raw-text">${esc(m.canonical)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full canonical payload">Copy</button></div>` : '<p class="muted">not carried by this fixture</p>'}</details>`;
   const step = (key, title, body) => `<li class="wp-step" data-step="${key}"><span class="wp-step-title">${title}</span>${body}</li>`;
-  const derivation = `<div class="wp-derivation"><h4>From payload to commitment</h4><p class="muted small">How the digest is derived from the record, and how the receipt relates to it. Every value is the engine's; nothing is recomputed here.</p><ol class="wp-steps" aria-label="Derivation, from payload to commitment">
+  const derivation = `<div class="wp-derivation"><h4>From payload to commitment</h4><p class="muted small">How the digest is derived from the record, and how the receipt relates to it. ${pub ? "Every value in this section is the engine&#39;s, as published; the SHA-256 this page computed over the canonical bytes is in the readout at the top." : "Every value is the engine's; nothing is recomputed here."}</p><ol class="wp-steps" aria-label="Derivation, from payload to commitment">
 ${step("payload", "Canonical payload", `<p class="muted small">The record without its own <code>digest</code>: the digest preimage.</p>${rawFold}`)}
 ${step("canonical", "Canonicalization", `<p>${code(m.canonicalization)} <span class="muted small">RFC 8785 JSON Canonicalization Scheme produces the canonical bytes.</span></p>`)}
 ${step("hash", "Digest algorithm", `<p>${code(m.digestAlgorithm)} <span class="muted small">over the canonical bytes.</span></p>`)}
@@ -757,7 +800,7 @@ ${replayCheck}
 </ol>
 <p class="wp-independent">Receipt and replay are separate questions: a matching receipt beside a replay mismatch, or beside an unreplayable record, is a consistent result. This document never combines them into one state.</p>
 ${registration}
-${portable(m)}
+${portable(m, pub)}
 ${derivation}
 </section>`;
 }
@@ -770,30 +813,48 @@ ${derivation}
  * record identity (no COMMITTED event naming this record and its digest) there is no reference and no code, and the
  * prerequisite is named.
  */
-function portable(m) {
+function portable(m, pub = null) {
   const ref = m.reference;
-  const intro = `<p class="muted small">A locator for this record: its id, its committed digest and the WallPrint version, in one fixed form. The code and the text beside it carry exactly the same reference. ${esc(REFERENCE_IDENTIFIES)}</p>`;
-  const boundary = `<p class="wp-boundary"><strong>A reference is a locator, not authority.</strong> It names which record and which bytes; it does not establish ${list(REFERENCE_DOES_NOT_ESTABLISH)
+  // The HTTPS form is drawn only when the page knows a resolver base that the codec admits; the canvas never passes one
+  // (it names no endpoint), so its code carries the walletwall: reference itself.
+  const base = pub !== null && isResolverBase(pub.resolverBase) ? pub.resolverBase : null;
+  const form = base === null ? "reference" : "https";
+  const intro =
+    base === null
+      ? `<p class="muted small">A locator for this record: its id, its committed digest and the WallPrint version, in one fixed form. The code and the text beside it carry exactly the same reference. ${esc(REFERENCE_IDENTIFIES)}</p>`
+      : `<p class="muted small">A locator for this record: its id, its committed digest and the WallPrint version, in one fixed form. The code encodes the public URL of this record: the same reference under WalletWall&#39;s public resolver; the <code>walletwall:</code> reference beside it is the same locator in its canonical form. ${esc(REFERENCE_IDENTIFIES)}</p>`;
+  const notEstablish = list(REFERENCE_DOES_NOT_ESTABLISH)
     .map((x) => esc(x))
-    .join(", ")}. It is not a signature. The code encodes no web address and no local address: it is a <code>walletwall:</code> locator that no app registers a handler for, so scanning it opens nothing by itself; opening it needs a compatible WalletWall disclosure store, such as this panel's bundled lineages. No public resolver exists in this release.</p>`;
+    .join(", ");
+  const boundary =
+    base === null
+      ? `<p class="wp-boundary"><strong>A reference is a locator, not authority.</strong> It names which record and which bytes; it does not establish ${notEstablish}. It is not a signature. The code encodes the <code>walletwall:</code> reference itself, not a web address: no app registers a handler for it, so scanning it opens nothing by itself; opening it needs a compatible WalletWall disclosure store or resolver, such as this panel&#39;s bundled lineages or WalletWall&#39;s public resolver for published disclosures, which serves the same reference under an HTTPS form.</p>`
+      : `<p class="wp-boundary"><strong>A reference is a locator, not authority.</strong> It names which record and which bytes; it does not establish ${notEstablish}. It is not a signature. The URL is a representation of the reference, not a second identity: it names the same record and digest under WalletWall&#39;s public resolver, and resolving it establishes only which record and which bytes were published. The <code>walletwall:</code> reference beside it is the same locator; a compatible WalletWall disclosure store opens either.</p>`;
   if (ref === null) {
-    return `<div class="wp-portable" data-wp-reference="unavailable"><h4>Portable reference</h4>${intro}<p class="note">No portable reference for this record: this disclosure carries no committed record identity for it (a COMMITTED lifecycle event naming this record with its committed digest, and a WallPrint version). A reference needs exactly those three values. No code is drawn in its place.</p>${boundary}</div>`;
+    return `<div class="wp-portable" data-wp-reference="unavailable" data-wp-reference-form="${form}"><h4>Portable reference</h4>${intro}<p class="note">No portable reference for this record: this disclosure carries no committed record identity for it (a COMMITTED lifecycle event naming this record with its committed digest, and a WallPrint version). A reference needs exactly those three values. No code is drawn in its place.</p>${boundary}</div>`;
   }
   const text = encodeReference(ref);
-  const code = encodeQr(text);
+  const url = base === null ? null : toHttpsUrl(ref, base);
+  const code = encodeQr(url ?? text);
   const { extent, d } = qrPathData(code);
   const textId = `wp-pr-${esc(m.id)}`;
-  const svg = `<svg class="wp-qr-code" viewBox="0 0 ${extent} ${extent}" role="img" aria-label="QR code. It encodes the portable reference printed beside it and nothing else." aria-describedby="${textId}" shape-rendering="crispEdges" data-qr-version="${esc(String(code.version))}" data-qr-modules="${esc(String(code.size))}" data-qr-ec="${esc(code.ecLevel)}"><rect class="wp-qr-quiet" width="${extent}" height="${extent}"/><path class="wp-qr-dark" d="${d}"/></svg>`;
+  const urlId = `wp-pu-${esc(m.id)}`;
+  const svg = `<svg class="wp-qr-code" viewBox="0 0 ${extent} ${extent}" role="img" aria-label="QR code. It encodes the ${url === null ? "portable reference" : "public URL"} printed beside it and nothing else." aria-describedby="${url === null ? textId : urlId}" shape-rendering="crispEdges" data-qr-version="${esc(String(code.version))}" data-qr-modules="${esc(String(code.size))}" data-qr-ec="${esc(code.ecLevel)}"><rect class="wp-qr-quiet" width="${extent}" height="${extent}"/><path class="wp-qr-dark" d="${d}"/></svg>`;
   const sections = REFERENCE_TARGETS.filter((t) => t !== "record").map((t) => `<li><span class="wp-eyebrow-inline">${esc(TARGET_LABELS[t])}</span> ${exact(encodeReference({ ...ref, target: t }), `portable reference to the ${TARGET_LABELS[t]} section`)}</li>`);
-  return `<div class="wp-portable" data-wp-reference="available" data-wp-reference-target="none"><h4>Portable reference</h4>${intro}
+  const urlRow = url === null ? "" : `<div><dt>Public URL</dt><dd><span class="wp-copyable"><code class="wp-exact" id="${urlId}">${esc(url)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full public URL">Copy URL</button></span></dd></div>\n`;
+  const encodes =
+    url === null
+      ? `the record id, the committed digest, WallPrint version <code>${esc(ref.wallprintVersion)}</code> and reference format <code>${esc(REFERENCE_VERSION)}</code>; no section target, no web or local address, no wallet address, no key, no record content`
+      : `the public URL of this record: the same reference (record id, committed digest, WallPrint version <code>${esc(ref.wallprintVersion)}</code>, reference format <code>${esc(REFERENCE_VERSION)}</code>) under WalletWall&#39;s public resolver; no section target, no wallet address, no key, no session, no record content`;
+  return `<div class="wp-portable" data-wp-reference="available" data-wp-reference-target="none" data-wp-reference-form="${form}"><h4>Portable reference</h4>${intro}
 <div class="wp-portable-block">
-<div class="wp-qr">${svg}<p class="wp-qr-caption">Scan · Copy reference</p><p class="muted small wp-qr-meta">QR version ${esc(String(code.version))}, ${esc(String(code.size))} modules, error correction ${esc(code.ecLevel)}, quiet zone 4</p></div>
+<div class="wp-qr">${svg}<p class="wp-qr-caption">${url === null ? "Scan · Copy reference" : "Scan · Copy URL"}</p><p class="muted small wp-qr-meta">QR version ${esc(String(code.version))}, ${esc(String(code.size))} modules, error correction ${esc(code.ecLevel)}, quiet zone 4</p></div>
 <div class="wp-portable-text">
 <dl class="states wp-facts wp-portable-fields">
-<div><dt>Reference</dt><dd><span class="wp-copyable"><code class="wp-exact" id="${textId}">${esc(text)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full portable reference">Copy reference</button></span></dd></div>
+${urlRow}<div><dt>Reference</dt><dd><span class="wp-copyable"><code class="wp-exact" id="${textId}">${esc(text)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full portable reference">Copy reference</button></span></dd></div>
 <div><dt>Record</dt><dd>${exact(ref.recordId, "WallPrint id")}</dd></div>
 <div><dt>Committed digest</dt><dd>${exact(ref.digest, "committed digest")} <span class="muted small">from the COMMITTED event of the lifecycle ledger</span></dd></div>
-<div><dt>Encodes</dt><dd>the record id, the committed digest, WallPrint version <code>${esc(ref.wallprintVersion)}</code> and reference format <code>${esc(REFERENCE_VERSION)}</code>; no section target, no web or local address, no wallet address, no key, no record content</dd></div>
+<div><dt>Encodes</dt><dd>${encodes}</dd></div>
 </dl>
 ${boundary}
 <details class="wp-more wp-portable-sections"><summary>Section references and the envelope</summary><p class="muted small">The same reference pointing at one section of this record, and the reference as a JSON envelope (RFC 8785 key order). Each is exact and copyable; none is a different reference.</p><ul class="limits wp-codes wp-portable-targets">${sections.join("")}</ul><p class="muted small">Envelope:</p>${exact(encodeReferenceEnvelope(ref), "reference envelope")}</details>
@@ -810,12 +871,16 @@ ${boundary}
 function referenceReadout(view) {
   const r = isObject(view.reference) ? view.reference : null;
   if (r === null) return "";
+  const pub = isObject(view.publication) ? view.publication : null;
   const res = isObject(r.resolution) ? r.resolution : null;
   const outcome = str(r.outcome);
   const target = str(r.target);
   const targetWord = target !== null && Object.hasOwn(TARGET_LABELS, target) ? TARGET_LABELS[target] : null;
   const named = `<dl class="states wp-facts wp-reference-fields"><div><dt>Record named</dt><dd>${exact(str(r.recordId), "referenced record id")}</dd></div><div><dt>Digest carried</dt><dd>${exact(str(r.digest), "reference digest")}</dd></div><div><dt>Section</dt><dd>${targetWord ? esc(targetWord) : '<span class="muted">none: the record itself</span>'}</dd></div></dl>`;
   if (outcome === "RESOLVED") {
+    if (pub !== null) {
+      return `<div class="wp-reference-result wp-rise" data-wp-step="0" data-outcome="RESOLVED" role="status"><p class="wp-eyebrow">Resolved from a public URL</p><p class="wp-reference-line">${chip("RESOLVED", ["RESOLVED"], false)} <span class="wp-check-meaning">${esc(PUBLIC_PRESENTATION.RESOLVED)}</span></p>${named}<p class="muted small">The record is shown below as published, with its standing in this store beside it; a URL to an earlier version opens that version, never a later one in its place.</p><p class="muted small wp-carried">The URL&#39;s digest covers the record&#39;s canonical bytes. The title, the registry names and the engine&#39;s receipt, replay and diff results are carried beside the record in the published artifact as they were recorded at publication: the digest does not cover them, and this page checks only that they are consistent with the record. The standing beside the record is the store&#39;s index, checked against its own hash-chained ledger and the digest this page computed; nothing signs it.</p></div>`;
+    }
     return `<div class="wp-reference-result wp-rise" data-wp-step="0" data-outcome="RESOLVED" role="status"><p class="wp-eyebrow">Opened from a portable reference</p><p class="wp-reference-line">${chip("RESOLVED", ["RESOLVED"], false)} <span class="wp-check-meaning">${esc(REFERENCE_PRESENTATION.RESOLVED)}</span></p>${named}<p class="muted small">The record is shown below as recorded, with its own lifecycle; a reference to an earlier version opens that version, never the lineage's current one in its place.</p></div>`;
   }
   const digests = `<dl class="states wp-facts wp-reference-fields"><div><dt>Digest carried by the reference</dt><dd>${exact(str(r.digest), "reference digest")}</dd></div><div><dt>Digest the record carries</dt><dd>${res && typeof res.embeddedDigest === "string" ? exact(res.embeddedDigest, "embedded digest") : '<span class="muted">none carried</span>'}</dd></div><div><dt>Digest the engine computed</dt><dd>${res && typeof res.computedDigest === "string" ? exact(res.computedDigest, "computed digest") : '<span class="muted">not carried: nothing was computed here</span>'}</dd></div></dl>`;
@@ -833,7 +898,66 @@ function referenceReadout(view) {
  * The view when a portable reference resolved to no record here: the fixed outcome and its problem code in words,
  * nothing of the text, no record, no state. UNAVAILABLE is said as unavailable, never as invalid.
  */
+/**
+ * The public resolver's outcome page: every outcome but RESOLVED, told in words, with no record content. UNAVAILABLE and
+ * UNREACHABLE are quiet (the store does not hold the record; the store could not be read); a mismatch is an integrity
+ * finding that decides nothing about which bytes are the committed ones and offers the published version only as a link
+ * the reader may follow. The URL's own fields are printed back only when the URL parsed; a malformed URL is described by
+ * its fixed problem code and never echoed.
+ */
+function renderPublicOutcome(view, pub) {
+  const r = isObject(view.reference) ? view.reference : {};
+  const res = isObject(r.resolution) ? r.resolution : null;
+  const outcome = str(r.outcome);
+  const problem = str(r.problem);
+  const problemWord = problem !== null && Object.hasOwn(REFERENCE_PROBLEM_LABELS, problem) ? REFERENCE_PROBLEM_LABELS[problem] : null;
+  const titles = { UNAVAILABLE: "Record unavailable", UNREACHABLE: "Store unreachable", NOT_COMPARED: "Not compared", DIGEST_MISMATCH: "Digest mismatch", MALFORMED_REFERENCE: "Malformed reference", UNSUPPORTED_VERSION: "Unsupported version" };
+  const known = outcome !== null && Object.hasOwn(titles, outcome);
+  const quiet = outcome === "UNAVAILABLE" || outcome === "UNREACHABLE" || outcome === "NOT_COMPARED";
+  const named = `<dl class="states wp-facts wp-reference-fields"><div><dt>Record named, as written in the URL</dt><dd>${exact(str(r.recordId), "referenced record id")}</dd></div><div><dt>Digest carried, as written in the URL</dt><dd>${exact(str(r.digest), "reference digest")}</dd></div></dl>`;
+  const published = list(pub.published).filter(isObject);
+  const landing = pub.landing === true && outcome === "MALFORMED_REFERENCE";
+  let body;
+  if (landing) body = `<p class="wp-reference-line"><span class="wp-check-meaning">This is WalletWall&#39;s public resolver for published WallPrint disclosures. A WallPrint URL names one record and its digest: <code>/wallprint/&lt;record id&gt;?reference=0.1&amp;wallprint=0.1&amp;digest=&lt;64 hexadecimal characters&gt;</code>. This address names no record, so nothing was resolved.</span></p><p class="muted small">${esc(REFERENCE_IDENTIFIES)}</p>`;
+  else if (!known) body = '<p class="wp-reference-line"><span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span> <span class="wp-check-meaning">The carried outcome is not one this page recognises. No result is shown.</span></p>';
+  else if (outcome === "UNAVAILABLE") body = `<p class="wp-reference-line">${chip(outcome, [outcome], false)} <span class="wp-check-meaning">${esc(PUBLIC_PRESENTATION.UNAVAILABLE)}</span></p>${named}<p class="muted small">${esc(REFERENCE_IDENTIFIES)}</p>`;
+  else if (outcome === "UNREACHABLE") {
+    const reason = str(pub.reason);
+    const reasonWord = reason !== null && Object.hasOwn(UNREACHABLE_LABELS, reason) ? UNREACHABLE_LABELS[reason] : null;
+    body = `<p class="wp-reference-line">${chip(outcome, [outcome], false)} <span class="wp-check-meaning">${esc(PUBLIC_PRESENTATION.UNREACHABLE)}</span></p>${named}<p class="muted small">Reason: <code>${esc(reason ?? "")}</code>${reasonWord ? ` (${esc(reasonWord)})` : reason === null ? "" : " (not recognised)"}. Nothing is said about the record.</p>`;
+  } else if (outcome === "NOT_COMPARED") {
+    const codes = list(pub.findings).filter((c) => typeof c === "string");
+    body = `<p class="wp-reference-line">${chip(outcome, [outcome], false)} <span class="wp-check-meaning">${esc(PUBLIC_PRESENTATION.NOT_COMPARED)}</span></p>${named}<p class="muted small">What the reader refused: ${codes.length ? codes.map((c) => `<code>${esc(c)}</code>`).join(", ") : '<span class="muted">not stated</span>'}. The published bytes were not repaired and are not shown.</p>`;
+  } else if (outcome === "DIGEST_MISMATCH") {
+    const failed = pub.artifactFailedOwnCheck === true;
+    const digests = `<dl class="states wp-facts wp-reference-fields"><div><dt>Digest carried by the URL</dt><dd>${exact(res && typeof res.referenceDigest === "string" ? res.referenceDigest : str(r.digest), "reference digest")}</dd></div><div><dt>Digest the published artifact carries</dt><dd>${res && typeof res.embeddedDigest === "string" ? exact(res.embeddedDigest, "published digest") : '<span class="muted">none carried</span>'}</dd></div><div><dt>Digest this page computed</dt><dd>${res && typeof res.computedDigest === "string" ? exact(res.computedDigest, "computed digest") : '<span class="muted">not computed</span>'}</dd></div></dl>`;
+    // A link is emitted only for a path the codec reads as this record's own resolver path for that digest, whatever the view carries.
+    const linkable = published.filter((p) => {
+      const path = str(p.path);
+      const parsed = path === null ? null : parseResolverPath(path);
+      return parsed !== null && parsed.ok && parsed.reference.recordId === str(r.recordId) && parsed.reference.digest === str(p.digest) && parsed.reference.target === null;
+    });
+    const versions = linkable.map((p) => `<li><a class="wp-published-link" href="${esc(str(p.path) ?? "")}">Open the published version</a> <span class="muted small">digest <code>${esc(str(p.digest) ?? "")}</code>, published ${instant(p.publishedAt)}</span></li>`);
+    body = `<p class="wp-reference-line">${chip(outcome, [outcome])} <span class="wp-check-meaning">${esc(failed ? PUBLIC_PRESENTATION.DIGEST_MISMATCH_ARTIFACT : PUBLIC_PRESENTATION.DIGEST_MISMATCH)}</span></p><p class="muted small">Record named, as written in the URL: ${exact(str(r.recordId), "referenced record id")}.</p>${digests}${
+      failed ? "" : `<p class="muted small">Nothing here decides which bytes are the committed ones; both digests are printed for the reader. ${versions.length ? "The version this store publishes can be opened by its own URL; nothing is redirected." : "This store names no other publication of the record."}</p>${versions.length ? `<ul class="limits wp-codes wp-published-versions">${versions.join("")}</ul>` : ""}`
+    }`;
+  } else {
+    body = `<p class="wp-reference-line">${chip(outcome, [outcome])} <span class="wp-check-meaning">${esc(PUBLIC_PRESENTATION[outcome])}</span></p><p class="muted small">Problem: <code>${esc(problem ?? "")}</code>${problemWord ? ` (${esc(problemWord)}${problem === "reference" || problem === "wallprint" ? (outcome === "UNSUPPORTED_VERSION" ? " is not one this resolver reads" : " is not a version") : ""})` : problem === null ? "" : " (not recognised)"}. A URL is read exactly as written: no case folding, no percent-decoding, no reordering of its parameters.</p>`;
+  }
+  return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="A public WallPrint URL">WallPrint</span></div><p class="ww-rail-asset"><span class="ww-rail-symbol">WallPrint</span><span class="ww-rail-sep" aria-hidden="true">·</span><span class="ww-rail-chain">public resolver</span></p></header></div>
+<section class="wp" data-wp-public="true" data-wp-reference-outcome="${esc(outcome ?? "")}"${landing ? ' data-wp-landing="true"' : ""} aria-label="Public resolver outcome">
+<div class="wp-plate">
+<p class="wp-fixture muted small wp-publication">Resolved by WalletWall&#39;s public resolver.</p>
+<p class="wp-boundary wp-publication-statement"><strong>${esc(str(view.vocabulary && view.vocabulary.principle) ?? "")}</strong> ${esc(str(pub.statement) ?? "")}</p>
+${mirrorNotice(pub)}
+<div class="wp-reference-result" data-outcome="${esc(known ? outcome : "UNRECOGNISED")}" role="${quiet || landing ? "status" : "alert"}"><p class="wp-eyebrow">Public URL</p><h2 class="wp-title">${esc(landing ? "WallPrint public resolver" : known ? titles[outcome] : "Reference not opened")}</h2>${body}</div>
+<p class="muted small wp-foot">A public URL locates a published record; this page decides no state, no authority, no verdict, and shows no record it did not resolve.</p>
+</div>
+</section>`;
+}
+
 export function renderReferenceOutcome(view) {
+  if (isObject(view.publication)) return renderPublicOutcome(view, view.publication);
   const r = isObject(view.reference) ? view.reference : {};
   const outcome = str(r.outcome);
   const known = outcome !== null && ["UNAVAILABLE", "MALFORMED_REFERENCE", "UNSUPPORTED_VERSION"].includes(outcome);
@@ -864,16 +988,64 @@ function invariants(vocabulary) {
   return `<details class="wp-more wp-invariants"><summary>WallPrint invariants</summary><ul class="limits wp-codes">${vocabulary.invariants.map((x) => `<li><code>${esc(x)}</code></li>`).join("")}</ul></details>`;
 }
 
-function article(m, vm, vocabulary, labels) {
+function article(m, vm, vocabulary, labels, pub = null) {
   const life = currency(m, vocabulary);
   return `<article class="wp-record" data-record-id="${esc(m.id)}" data-version="${esc(m.version)}"${life.known ? ` data-lifecycle="${esc(life.state)}"` : ""}${m.focused ? "" : " hidden"} aria-labelledby="wp-h-${esc(m.id)}" tabindex="-1">
 ${head(m, vocabulary, labels)}
 <div class="wp-columns">${why(m, vocabulary, labels)}${recordBox(m)}</div>
 ${assessmentsTable(m, vocabulary)}
 ${provenanceChain(m)}
-${history(m, vm, vocabulary)}
-${verify(m, vm, vocabulary)}
+${history(m, vm, vocabulary, pub)}
+${verify(m, vm, vocabulary, pub)}
 </article>`;
+}
+
+/**
+ * Public mode: the publication line (which record, which digest, published when, and how a synthetic lineage was
+ * constructed) in place of the fixture line, followed by the boundary statement beside the principle.
+ */
+function publicationLine(vm, vocabulary, pub) {
+  const scenario = vm.scenario;
+  const construction = scenario
+    ? ` <span class="wp-scenario" data-scenario="${esc(scenario.kind ?? "")}">Synthetic disclosure: ${scenario.label ? esc(scenario.label) : `not recognised: ${esc(String(scenario.kind).slice(0, 24))}`}${scenario.patched.length ? ` (changed: ${scenario.patched.map((p) => `<code>${esc(p)}</code>`).join(", ")})` : ""}.</span>`
+    : "";
+  return `<p class="wp-fixture muted small wp-publication">Published WallPrint disclosure ${exact(str(pub.recordId), "WallPrint id")} · digest ${exact(str(pub.digest), "published digest")} · published ${instant(pub.publishedAt)}.${construction}</p>
+<p class="wp-boundary wp-publication-statement"><strong>${esc(vocabulary.principle)}</strong> ${esc(str(pub.statement) ?? "")}</p>${mirrorNotice(pub)}`;
+}
+
+/**
+ * Public mode: a copy served from another origin than the resolver base (a mirror, a preview deployment, a local build)
+ * says so. The serving origin is never printed; the base is, because it is the one the page's share URL and code name.
+ */
+function mirrorNotice(pub) {
+  if (pub.mirror !== true || !isResolverBase(pub.resolverBase)) return "";
+  return `<p class="note wp-mirror" data-attention="true">This copy of the page is not served from the resolver base its share URL and code name (<code>${esc(pub.resolverBase)}</code>); this page checks what it shows either way, and the resolver base is where WalletWall publishes.</p>`;
+}
+
+/**
+ * Public mode: the record's standing in this store, as the store's index records it. It is metadata beside the immutable
+ * record (lifecycle, successor, lineage, publication instants); it may be appended to as the lifecycle moves and it
+ * changes nothing in the record, whose bytes are proved by the readout above.
+ */
+function standingNow(vm, vocabulary, pub) {
+  const s = isObject(pub.standing) ? pub.standing : null;
+  const m = vm.records[0];
+  if (s === null || m === undefined) return "";
+  const life = isObject(s.lifecycle) ? s.lifecycle : {};
+  const by = isObject(s.supersededBy) ? s.supersededBy : null;
+  const lineage = isObject(s.lineage) ? s.lineage : {};
+  const chain = list(lineage.chain).map(String);
+  const pubs = list(s.publications).filter(isObject);
+  return `<section class="wp-standing-now wp-rise" data-wp-step="1" aria-labelledby="wp-standing-${esc(m.id)}"><h2 id="wp-standing-${esc(m.id)}" class="wp-standing-title">Standing in the public store</h2>
+<p class="muted small">Metadata the public store keeps beside the immutable record, as the public store&#39;s index records it. It may be appended to as the record&#39;s lifecycle moves; it changes nothing in the record, whose bytes are proved above.</p>
+<dl class="states wp-facts wp-standing-fields">
+<div><dt>Lifecycle</dt><dd>${chip(str(life.state), vocabulary.lifecycleStates)}</dd></div>
+<div><dt>Published</dt><dd>${pubs.length ? pubs.map((p) => `${instant(p.publishedAt)} <span class="muted small">digest <code>${esc(str(p.digest) ?? "")}</code></span>`).join("<br/>") : '<span class="muted">not stated</span>'}</dd></div>
+<div><dt>Successor</dt><dd>${by ? `${exact(str(by.id), "successor record id")} <span class="muted small">(${esc(linkVerb(by.kind, true))}; digest <code>${esc(str(by.digest) ?? "")}</code>)</span>` : '<span class="muted">none recorded</span>'}</dd></div>
+<div><dt>Predecessor</dt><dd>${typeof lineage.predecessor === "string" ? exact(lineage.predecessor, "predecessor record id") : '<span class="muted">none: root record</span>'}</dd></div>
+<div><dt>Lineage</dt><dd>${chain.length ? chain.map((id) => `<code>${esc(id)}</code>`).join(" <span aria-hidden=\"true\">→</span> ") : '<span class="muted">not stated</span>'}</dd></div>
+</dl>
+</section>`;
 }
 
 /**
@@ -884,19 +1056,25 @@ ${verify(m, vm, vocabulary)}
 export function renderWallPrint(view, labels) {
   // Opened from a reference, the record in view is the one the reference named; a section is opened only after a
   // successful resolution with matching digests, and only one of the fixed targets (the client refuses anything else).
+  // With a `publication` block the document is in PUBLIC MODE (the public resolver): the publication line replaces the
+  // fixture line, the standing is printed beside the record, lineage versions are links, the QR code may carry the HTTPS
+  // form. The canvas never passes a publication block.
+  const pub = isObject(view.publication) ? view.publication : null;
   const vm = wallPrintViewModel(view.fixture, view.disclosure, view.vocabulary, str(view.focus));
   const open = isObject(view.reference) && view.reference.outcome === "RESOLVED" && typeof view.target === "string" && Object.hasOwn(TARGET_LABELS, view.target) ? view.target : null;
   const asset = vm.registry.asset;
   const headerAsset = `<p class="ww-rail-asset"><span class="ww-rail-symbol">${esc(asset ? asset.symbol : "WallPrint")}</span><span class="ww-rail-sep" aria-hidden="true">·</span><span class="ww-rail-chain">${vm.registry.chain ? `chain ${esc(vm.registry.chain.chainId)}` : "disclosure record"}</span></p>`;
-  const records = vm.records.map((m) => article(m, vm, view.vocabulary, labels)).join("\n");
-  return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="A fixture-backed disclosure record">WallPrint</span></div>${headerAsset}</header></div>
-<section class="wp" data-wp-fixture="${esc(vm.name)}" data-wp-focus="${esc(vm.focus ?? "")}"${open ? ` data-wp-open="${esc(open)}"` : ""} aria-label="WallPrint disclosure">
+  const records = vm.records.map((m) => article(m, vm, view.vocabulary, labels, pub)).join("\n");
+  const fixtureLine = `<p class="wp-fixture muted small">Synthetic fixture <code>${esc(vm.name)}</code>: ${esc(vm.title)} Source: <code>${esc(view.source ?? "")}</code>.${vm.scenario ? ` <span class="wp-scenario" data-scenario="${esc(vm.scenario.kind ?? "")}">Construction: ${vm.scenario.label ? esc(vm.scenario.label) : `not recognised: ${esc(String(vm.scenario.kind).slice(0, 24))}`}${vm.scenario.patched.length ? ` (changed: ${vm.scenario.patched.map((p) => `<code>${esc(p)}</code>`).join(", ")})` : ""}.</span>` : ""}</p>`;
+  return `<div class="ww-summary"><header class="ww-rail"><span class="ww-mark" role="img" aria-label="WalletWall mark"></span><div class="ww-rail-name"><h1>WalletWall</h1><span class="ww-lens-badge" title="${pub ? "A published WallPrint disclosure record" : "A fixture-backed disclosure record"}">WallPrint</span></div>${headerAsset}</header></div>
+<section class="wp" data-wp-fixture="${esc(vm.name)}" data-wp-focus="${esc(vm.focus ?? "")}"${open ? ` data-wp-open="${esc(open)}"` : ""}${pub ? ' data-wp-public="true"' : ""} aria-label="WallPrint disclosure">
 <div class="wp-plate">
-<p class="wp-fixture muted small">Synthetic fixture <code>${esc(vm.name)}</code>: ${esc(vm.title)} Source: <code>${esc(view.source ?? "")}</code>.${vm.scenario ? ` <span class="wp-scenario" data-scenario="${esc(vm.scenario.kind ?? "")}">Construction: ${vm.scenario.label ? esc(vm.scenario.label) : `not recognised: ${esc(String(vm.scenario.kind).slice(0, 24))}`}${vm.scenario.patched.length ? ` (changed: ${vm.scenario.patched.map((p) => `<code>${esc(p)}</code>`).join(", ")})` : ""}.</span>` : ""}</p>
+${pub ? publicationLine(vm, view.vocabulary, pub) : fixtureLine}
 ${referenceReadout(view)}
+${pub ? standingNow(vm, view.vocabulary, pub) : ""}
 ${records}
 ${invariants(view.vocabulary)}
-<p class="muted small wp-foot">This page renders the canonical WallPrint record and the engine's receipt, replay and diff results for it. It decides no state, no authority, no verdict.</p>
+<p class="muted small wp-foot">${pub ? "This page renders a published WallPrint record and the engine&#39;s receipt, replay and diff results carried with it. It decides no state, no authority, no verdict." : "This page renders the canonical WallPrint record and the engine's receipt, replay and diff results for it. It decides no state, no authority, no verdict."}</p>
 </div>
 </section>`;
 }

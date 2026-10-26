@@ -92,8 +92,9 @@ describe("every disclosed record prints its portable reference as exact text and
       assert.ok(block.includes("the record id, the committed digest, WallPrint version <code>0.1</code> and reference format <code>0.1</code>; no section target, no web or local address, no wallet address, no key, no record content"));
       assert.ok(block.includes("<strong>A reference is a locator, not authority.</strong>"));
       assert.ok(block.includes("This reference identifies the WallPrint record and digest. Resolution depends on a compatible WalletWall disclosure store or resolver."));
-      assert.ok(block.includes("The code encodes no web address and no local address: it is a <code>walletwall:</code> locator that no app registers a handler for, so scanning it opens nothing by itself"));
-      assert.ok(block.includes("No public resolver exists in this release."));
+      assert.ok(block.includes("The code encodes the <code>walletwall:</code> reference itself, not a web address: no app registers a handler for it, so scanning it opens nothing by itself"));
+      assert.ok(block.includes("such as this panel&#39;s bundled lineages or WalletWall&#39;s public resolver for published disclosures, which serves the same reference under an HTTPS form."));
+      assert.ok(block.includes('data-wp-reference-form="reference"'), "the canvas names no resolver base, so its code carries the reference itself");
       assert.ok(!BAD_WORDS.test(text(block).replaceAll("not authority", "")), `${name}/${r.id}: ${BAD_WORDS.exec(text(block))?.[0]} in the portable block`);
       assert.ok(!/<a\b|href=|javascript:|data:|https?:\/\/|127\.0\.0\.1|localhost|%[0-9A-Fa-f]{2}/.test(block), "no link, URL, host or percent-encoding");
       assert.ok(!/ style="|fill="|stroke="|<script/.test(block), "no inline style, no attribute colour, no script");
@@ -175,7 +176,7 @@ describe("every disclosed record prints its portable reference as exact text and
       const derivation = a.indexOf('<div class="wp-derivation">');
       assert.ok(reg >= 0 && reg < portable && portable < derivation, `${name}/${r.id}: order`);
       const block = portableOf(a);
-      assert.ok(block.startsWith('<div class="wp-portable" data-wp-reference="available" data-wp-reference-target="none"><h4>Portable reference</h4>'));
+      assert.ok(block.startsWith('<div class="wp-portable" data-wp-reference="available" data-wp-reference-target="none" data-wp-reference-form="reference"><h4>Portable reference</h4>'));
       assert.ok(!block.includes('data-attention="true"') && !block.includes('class="chip"'), "a locator is calm: no attention mark, no state chip");
     }
   });

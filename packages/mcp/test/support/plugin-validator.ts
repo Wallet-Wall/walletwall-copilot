@@ -128,6 +128,7 @@ const EXTENSION_FILES = new Set([
   "render.mjs",
   "wall.mjs",
   "coinstellation-model.mjs",
+  "labels.mjs",
   "styles.mjs",
   "client.mjs",
   "brand.mjs",

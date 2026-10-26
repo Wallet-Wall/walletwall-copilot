@@ -50,10 +50,27 @@ describe("WallPrint specification document", () => {
     assert.ok(doc.includes('"type":"walletwall.wallprint.reference"'));
     for (const o of REFERENCE_OUTCOMES) assert.ok(doc.includes(`\`${o}\``), o);
     for (const t of REFERENCE_TARGETS) assert.ok(doc.includes(`\`${t}\``), t);
-    assert.ok(/No public resolver exists/.test(flat) && /not a signature/.test(flat) && /never as forgery/.test(flat));
+    assert.ok(/A resolver locates a disclosure\. It does not make that disclosure authoritative\./.test(flat) && /not a signature/.test(flat) && /never as forgery/.test(flat));
+    assert.ok(!/No public resolver exists/.test(flat), "the public resolver exists now; the old statement is gone");
     assert.ok(/a corrected, superseded or withdrawn record is as valid a target as the current one/.test(flat));
     assert.ok(flat.includes("packages/mcp/src/wallprint/reference.ts") && flat.includes("scripts/gen-wallprint-reference.ts"));
     assert.ok(existsSync(`${ROOT}packages/mcp/src/wallprint/reference.ts`) && existsSync(`${ROOT}scripts/gen-wallprint-reference.ts`) && existsSync(`${ROOT}packages/mcp/test/wallprint/reference.test.ts`));
+  });
+
+  test("states the public resolver: the HTTPS form as a prefix substitution, deliberate publication, immutable bytes, the seven outcomes and the boundary statement", () => {
+    assert.ok(doc.includes("## Public resolver"));
+    assert.ok(doc.includes("<resolverBase>/wallprint/<recordId>?reference=0.1&wallprint=<wallprintVersion>&digest=<hex64>[&target=<target>]"));
+    assert.ok(flat.includes("This page resolves a published WallPrint disclosure. Publication and resolution do not establish factual truth, safety, solvency, compliance, or investment merit."));
+    for (const o of ["`UNREACHABLE`", "`UNAVAILABLE`", "`DIGEST_MISMATCH`", "`NOT_COMPARED`"]) assert.ok(doc.includes(o), o);
+    assert.ok(/deliberate, never ambient/.test(flat) && /nothing redirects/.test(flat) && /never overwrite/.test(flat));
+    assert.ok(flat.includes("**What the digest covers.** The URL's digest covers the record's canonical bytes and nothing else."));
+    assert.ok(/nothing signs it/.test(flat) && /cannot be told apart from the engine's own without a signature/.test(flat));
+    for (const name of ["isPublishableId", "storeGraphFindings", "lib/ledger.ts"]) assert.ok(flat.includes(name), name);
+    assert.ok(/must answer 404|depends on the host answering 404/.test(flat), "the host requirement for UNAVAILABLE is stated");
+    for (const p of ["packages/mcp/src/wallprint/publication.ts", "packages/mcp/src/wallprint/publication-vocabulary.ts", "packages/wallprint-web/browser/page.ts", "scripts/wallprint-publish.ts", "scripts/build-wallprint-public.ts", "docs/WALLPRINT_PUBLIC_RESOLVER.md"]) {
+      assert.ok(flat.includes(p), p);
+      assert.ok(existsSync(`${ROOT}${p}`), `${p} exists`);
+    }
   });
 
   test("the modules and tests it names exist", () => {
