@@ -121,7 +121,23 @@ export function validatePluginDir(dir: string, repoRoot: string): Finding[] {
   return out;
 }
 
-const EXTENSION_FILES = new Set(["extension.mjs", "explorer.mjs", "mcp-client.mjs", "render.mjs", "wall.mjs", "coinstellation-model.mjs", "styles.mjs", "client.mjs", "brand.mjs", "fixtures.mjs", "copilot-extension.json"]);
+const EXTENSION_FILES = new Set([
+  "extension.mjs",
+  "explorer.mjs",
+  "mcp-client.mjs",
+  "render.mjs",
+  "wall.mjs",
+  "coinstellation-model.mjs",
+  "styles.mjs",
+  "client.mjs",
+  "brand.mjs",
+  "fixtures.mjs",
+  "wallprint-fixtures.mjs",
+  "wallprint-render.mjs",
+  "wallprint-styles.mjs",
+  "wallprint-client.mjs",
+  "copilot-extension.json",
+]);
 
 /** `com.github.copilot/` may hold canvas extensions only: no hooks, agents, commands, rules or LSP servers. */
 function validateCopilotDir(dir: string, add: (file: string, problem: string) => void): void {

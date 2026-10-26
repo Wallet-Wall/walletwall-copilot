@@ -8,7 +8,7 @@ const FORBIDDEN_MODULES = [
 ].flatMap((m) => [m, `node:${m}`]);
 
 export default defineConfig(
-  { ignores: ["node_modules/**", "plugin/server/**", "plugin/com.github.copilot/**/fixtures.mjs", "packages/mcp/src/generated/**", "conformance/**"] },
+  { ignores: ["node_modules/**", "plugin/server/**", "plugin/com.github.copilot/**/fixtures.mjs", "plugin/com.github.copilot/**/wallprint-fixtures.mjs", "packages/mcp/src/generated/**", "conformance/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
