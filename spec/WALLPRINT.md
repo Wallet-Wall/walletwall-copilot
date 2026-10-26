@@ -228,11 +228,14 @@ Subject (`record.subject`); Current WalletWall assessment (the `WALLETWALL` entr
 (authority, freshness, finality, corroboration, conflicts, limitations and violations from the focal claim);
 Assessments (one row per assessor, never merged); Record (`view.lifecycle.events`); Provenance (`record.provenance`
 and the `evidence` references); Corrections & supersessions (`view.supersedes`, `view.supersededBy`, `lineage`,
-`diffWallPrints`); Verify (canonical payload, digest, versions, `validateWallPrintRecord`, `verifyWallPrintDigest`,
-`verifyReceipt`, `replayWallPrint`). Its input is `wallprint-fixtures.mjs`, generated from this module by
-`scripts/gen-wallprint-fixtures.ts` through `packages/mcp/test/support/wallprint-disclosures.ts`: synthetic lineages
-whose every verdict is an engine output. The page quotes the principle, the invariants and the receipt boundary from
-the module's exports and decides nothing.
+`diffWallPrints`); Verify (four separate questions, each a 1:1 projection of one engine result and never combined: Record from
+`validateWallPrintRecord`, Digest from `verifyWallPrintDigest`, Receipt from `verifyReceipt`, Replay from
+`replayWallPrint`; then a registration readout and the canonical payload). Its input is `wallprint-fixtures.mjs`,
+generated from this module by `scripts/gen-wallprint-fixtures.ts` through
+`packages/mcp/test/support/wallprint-disclosures.ts`: synthetic lineages whose every verdict is an engine output. One
+lineage carries its issued receipt without the verification result; the view shows that as unchecked, a
+disclosure-layer state (`verifyReceipt` itself always returns a result). The page quotes the principle, the invariants
+and the receipt boundary from the module's exports and decides nothing.
 
 ## Non-negotiable invariants
 
