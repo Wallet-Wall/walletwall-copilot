@@ -36,11 +36,12 @@ describe("WallPrint disclosure fixtures are engine outputs, not authored views",
     assert.deepEqual(Object.keys(FIXTURES), [...WALLPRINT_FIXTURE_NAMES]);
   });
 
-  test("every fixture declares how it was constructed; exactly two are adversarial and name the one field they changed", () => {
+  test("every fixture declares how it was constructed; two are adversarial, one omits a verification result, and each names the one field it changed", () => {
     const adversarial = Object.entries(FIXTURES).filter(([, f]) => f.scenario.kind !== "ENGINE_BUILT");
     assert.deepEqual(adversarial.map(([name, f]) => [name, f.scenario]), [
       ["receipt-mismatch", { kind: "ALTERED_AFTER_COMMIT", patched: ["assessments[reviewer-y].statement"] }],
       ["replay-mismatch", { kind: "COMMITTED_ELSEWHERE", patched: ["claims[a-price].supportState"] }],
+      ["receipt-unverified", { kind: "VERIFICATION_NOT_CARRIED", patched: ["receipt.verification"] }],
     ]);
     for (const [name, f] of all()) if (f.scenario.kind === "ENGINE_BUILT") assert.deepEqual(f.scenario.patched, [], name);
     // The declared patches are the only places those records depart from what this engine builds.
@@ -69,8 +70,10 @@ describe("WallPrint disclosure fixtures are engine outputs, not authored views",
       assert.equal(r.canonical, canonicalize(wallPrintPayload(r.record)), `${label}: canonical bytes`);
       assert.deepEqual(verifyLifecycleChain(r.lifecycle.events), { ok: true, brokenAt: null }, `${label}: lifecycle chain`);
       assert.equal(r.lifecycle.state, r.lifecycle.events[r.lifecycle.events.length - 1]?.state, `${label}: state is the last event`);
-      if (r.receipt.issued !== null) assert.deepEqual(r.receipt.verification, verifyReceipt(r.receipt.issued, r.record), `${label}: receipt`);
-      else assert.equal(r.receipt.verification, null, `${label}: no verification without a receipt`);
+      const fixtureName = label.slice(0, label.indexOf("/"));
+      if (r.receipt.issued === null) assert.equal(r.receipt.verification, null, `${label}: no verification without a receipt`);
+      else if (FIXTURES[fixtureName]!.scenario.kind === "VERIFICATION_NOT_CARRIED") assert.equal(r.receipt.verification, null, `${label}: the verification result is deliberately not carried`);
+      else assert.deepEqual(r.receipt.verification, verifyReceipt(r.receipt.issued, r.record), `${label}: receipt`);
       assert.equal(r.record.versions.wwep, WWEP_VERSION, label);
     }
   });
@@ -173,6 +176,25 @@ describe("WallPrint disclosure fixtures are engine outputs, not authored views",
     const conflict = focus("conflicting-evidence");
     assert.equal(focalClaim(conflict).supportState, "CONFLICTING");
     assert.ok(conflict.record.conflicts.length >= 1 && focalClaim(conflict).conflictsWith.length >= 1);
+
+    // Receipt and replay are independent questions: a matching receipt beside an unreplayable record is a valid combination.
+    const unretained = focus("receipt-unreplayable");
+    assert.deepEqual(unretained.receipt.verification, { matches: true, reasons: [] }, "the receipt matches the committed bytes");
+    assert.deepEqual(unretained.replay, { outcome: "UNREPLAYABLE", reasons: ["MISSING_EVIDENCE"], recomputedDigest: null, mismatches: [] }, "the evidence was not retained, so nothing was recomputed");
+    assert.equal(unretained.lifecycle.state, "DISCLOSED");
+
+    // A receipt carried without a verification result: the engine issued it; no check result travels with the disclosure.
+    const unverified = focus("receipt-unverified");
+    assert.notEqual(unverified.receipt.issued, null, "a receipt is carried");
+    assert.equal(unverified.receipt.verification, null, "no verification result is carried");
+    assert.equal(unverified.replay.outcome, "REPRODUCED");
+    assert.deepEqual(verifyReceipt(unverified.receipt.issued, unverified.record), { matches: true, reasons: [] }, "the engine could verify it; the disclosure simply does not carry that result");
+  });
+
+  test("the lineage names end with the receipt-focused lineages, so every receipt and replay combination the view must show has a fixture", () => {
+    assert.deepEqual([...WALLPRINT_FIXTURE_NAMES].slice(-2), ["receipt-unreplayable", "receipt-unverified"]);
+    const combos = new Set(Object.values(FIXTURES).map((f) => f.records.find((r) => r.id === f.focus)!).map((r) => `${r.receipt.issued === null ? "UNAVAILABLE" : r.receipt.verification === null ? "UNCHECKED" : r.receipt.verification.matches ? "MATCH" : "MISMATCH"}+${r.replay.outcome}`));
+    for (const combo of ["MATCH+REPRODUCED", "MATCH+MISMATCH", "MATCH+UNREPLAYABLE", "MISMATCH+UNREPLAYABLE", "UNAVAILABLE+UNREPLAYABLE", "UNCHECKED+REPRODUCED"]) assert.ok(combos.has(combo), combo);
   });
 
   test("nothing in the fixtures describes a real wallet, and no timestamp is a clock reading", () => {

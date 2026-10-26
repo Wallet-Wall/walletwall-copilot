@@ -82,10 +82,12 @@ export interface DisclosureRegistry {
  * How the fixture's records were constructed. ENGINE_BUILT: every record came out of buildWallPrintSnapshot unchanged.
  * COMMITTED_ELSEWHERE: one field of an engine-built payload was changed and the record re-digested before commit, as a
  * record from another engine would be. ALTERED_AFTER_COMMIT: the committed record is engine-built; the disclosed copy was
- * changed afterwards without re-digesting. `patched` names the changed paths. The page prints this on the fixture line.
+ * changed afterwards without re-digesting. VERIFICATION_NOT_CARRIED: every record is engine-built and its receipt was
+ * issued by the engine, but the receipt's verification result was left out of the disclosure, so the view must show the
+ * receipt as unchecked and run no check of its own. `patched` names the changed paths. The page prints this on the fixture line.
  */
 export interface DisclosureScenario {
-  kind: "ENGINE_BUILT" | "COMMITTED_ELSEWHERE" | "ALTERED_AFTER_COMMIT";
+  kind: "ENGINE_BUILT" | "COMMITTED_ELSEWHERE" | "ALTERED_AFTER_COMMIT" | "VERIFICATION_NOT_CARRIED";
   patched: string[];
 }
 
@@ -241,8 +243,12 @@ function registryFor(record: WallPrintRecord): DisclosureRegistry {
   };
 }
 
-/** Everything the engine says about one disclosed record, assembled from the history, the receipt and the evidence store. */
-function disclosureRecord(history: WallPrintHistory, committedId: string, disclosed: WallPrintRecord, receipt: WallPrintReceipt | null, store: EvidenceStore, predecessor: WallPrintRecord | null): DisclosureRecord {
+/**
+ * Everything the engine says about one disclosed record, assembled from the history, the receipt and the evidence store.
+ * `carryVerification: false` leaves the receipt's verification result out of the disclosure (the receipt itself is still
+ * carried); it never substitutes a result.
+ */
+function disclosureRecord(history: WallPrintHistory, committedId: string, disclosed: WallPrintRecord, receipt: WallPrintReceipt | null, carryVerification: boolean, store: EvidenceStore, predecessor: WallPrintRecord | null): DisclosureRecord {
   const view = history.view(committedId);
   if (view === null) throw new Error(`record ${committedId} is not committed`);
   const validation = validateWallPrintRecord(disclosed);
@@ -257,7 +263,7 @@ function disclosureRecord(history: WallPrintHistory, committedId: string, disclo
     supersededBy: view.supersededBy,
     lineage: view.lineage,
     diff: predecessor === null || !validation.ok ? null : diffWallPrints(predecessor, disclosed),
-    receipt: { issued: receipt, verification: receipt === null ? null : verifyReceipt(receipt, disclosed) },
+    receipt: { issued: receipt, verification: receipt === null || !carryVerification ? null : verifyReceipt(receipt, disclosed) },
     replay: replayWallPrint(disclosed, { evidence: store }),
   });
 }
@@ -270,8 +276,10 @@ interface Step {
   withdraw: { at: string; reason: string } | null;
   /** The record as disclosed, when it differs from the committed bytes (the receipt-mismatch fixture). */
   disclosedAs?: WallPrintRecord;
-  /** false: the evidence store never held this record's bundle (the unreplayable fixture). */
+  /** false: the evidence store never held this record's bundle (the unreplayable fixtures). */
   retainEvidence?: boolean;
+  /** false: the issued receipt is carried, its verification result is not (the receipt-unverified fixture). */
+  carryVerification?: boolean;
 }
 
 /** Runs one lineage through a fresh history and evidence store, in order, and assembles the fixture. */
@@ -290,7 +298,7 @@ function lineage(title: string, steps: Step[], scenario: DisclosureScenario = { 
     if (s.retainEvidence !== false) store.put(s.bundle);
     built.push({ record: s.record, bundle: s.bundle, receipt });
   }
-  const records = steps.map((s, i) => disclosureRecord(history, s.record.id, s.disclosedAs ?? s.record, built[i]?.receipt ?? null, store, i === 0 ? null : (steps[i - 1]?.record ?? null)));
+  const records = steps.map((s, i) => disclosureRecord(history, s.record.id, s.disclosedAs ?? s.record, built[i]?.receipt ?? null, s.carryVerification !== false, store, i === 0 ? null : (steps[i - 1]?.record ?? null)));
   const focus = steps[focusIndex]?.record.id;
   if (focus === undefined) throw new Error("empty lineage");
   return { title, focus, scenario, registry: registryFor(steps[focusIndex]!.record), records };
@@ -309,6 +317,8 @@ export const WALLPRINT_FIXTURE_NAMES = [
   "receipt-mismatch",
   "replay-mismatch",
   "conflicting-evidence",
+  "receipt-unreplayable",
+  "receipt-unverified",
 ] as const;
 export type WallPrintFixtureName = (typeof WALLPRINT_FIXTURE_NAMES)[number];
 
@@ -427,6 +437,24 @@ export function buildWallPrintDisclosures(): DisclosureFixtures {
     out["conflicting-evidence"] = lineage("A disclosed record whose focal balance claim is CONFLICTING: two assertions about the same claim identity carry different values. The conflict is recorded between the claims and never resolved; no side is ranked above the other.", [
       { record, bundle, commitAt: COMMIT_AT, discloseAt: DISCLOSE_AT, withdraw: null },
     ]);
+  }
+
+  {
+    const bundle = golden();
+    const record = snapshot({ id: "wp-identity-unretained-v1", bundle: clone(bundle), evaluatedAt: SNAPSHOT_AT, focalAssertionId: "a-identity", assessments: [issuerConfirmed()], supersedes: null });
+    out["receipt-unreplayable"] = lineage("A disclosed record whose receipt matches the committed bytes while its historical evidence bundle was not retained: replay is UNREPLAYABLE (MISSING_EVIDENCE) and nothing is recomputed. Receipt integrity and replayability are separate questions; the two results stand side by side.", [
+      { record, bundle, commitAt: COMMIT_AT, discloseAt: DISCLOSE_AT, withdraw: null, retainEvidence: false },
+    ]);
+  }
+
+  {
+    const bundle = golden();
+    const record = snapshot({ id: "wp-identity-unverified-v1", bundle: clone(bundle), evaluatedAt: SNAPSHOT_AT, focalAssertionId: "a-identity", assessments: [issuerConfirmed(), reviewerNotAvailable()], supersedes: null });
+    out["receipt-unverified"] = lineage(
+      "A disclosed record whose receipt is carried without a verification result: the document shows the receipt as UNCHECKED and runs no check of its own. Absence of a check is not a failed check.",
+      [{ record, bundle, commitAt: COMMIT_AT, discloseAt: DISCLOSE_AT, withdraw: null, carryVerification: false }],
+      { kind: "VERIFICATION_NOT_CARRIED", patched: ["receipt.verification"] },
+    );
   }
 
   for (const name of WALLPRINT_FIXTURE_NAMES) if (!(name in out)) throw new Error(`fixture ${name} was not built`);

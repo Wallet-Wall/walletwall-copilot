@@ -1,10 +1,11 @@
 // The browser-side script of the WallPrint disclosure view, served inline under the page's CSP nonce beside client.mjs.
 //
-// It keeps two pieces of presentation state, both in the DOM: which version of a lineage is in view (every version is
-// rendered by the server; this script only toggles `hidden` and `aria-current`), and the copy control for exact values
+// It keeps three pieces of presentation state, all in the DOM: which version of a lineage is in view (every version is
+// rendered by the server; this script only toggles `hidden` and `aria-current`), which section of that version has
+// focus (a local jump to a server-rendered target, never a URL or a fragment), and the copy control for exact values
 // (identifiers, digests, the canonical payload), which copies exactly the printed text. It talks to no origin, stores
 // nothing, computes no state, and leaves the canvas's own selection model (client.mjs) untouched: a WallPrint version
-// is a local view choice, never an assertion selection.
+// or section is a local view choice, never an assertion selection.
 export const WALLPRINT_JS = `(() => {
   const app = document.getElementById("app");
   const status = document.getElementById("copy-status");
@@ -14,8 +15,32 @@ export const WALLPRINT_JS = `(() => {
   const one = (sel) => (app.querySelector ? app.querySelector(sel) : null);
   function announce(text) { if (announcer) announcer.textContent = text; }
 
-  // Shows one version of the lineage and keeps every other version addressable: nothing is removed from the page.
-  function showVersion(id) {
+  // The sections a jump may name, with the words a reader hears. A key outside this table is refused and never echoed.
+  const SECTIONS = { receipt: "Receipt", replay: "Replay", history: "History", assessments: "Assessments", provenance: "Provenance" };
+  const known = (key) => typeof key === "string" && Object.prototype.hasOwnProperty.call(SECTIONS, key);
+
+  // Finds the server-rendered target of one section inside one record, brings it into view and focuses its heading.
+  // Returns false when the record does not carry that section; nothing is created in its place.
+  function reachSection(record, key) {
+    const target = record && record.querySelector ? record.querySelector('[data-wp-target="' + key + '"]') : null;
+    if (!target) return false;
+    const h = (target.querySelector ? target.querySelector("h3, h4") : null) || target;
+    if (h.setAttribute) h.setAttribute("tabindex", "-1");
+    if (typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "start" });
+    if (h.focus) h.focus();
+    return true;
+  }
+
+  function focusSection(record, key) {
+    if (!record || !known(key)) { announce("That section is not part of this record."); return; }
+    if (!reachSection(record, key)) { announce("The " + SECTIONS[key] + " section is not in this record."); return; }
+    const d = record.dataset || {};
+    announce(SECTIONS[key] + " of " + (d.version || "this record") + ": " + (d.recordId || "") + ".");
+  }
+
+  // Shows one version of the lineage and keeps every other version addressable: nothing is removed from the page. With
+  // a section key, focus lands on that section of the chosen version instead of its heading.
+  function showVersion(id, then) {
     const root = one(".wp");
     if (!root) return;
     let target = null;
@@ -25,9 +50,12 @@ export const WALLPRINT_JS = `(() => {
     if (!target) return;
     if (root.dataset) root.dataset.wpFocus = id;
     for (const b of all("[data-wp-version]")) { if (b.dataset.wpVersion === id) b.setAttribute("aria-current", "true"); else b.removeAttribute("aria-current"); }
+    // The lifecycle the server recorded on the article is announced with the version, so a predecessor is never heard as current.
+    const shown = "Showing " + (target.dataset.version || "record") + " of this lineage: " + id + "." + (target.dataset.lifecycle ? " Lifecycle " + target.dataset.lifecycle + "." : "");
+    if (known(then) && reachSection(target, then)) { announce(shown + " " + SECTIONS[then] + " section. The other versions stay available."); return; }
     const h = target.querySelector ? target.querySelector("h2") : null;
     if (h && h.focus) { h.setAttribute("tabindex", "-1"); h.focus(); }
-    announce("Showing " + (target.dataset.version || "record") + " of this lineage: " + id + ". The other versions stay available.");
+    announce(shown + " The other versions stay available.");
   }
 
   // Copies exactly the printed text of the exact value beside the control; never a shortened or reformatted value.
@@ -63,7 +91,9 @@ export const WALLPRINT_JS = `(() => {
     if (!e.target || !e.target.closest) return;
     const copy = e.target.closest("[data-wp-copy]");
     if (copy) { copyExact(copy); return; }
+    const jump = e.target.closest("[data-wp-jump]");
+    if (jump) { focusSection(jump.closest ? jump.closest(".wp-record") : null, jump.dataset ? jump.dataset.wpJump : undefined); return; }
     const version = e.target.closest("[data-wp-version]");
-    if (version) showVersion(version.dataset.wpVersion);
+    if (version) showVersion(version.dataset.wpVersion, version.dataset.wpThen);
   });
 })();`;

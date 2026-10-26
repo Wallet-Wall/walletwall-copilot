@@ -162,3 +162,64 @@ describe("the page: the WallPrint stylesheet and script ship inside the same non
     }
   });
 });
+
+describe("the Verify readout is an instrument, not a badge: calm positive results, neutral absences, attention only for a mismatch", () => {
+  const checksOf = (html: string): string[] => [...html.matchAll(/<ol class="wp-checks"[\s\S]*?<\/ol>/g)].map((m) => m[0]);
+
+  test("no stylesheet rule singles out a positive result: MATCH, VALID and REPRODUCED are the plate's resting state, never a seal, a fill or a glow", () => {
+    for (const [selector] of rules) assert.ok(!/="(MATCH|VALID|REPRODUCED)"\]/.test(selector), `${selector} styles a positive result`);
+    assert.ok(!/\.wp-check[^{]*\{[^}]*background/.test(css), "no check is a filled panel: there is no success card");
+    assert.ok(!/\.wp-check[^{]*\{[^}]*font-size:(1[7-9]|[2-9]\d)/.test(css), "no result is shouted: nothing in a check is larger than body text");
+    for (const [, html] of fragments) for (const list of checksOf(html)) assert.ok(!/<span class="chip"[^>]*>[^<]*<\/span>[^<]*<span class="chip"/.test(list.replace(/<ul class="limits wp-codes">[\s\S]*?<\/ul>/g, "")), "one chip per answer, no row of chips reading as a scorecard");
+  });
+
+  test("attention is a dashed brick edge on a mismatch, an invalid record or an unrecognised result only; absence is a dotted neutral edge", () => {
+    const attention = rules.filter(([s, d]) => /border-style:dashed/.test(d) && /wp-check/.test(s)).map(([s]) => s);
+    assert.deepEqual(attention, ['.wp-check[data-result="INVALID"],.wp-check[data-result="MISMATCH"],.wp-check[data-result="NOT_COMPUTABLE"],.wp-check[data-result="UNRECOGNISED"],.wp-check[data-receipt="MISMATCH"],.wp-check[data-receipt="UNRECOGNISED"],.wp-check[data-replay="MISMATCH"],.wp-check[data-replay="UNRECOGNISED"]']);
+    const neutral = rules.filter(([, d]) => /border-style:dotted/.test(d)).map(([s]) => s);
+    assert.deepEqual(neutral, ['.wp-check[data-result="NOT_CARRIED"],.wp-check[data-result="NO_DIGEST"],.wp-check[data-receipt="UNAVAILABLE"],.wp-check[data-receipt="UNCHECKED"],.wp-check[data-replay="UNREPLAYABLE"],.wp-check[data-replay="NOT_CARRIED"]']);
+    for (const [name, html] of fragments) {
+      for (const list of checksOf(html)) {
+        for (const m of list.matchAll(/<li class="wp-check[^"]*" data-check="[a-z]+" data-(?:result|receipt|replay)="([A-Z_]+)"[^>]*>([\s\S]*?)<\/li>/g)) {
+          const attentionMarks = (m[2]!.match(/data-attention="true"/g) ?? []).length;
+          if (["MATCH", "VALID", "REPRODUCED", "UNAVAILABLE", "UNCHECKED", "NOT_CARRIED", "NO_DIGEST"].includes(m[1]!)) assert.equal(attentionMarks - (m[2]!.match(/wp-receipt-standing|data-state="(CORRECTED|SUPERSEDED|WITHDRAWN)"/g) ?? []).length, 0, `${name}: a ${m[1]} answer asks for no attention`);
+        }
+      }
+    }
+  });
+
+  test("the four checks sit in one grid: two columns on a wide plate, one column on a narrow plate and in the fallback; nothing is folded or hidden", () => {
+    assert.ok(/\.wp-checks\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(css));
+    assert.ok(block("@container wp (max-width:719px)").includes(".wp-checks{grid-template-columns:1fr}"));
+    assert.ok(block("@supports not (container-type:inline-size)").includes(".wp-checks{grid-template-columns:1fr}"));
+    for (const [name, html] of fragments) {
+      const lists = checksOf(html);
+      assert.ok(lists.length >= 1, `${name}: a checks list per record`);
+      for (const list of lists) assert.ok(!list.includes("<details") && !/\shidden[\s>]/.test(list), `${name}: no check is folded or hidden at any width`);
+    }
+    assert.ok(!/\.wp-(check|registration|derivation|independent|jump)[^{]*\{[^}]*display:none/.test(css));
+  });
+
+  test("no celebration, security or certification glyph, and no such word in WalletWall-authored prose; attributed external text stays marked", () => {
+    const labels = render as unknown as { SUPPORT_HINTS: Record<string, string>; FRESHNESS_HINTS: Record<string, string>; FINALITY_HINTS: Record<string, string>; LIMITATION_LABELS: Record<string, string> };
+    const hints = [...Object.values(labels.SUPPORT_HINTS), ...Object.values(labels.FRESHNESS_HINTS), ...Object.values(labels.FINALITY_HINTS), ...Object.values(labels.LIMITATION_LABELS)].map((s) => s.replaceAll("&", "&amp;").replaceAll("'", "&#39;"));
+    for (const [name, html] of fragments) {
+      assert.ok(!/✓|✔|☑|✅|🛡|🔒|🏆|🎉|⭐/.test(html), `${name}: no check mark, shield, lock or celebration glyph`);
+      let prose = html.replace(/<code[^>]*>[^<]*<\/code>/g, "").replace(/<(q|code) class="wp-attributed" data-attributed="true">[^<]*<\/\1>/g, "");
+      for (const h of hints) prose = prose.replaceAll(h, "");
+      const words = prose.replace(/<[^>]+>/g, " ");
+      assert.ok(!/\b(authentic\w*|certif\w*|trust\w*|guarantee\w*|100 ?%|seal|badge|shield|tamper\w*|verified|genuine)\b/i.test(words), `${name}: ${/\b(authentic\w*|certif\w*|trust\w*|guarantee\w*|100 ?%|seal|badge|shield|tamper\w*|verified|genuine)\b/i.exec(words)?.[0]} appears in WalletWall-authored prose`);
+      for (const m of html.matchAll(/<q [^>]*>/g)) assert.ok(m[0].includes('class="wp-attributed" data-attributed="true"'), `${name}: every quotation is marked attributed`);
+    }
+  });
+
+  test("jump and inline version controls are real buttons at 36 px, 44 px on a coarse pointer, in the chip material; the derivation rail is a static hairline", () => {
+    assert.ok(/\.wp-jump button\{[^}]*min-height:36px/.test(css) && /\.wp-version-inline\{[^}]*min-height:36px/.test(css));
+    const coarse = block("@media (pointer:coarse)");
+    assert.ok(coarse.includes(".wp-jump button,.wp-version-inline{min-height:44px}"));
+    assert.ok(/\.wp-jump button\{[^}]*background:var\(--ww-label\)/.test(css), "the chip material, not a link");
+    const rail = rules.find(([s]) => s === ".wp-steps::before");
+    assert.ok(rail && /width:1px/.test(rail[1]) && !/animation/.test(rail[1]), "the rail is drawn once, static");
+    for (const [, html] of fragments) assert.ok(!/<a\b/.test(html), "no link anywhere in the document");
+  });
+});

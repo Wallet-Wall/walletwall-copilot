@@ -27,6 +27,14 @@ export const ASSESSOR_ROLE_LABELS = {
   OTHER: "Other",
 };
 
+/**
+ * The sections a local jump may focus inside one record, in the order the controls appear. Each target is rendered with
+ * `data-wp-target="<key>" id="wp-sec-<key>-<record id>"`, so the same vocabulary can address a section later without
+ * any URL existing in this lane.
+ */
+export const WALLPRINT_SECTIONS = ["receipt", "replay", "history", "assessments", "provenance"];
+export const SECTION_LABELS = { receipt: "Receipt", replay: "Replay", history: "History", assessments: "Assessments", provenance: "Provenance" };
+
 export const CLAIM_LABELS = {
   ASSET_IDENTITY: "Asset identity",
   TOKEN_BALANCE_AT_BLOCK: "Token balance at block",
@@ -103,25 +111,150 @@ export const DIFF_CATEGORY_LABELS = {
   lifecycle: "Lifecycle link",
 };
 
+/** The four questions the Verify section answers, one per check. They are not interchangeable and are never combined. */
+export const CHECK_QUESTIONS = {
+  record: "Is this a structurally valid WallPrint record?",
+  digest: "Do these canonical bytes produce the embedded digest?",
+  receipt: "Does the disclosed record match the committed record?",
+  replay: "Can the historical evaluation be reproduced under the recorded context?",
+};
+
+/** The record validation as presented: a 1:1 label of the engine's `ok` boolean, absence said as absence. */
+export const RECORD_PRESENTATION = {
+  VALID: "Every rule the builder applies holds for the disclosed record.",
+  INVALID: "The disclosed record does not validate. Findings, as the engine reported them:",
+  NOT_CARRIED: "No validation result is carried in this disclosure. Nothing was checked here.",
+  UNRECOGNISED: "The carried validation result is not in a form this document recognises. No result is shown.",
+};
+
+/** The digest check as presented: self-consistency of the disclosed bytes with the digest they carry, nothing more. */
+export const DIGEST_PRESENTATION = {
+  MATCH: "The embedded digest is the SHA-256 of the disclosed canonical record. The bytes are self-consistent with the digest they carry; whether they are the committed bytes is the receipt's question.",
+  MISMATCH: "The embedded digest is not the SHA-256 of the disclosed canonical record. The bytes or the digest changed after the other. This says nothing about which, and nothing about the facts.",
+  NOT_COMPUTABLE: "The disclosed record could not be canonicalized, so no digest was computed and nothing was compared.",
+  NO_DIGEST: "The disclosed record carries no digest to check.",
+  NOT_CARRIED: "No digest check is carried in this disclosure. Nothing was computed here.",
+  UNRECOGNISED: "The carried digest check is not in a form this document recognises. No result is shown.",
+};
+
 /**
- * The receipt as presented: a 1:1 label of the engine's `matches` boolean, absence when no receipt was issued, and absence
- * of the check itself when a receipt exists but no verification result is carried. Never a verdict the engine did not give.
+ * The receipt as presented: a 1:1 label of the engine's `matches` boolean, absence when no receipt was issued, absence of
+ * the check itself when a receipt exists but no verification result is carried, and "not recognised" for anything else.
+ * Never a verdict the engine did not give, and never a statement about the facts inside the record.
  */
 export const RECEIPT_PRESENTATION = {
-  MATCH: "The receipt's digest is the digest of the disclosed canonical record.",
-  MISMATCH: "The receipt does not prove the disclosed bytes.",
-  UNAVAILABLE: "No receipt is carried for this record.",
-  UNCHECKED: "A receipt is carried, but no verification result for it.",
+  MATCH: "The disclosed canonical record matches the committed record.",
+  MISMATCH: "The disclosed record does not match the commitment this receipt represents. The engine's reasons are listed below; they describe bytes, not facts.",
+  /** `matches: false` returned before any comparison (RECEIPT_INVALID, RECORD_INVALID): nothing was compared, so nothing is said not to match. */
+  MISMATCH_UNCOMPARED: "The engine reports matches: false without comparing: the receipt or the record is not in a checkable form, so no comparison with the commitment was made. The reasons are listed below; they describe form, not facts.",
+  UNAVAILABLE: "No receipt is carried for this record. Absence is not failure.",
+  UNCHECKED: "A receipt is carried, but no verification result is available in this disclosure. No check was run here.",
+  UNRECOGNISED: "The carried verification result is not in a form this document recognises. No result is shown.",
 };
+
+// ─── verification projections ───────────────────────────────────────────────
+// Each projection maps one engine result onto a fixed presentation word, 1:1. Absence (null or undefined) is "not
+// carried" or UNAVAILABLE; a value that is not the engine's shape, or is internally inconsistent, is UNRECOGNISED. Nothing
+// here recomputes a digest, a validation or a replay: a projection reads booleans and enumerations the engine wrote.
+
+export const RECEIPT_STATES = ["MATCH", "MISMATCH", "UNAVAILABLE", "UNCHECKED"];
+const UNRECOGNISED = "UNRECOGNISED";
+const NOT_CARRIED = "NOT_CARRIED";
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const absent = (v) => v === null || v === undefined;
+
+/** `{ issued, verification }` -> MATCH | MISMATCH | UNAVAILABLE | UNCHECKED | UNRECOGNISED. A match is `matches: true` with no reason; a mismatch is `matches: false` with at least one. */
+export function receiptStatusOf(receipt) {
+  if (absent(receipt)) return "UNAVAILABLE";
+  if (!isObj(receipt)) return UNRECOGNISED;
+  const v = receipt.verification;
+  if (absent(receipt.issued)) return absent(v) ? "UNAVAILABLE" : UNRECOGNISED;
+  if (!isObj(receipt.issued)) return UNRECOGNISED;
+  if (absent(v)) return "UNCHECKED";
+  if (!isObj(v) || typeof v.matches !== "boolean" || !Array.isArray(v.reasons)) return UNRECOGNISED;
+  if (v.matches) return v.reasons.length === 0 ? "MATCH" : UNRECOGNISED;
+  return v.reasons.length > 0 ? "MISMATCH" : UNRECOGNISED;
+}
+
+/** `{ ok, findings }` -> VALID | INVALID | NOT_CARRIED | UNRECOGNISED. VALID has no finding; INVALID has at least one. */
+export function recordStatusOf(validation) {
+  if (absent(validation)) return NOT_CARRIED;
+  if (!isObj(validation) || typeof validation.ok !== "boolean" || !Array.isArray(validation.findings)) return UNRECOGNISED;
+  if (validation.ok) return validation.findings.length === 0 ? "VALID" : UNRECOGNISED;
+  return validation.findings.length > 0 ? "INVALID" : UNRECOGNISED;
+}
+
+/**
+ * `{ hasDigest, matches, computedDigest }` -> MATCH | MISMATCH | NOT_COMPUTABLE | NO_DIGEST | NOT_CARRIED | UNRECOGNISED.
+ * A match carries the digest it matched; a mismatch carries the digest it compared; `matches: false` with no computed
+ * digest is the engine saying the record could not be canonicalized, which compared nothing.
+ */
+export function digestStatusOf(digest) {
+  if (absent(digest)) return NOT_CARRIED;
+  if (!isObj(digest) || typeof digest.hasDigest !== "boolean" || typeof digest.matches !== "boolean") return UNRECOGNISED;
+  if (!digest.hasDigest) return digest.matches ? UNRECOGNISED : "NO_DIGEST";
+  const computed = typeof digest.computedDigest === "string" && digest.computedDigest !== "";
+  if (digest.matches) return computed ? "MATCH" : UNRECOGNISED;
+  return computed ? "MISMATCH" : "NOT_COMPUTABLE";
+}
+
+/**
+ * `{ outcome, reasons, recomputedDigest, mismatches }` -> the engine's outcome when it is one the vocabulary names AND
+ * the other fields agree with it (replay.ts): REPRODUCED carries a recomputed digest and no reason or section; MISMATCH
+ * carries a recomputed digest, reasons and sections; UNREPLAYABLE carries reasons only (from the vocabulary's
+ * unreplayable reasons when given), no digest and no section. Anything else is NOT_CARRIED (absent) or UNRECOGNISED.
+ */
+export function replayStatusOf(replay, outcomes, unreplayableReasons) {
+  if (absent(replay)) return NOT_CARRIED;
+  if (!isObj(replay) || typeof replay.outcome !== "string") return UNRECOGNISED;
+  const outcome = replay.outcome;
+  if (!(Array.isArray(outcomes) ? outcomes : []).includes(outcome)) return UNRECOGNISED;
+  if (!Array.isArray(replay.reasons) || !Array.isArray(replay.mismatches)) return UNRECOGNISED;
+  const digest = typeof replay.recomputedDigest === "string" && replay.recomputedDigest !== "";
+  if (outcome === "REPRODUCED") return replay.reasons.length === 0 && replay.mismatches.length === 0 && digest ? outcome : UNRECOGNISED;
+  if (outcome === "MISMATCH") return replay.reasons.length > 0 && replay.mismatches.length > 0 && digest ? outcome : UNRECOGNISED;
+  if (outcome === "UNREPLAYABLE") {
+    if (replay.recomputedDigest !== null || replay.mismatches.length !== 0 || replay.reasons.length === 0) return UNRECOGNISED;
+    if (Array.isArray(unreplayableReasons) && !replay.reasons.every((x) => unreplayableReasons.includes(x))) return UNRECOGNISED;
+    return outcome;
+  }
+  return outcome;
+}
+
+/** Results that mean "no result": neutral, never an attention mark. Absence is not failure. */
+const NEUTRAL_RESULTS = ["UNAVAILABLE", "UNCHECKED", "NOT_CARRIED", "NO_DIGEST", "UNREPLAYABLE"];
+
+/** The compact status mark of a check: the chip component, with the result written in words and never colour alone. */
+function resultChip(status) {
+  if (status === NOT_CARRIED) return '<span class="chip" data-state="NA">not carried</span>';
+  if (status === UNRECOGNISED) return '<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span>';
+  if (status === "NO_DIGEST") return '<span class="chip" data-state="NO_DIGEST">no digest</span>';
+  if (status === "NOT_COMPUTABLE") return '<span class="chip" data-attention="true" data-state="NOT_COMPUTABLE">not computable</span>';
+  return chip(status, [status], NEUTRAL_RESULTS.includes(status) ? false : undefined);
+}
+
+/**
+ * The replay outcome chip: the engine's word when the result is recognised; an outcome outside the vocabulary is shown
+ * with its value; an in-vocabulary outcome whose fields contradict it is "not recognised" without the word, so an
+ * inconsistent result never reads as calm; absence is absence.
+ */
+function replayChip(m, vocabulary) {
+  if (m.replayStatus === NOT_CARRIED) return '<span class="chip" data-state="NA">not carried</span>';
+  const outcome = isObj(m.replay) ? m.replay.outcome : null;
+  if (typeof outcome !== "string") return '<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span>';
+  if (m.replayStatus === UNRECOGNISED && list(vocabulary.replayOutcomes).includes(outcome)) return '<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span>';
+  return chip(outcome, vocabulary.replayOutcomes, outcome === "UNREPLAYABLE" ? false : undefined);
+}
 
 /** How a synthetic fixture was constructed, printed on its fixture line so an adversarial scenario is never mistaken for an engine-built one. */
 export const SCENARIO_LABELS = {
   ENGINE_BUILT: "every record of this lineage was built by the engine from its synthetic evidence",
   COMMITTED_ELSEWHERE: "this record was built by the engine, then one field was changed and the record re-digested before commit, as a record from another engine would be",
   ALTERED_AFTER_COMMIT: "this record was built and committed by the engine; the copy disclosed here was changed afterwards without re-digesting",
+  VERIFICATION_NOT_CARRIED: "every record of this lineage was built by the engine and its receipt was issued by the engine; the receipt's verification result was left out of this disclosure, so no check result is carried",
 };
 
-const ATTENTION_FREE = ["ESTABLISHED", "SUPPORTED", "CURRENT", "PINNED", "FINALIZED", "COMMITTED", "DISCLOSED", "REPRODUCED", "MATCH"];
+const ATTENTION_FREE = ["ESTABLISHED", "SUPPORTED", "CURRENT", "PINNED", "FINALIZED", "COMMITTED", "DISCLOSED", "REPRODUCED", "MATCH", "VALID"];
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const list = (v) => (Array.isArray(v) ? v : []);
@@ -129,9 +262,36 @@ const str = (v) => (typeof v === "string" ? v : null);
 const ADDRESS_KEYS = new Set(["address", "token", "holder"]);
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 
+/** A label from a fixed table, only for a key the table itself names: a prototype key or an unknown code gets nothing. */
+const lookup = (table, key) => (typeof key === "string" && Object.hasOwn(table, key) ? table[key] : undefined);
+
+/** Characters that steer display without being visible: C0 controls, DEL, the bidirectional marks, embeddings, overrides and isolates. */
+function controlCount(value) {
+  let n = 0;
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if (c < 32 || c === 127 || c === 8206 || c === 8207 || (c >= 8234 && c <= 8238) || (c >= 8294 && c <= 8297)) n++;
+  }
+  return n;
+}
+
+/**
+ * Disclosure currency, read from a recognised lifecycle state only: CORRECTED, SUPERSEDED and WITHDRAWN records are not
+ * the current record; an absent or unrecognised state asserts nothing either way.
+ */
+function currency(m, vocabulary) {
+  const state = m.lifecycle.state;
+  const known = typeof state === "string" && list(vocabulary.lifecycleStates).includes(state);
+  return { state, known, superseded: known && (state === "CORRECTED" || state === "SUPERSEDED" || state === "WITHDRAWN") };
+}
+
 function chip(value, allowed, attentionOverride) {
   if (value === null || value === undefined) return '<span class="chip" data-state="NA">N/A</span>';
-  if (!allowed.includes(value)) return `<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised: ${esc(String(value).slice(0, 24))}</span>`;
+  if (!allowed.includes(value)) {
+    // The chip is cut for the eye; a longer value is also printed in full beside it, so two unrecognised values never read the same.
+    const s = String(value);
+    return `<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised: ${esc(s.slice(0, 24))}</span>${s.length > 24 ? ` <code class="wp-unrecognised">${esc(s)}</code>` : ""}`;
+  }
   const attention = attentionOverride === undefined ? !ATTENTION_FREE.includes(value) : attentionOverride;
   return `<span class="chip" data-state="${esc(value)}"${attention ? ' data-attention="true"' : ""}>${esc(value)}</span>`;
 }
@@ -139,7 +299,11 @@ function chip(value, allowed, attentionOverride) {
 /** An exact value: full, monospace, selectable, with a copy control that copies exactly the printed text. Absence is said. */
 function exact(value, label) {
   if (typeof value !== "string" || value === "") return '<span class="muted">not carried</span>';
-  return `<span class="wp-copyable"><code class="wp-exact">${esc(value)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full ${esc(label)}">Copy</button></span>`;
+  // A value is printed and copied exactly as carried. Characters that steer display (controls, bidirectional marks) are
+  // counted and said beside it, so a reversed or spoofed rendering is never silent; the stylesheet isolates the run.
+  const n = controlCount(value);
+  const note = n ? ` <span class="wp-controls muted small">contains ${n} control or direction character${n === 1 ? "" : "s"}, shown as carried</span>` : "";
+  return `<span class="wp-copyable"><code class="wp-exact">${esc(value)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full ${esc(label)}">Copy</button>${note}</span>`;
 }
 
 /** The link between a successor and its predecessor, in words, only for the kinds the engine names. */
@@ -172,7 +336,7 @@ function flat(rec, chainId) {
 function codes(values, labels) {
   const xs = list(values);
   if (xs.length === 0) return null;
-  return `<ul class="limits wp-codes">${xs.map((c) => `<li><code>${esc(c)}</code>${labels && labels[c] ? ` <span class="muted">${esc(labels[c])}</span>` : ""}</li>`).join("")}</ul>`;
+  return `<ul class="limits wp-codes">${xs.map((c) => `<li><code>${esc(c)}</code>${labels && lookup(labels, c) ? ` <span class="muted">${esc(lookup(labels, c))}</span>` : ""}</li>`).join("")}</ul>`;
 }
 
 // ─── view model ──────────────────────────────────────────────────────────────
@@ -200,7 +364,7 @@ export function recordViewModel(entry, index, fixture, vocabulary) {
   const chainId = str(identity.chainId);
   const symbolPresented = focal && isObject(focal.value) ? str(focal.value.symbol) : null;
   const claimType = str(subject.claimType);
-  const claimLabel = CLAIM_LABELS[claimType] ?? (claimType === null ? "Claim" : `not recognised: ${claimType.slice(0, 24)}`);
+  const claimLabel = lookup(CLAIM_LABELS, claimType) ?? (claimType === null ? "Claim" : `not recognised: ${claimType.slice(0, 24)}`);
   const chainName = registry.chain ? str(registry.chain.name) : null;
   const chainIds = isObject(entry.lineage) ? list(entry.lineage.chain).map(String) : [];
   const position = chainIds.indexOf(String(entry.id));
@@ -210,7 +374,9 @@ export function recordViewModel(entry, index, fixture, vocabulary) {
   const digest = isObject(entry.digest) ? entry.digest : null;
   const validation = isObject(entry.validation) ? entry.validation : null;
   const verification = isObject(receipt.verification) ? receipt.verification : null;
-  const receiptStatus = receipt.issued === null || receipt.issued === undefined ? "UNAVAILABLE" : verification === null ? "UNCHECKED" : verification.matches === true ? "MATCH" : "MISMATCH";
+  // The four verification results, each a 1:1 projection of the engine's output (see the projections above): nothing is
+  // recomputed, absence stays absence, and a result the document does not recognise is shown as such, never as MATCH.
+  const receiptStatus = receiptStatusOf(entry.receipt);
   // The title is what the record carries: the presented symbol for an identity claim, the claim type otherwise. The
   // registry's point-in-time names are a labelled subtitle, never the title.
   const title = claimType === "ASSET_IDENTITY" && symbolPresented !== null ? symbolPresented : claimLabel;
@@ -257,6 +423,9 @@ export function recordViewModel(entry, index, fixture, vocabulary) {
     validation,
     receipt: { issued: isObject(receipt.issued) ? receipt.issued : null, verification },
     receiptStatus,
+    recordStatus: recordStatusOf(entry.validation),
+    digestStatus: digestStatusOf(entry.digest),
+    replayStatus: replayStatusOf(entry.replay, vocabulary.replayOutcomes, vocabulary.unreplayableReasons),
     replay,
     supersedes: isObject(entry.supersedes) ? entry.supersedes : null,
     supersededBy: isObject(entry.supersededBy) ? entry.supersededBy : null,
@@ -281,7 +450,7 @@ export function wallPrintViewModel(name, fixture, vocabulary) {
     title: str(fixture.title) ?? "",
     focus: models.find((m) => m.focused)?.id ?? null,
     registry: isObject(fixture.registry) ? fixture.registry : { asset: null, chain: null },
-    scenario: scenario === null ? null : { kind: str(scenario.kind), patched: list(scenario.patched).map(String), label: SCENARIO_LABELS[str(scenario.kind)] ?? null },
+    scenario: scenario === null ? null : { kind: str(scenario.kind), patched: list(scenario.patched).map(String), label: lookup(SCENARIO_LABELS, str(scenario.kind)) ?? null },
     records: models,
   };
 }
@@ -292,22 +461,30 @@ function head(m, vocabulary, labels) {
   const asset = m.registry.asset;
   const chain = `${asset ? `${esc(asset.symbol)} ${esc(asset.name)} <span class="muted">(registry record, point in time)</span> · ` : ""}${m.chainName ? `${esc(m.chainName)} <span class="muted">(registry name, point in time) · chain ID <code>${esc(m.chainId)}</code></span>` : m.chainId ? `chain ID <code>${esc(m.chainId)}</code>` : '<span class="muted">chain not stated</span>'}`;
   const assessment = m.assessment.code === null ? '<span class="chip" data-state="NA" data-attention="true">no WalletWall assessment recorded</span>' : m.assessment.known ? `<span class="wp-assessment-word" data-state="${esc(m.assessment.code)}"${ATTENTION_FREE.includes(m.assessment.code) ? "" : ' data-attention="true"'}>${esc(m.assessment.code)}</span>` : `<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised: ${esc(m.assessment.code.slice(0, 24))}</span>`;
-  const hint = m.assessment.known ? labels.SUPPORT_HINTS[m.assessment.code] ?? "" : "";
+  const hint = m.assessment.known ? lookup(labels.SUPPORT_HINTS, m.assessment.code) ?? "" : "";
   // A record that is no longer the current disclosure says so beside its assessment: lifecycle is disclosure metadata and
   // changes no evidence state, but a reader must never take a corrected, superseded or withdrawn record for the current one.
-  // Every event that takes the record out of currency is named: the successor link and, separately, a withdrawal.
+  // Every event that takes the record out of currency is named: the successor link and, separately, a withdrawal. Only a
+  // recognised CORRECTED, SUPERSEDED or WITHDRAWN state says "not current"; absence or an unrecognised value asserts nothing.
   const linked = m.lifecycle.events.find((e) => e.ref !== null && isObject(e.ref)) ?? null;
   const withdrawn = m.lifecycle.events.find((e) => e.state === "WITHDRAWN") ?? null;
-  const current = m.lifecycle.state === "COMMITTED" || m.lifecycle.state === "DISCLOSED";
-  const standing = m.lifecycle.state !== null && !current
-    ? `<p class="note wp-standing" data-attention="true">This record's lifecycle is <code>${esc(m.lifecycle.state)}</code>${linked ? ` (${esc(linkVerb(linked.ref.kind, true))} by <code>${esc(linked.ref.id)}</code>${linked.reason ? `: <span class="wp-reason-inline">${esc(linked.reason)}</span>` : ""})` : ""}${withdrawn ? `${linked ? "; withdrawn" : ""}${withdrawn.reason ? `: <span class="wp-reason-inline">${esc(withdrawn.reason)}</span>` : ""}` : ""}. The assessment above is what this record carried at its snapshot; a lifecycle state is disclosure metadata and changes no evidence state.</p>`
+  const life = currency(m, vocabulary);
+  const standing = life.superseded
+    ? `<p class="note wp-standing" data-attention="true">This record's lifecycle is <code>${esc(life.state)}</code>${linked ? ` (${esc(linkVerb(linked.ref.kind, true))} by <code>${esc(linked.ref.id)}</code>${linked.reason ? `: <span class="wp-reason-inline">${esc(linked.reason)}</span>` : ""})` : ""}${withdrawn ? `${linked ? "; withdrawn" : ""}${withdrawn.reason ? `: <span class="wp-reason-inline">${esc(withdrawn.reason)}</span>` : ""}` : ""}. The assessment above is what this record carried at its snapshot; a lifecycle state is disclosure metadata and changes no evidence state.</p>`
     : "";
-  const eyebrow = current ? "Current WalletWall assessment" : "WalletWall assessment as recorded (not the current record)";
+  const eyebrow = life.superseded ? "WalletWall assessment as recorded (not the current record)" : life.known ? "Current WalletWall assessment" : life.state === null ? "WalletWall assessment as recorded (lifecycle not carried)" : "WalletWall assessment as recorded (lifecycle not recognised)";
   return `<header class="wp-head">
 <div class="wp-head-top"><svg class="wp-reg wp-rise" data-wp-step="0" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="6.5"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5"/></svg><p class="wp-eyebrow wp-rise" data-wp-step="0">WallPrint · disclosure record</p><p class="wp-id wp-rise" data-wp-step="0"><span class="ww-sr">WallPrint id </span>${exact(m.id, "WallPrint id")}<span class="wp-version-of muted small">${esc(m.version)} of ${esc(String(m.total))}</span></p></div>
 <div class="wp-identity wp-rise" data-wp-step="1"><h2 id="wp-h-${esc(m.id)}" class="wp-title">${esc(m.title)}</h2><p class="wp-subtitle">${esc(m.claimLabel)}${m.temporality ? ` · <code>${esc(m.temporality)}</code>` : ""} · ${chain}</p>${m.symbolPresented && m.registry.asset && m.symbolPresented !== m.registry.asset.symbol ? `<p class="note" data-attention="true">The symbol as presented, <code>${esc(m.symbolPresented)}</code>, differs from the registry symbol <code>${esc(m.registry.asset.symbol)}</code>. A symbol is not an identity.</p>` : ""}<div class="wp-subject-record"><p class="wp-eyebrow">Subject identity, as recorded</p>${flat(m.identity, m.chainId ?? undefined)}</div></div>
 <div class="wp-current wp-rise" data-wp-step="2"><p class="wp-eyebrow">${eyebrow}</p><p class="wp-assessment">${assessment}</p>${hint ? `<p class="wp-assessment-hint">${esc(hint)}</p>` : ""}<p class="wp-principle">${esc(vocabulary.principle)}</p><p class="wp-status-line"><span class="wp-eyebrow-inline">Lifecycle</span> ${chip(m.lifecycle.state, vocabulary.lifecycleStates)} <span class="wp-eyebrow-inline">Snapshot</span> ${instant(m.snapshotAt)}</p>${standing}</div>
+${jump(m)}
 </header>`;
+}
+
+/** Local section controls: one real button per section of this record, each naming its server-rendered target. */
+function jump(m) {
+  // A jump moves focus; it controls nothing, so the target is named by a data attribute rather than aria-controls.
+  return `<nav class="wp-jump wp-rise" data-wp-step="2" aria-label="Go to a section of this record">${WALLPRINT_SECTIONS.map((key) => `<button type="button" data-wp-jump="${key}" data-wp-for="wp-sec-${key}-${esc(m.id)}">${SECTION_LABELS[key]}</button>`).join("")}</nav>`;
 }
 
 function why(m, vocabulary, labels) {
@@ -344,7 +521,7 @@ function recordBox(m) {
     const reached = event !== null;
     const attention = reached && !ATTENTION_FREE.includes(state);
     const detail = reached ? `${instant(event.at)}${event.reason ? `<span class="wp-reason">${esc(event.reason)}</span>` : ""}${event.ref && isObject(event.ref) ? `<span class="wp-ref muted small">by <code>${esc(event.ref.id)}</code> (${esc(event.ref.kind)})</span>` : ""}` : '<span class="muted small">not reached</span>';
-    return `<li class="wp-ledger-row" data-reached="${reached}"${attention ? ' data-attention="true"' : ""}><span class="wp-dot" aria-hidden="true">${reached ? "●" : "○"}</span><span class="wp-ledger-state"><code>${esc(state)}</code><span class="ww-sr">${reached ? " reached" : " not reached"}</span></span><span class="wp-ledger-detail">${detail}</span><span class="wp-ledger-hint muted small">${esc(LIFECYCLE_HINTS[state] ?? "")}</span></li>`;
+    return `<li class="wp-ledger-row" data-reached="${reached}"${attention ? ' data-attention="true"' : ""}><span class="wp-dot" aria-hidden="true">${reached ? "●" : "○"}</span><span class="wp-ledger-state"><code>${esc(state)}</code><span class="ww-sr">${reached ? " reached" : " not reached"}</span></span><span class="wp-ledger-detail">${detail}</span><span class="wp-ledger-hint muted small">${esc(lookup(LIFECYCLE_HINTS, state) ?? "")}</span></li>`;
   });
   const chain = m.lifecycle.events.map((e) => `<li><code>${esc(e.seq)}</code> <code>${esc(e.state)}</code> at ${instant(e.at)} · event digest <code>${esc(e.eventDigest)}</code>${e.previousEventDigest ? ` · previous <code>${esc(e.previousEventDigest)}</code>` : " · first event"}</li>`);
   return `<section class="wp-recordbox wp-rise" data-wp-step="3" aria-labelledby="wp-rec-${esc(m.id)}"><h3 id="wp-rec-${esc(m.id)}">Record</h3>
@@ -357,13 +534,13 @@ function recordBox(m) {
 
 function assessmentsTable(m, vocabulary) {
   const rows = m.assessments.map((a) => {
-    const role = ASSESSOR_ROLE_LABELS[a.assessorRole] ?? `not recognised: ${String(a.assessorRole).slice(0, 24)}`;
+    const role = lookup(ASSESSOR_ROLE_LABELS, a.assessorRole) ?? `not recognised: ${String(a.assessorRole).slice(0, 24)}`;
     const walletwall = a.assessorRole === "WALLETWALL";
     const code = walletwall ? chip(a.assessment, vocabulary.supportStates) : `<code class="wp-attributed" data-attributed="true">${esc(a.assessment)}</code> <span class="muted small">as stated</span>`;
     const lims = list(a.limitations);
     return `<tr role="row"><th role="rowheader" scope="row"><code>${esc(a.assessor)}</code></th><td role="cell" data-label="Role">${esc(role)}</td><td role="cell" data-label="Assessment">${code}</td><td role="cell" data-label="Policy"><code>${esc(a.policy)}</code></td><td role="cell" data-label="Policy version"><code>${esc(a.policyVersion)}</code></td><td role="cell" data-label="Assessed">${instant(a.assessedAt)}</td><td role="cell" data-label="Limitations">${lims.length ? lims.map((l) => `<code>${esc(l)}</code>`).join(" ") : '<span class="muted">none</span>'}</td><td role="cell" data-label="Statement">${typeof a.statement === "string" ? `<q class="wp-attributed" data-attributed="true">${esc(a.statement)}</q>` : '<span class="muted">no statement</span>'}</td></tr>`;
   });
-  return `<section class="wp-assessments wp-rise" data-wp-step="4" aria-labelledby="wp-as-${esc(m.id)}"><h3 id="wp-as-${esc(m.id)}">Assessments</h3>
+  return `<section class="wp-assessments wp-rise" data-wp-step="4" aria-labelledby="wp-as-${esc(m.id)}" data-wp-target="assessments" id="wp-sec-assessments-${esc(m.id)}"><h3 id="wp-as-${esc(m.id)}">Assessments</h3>
 <p class="muted small">One row per named assessor and policy, as recorded. WalletWall's row is the focal claim's evaluated support state; every other row is an attributed statement, recorded verbatim. Absence of an assessment is not a failed assessment.</p>
 <div class="ww-table-wrap"><table class="wp-table" role="table" aria-label="Assessments"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Assessor</th><th role="columnheader" scope="col">Role</th><th role="columnheader" scope="col">Assessment</th><th role="columnheader" scope="col">Policy</th><th role="columnheader" scope="col">Policy version</th><th role="columnheader" scope="col">Assessed</th><th role="columnheader" scope="col">Limitations</th><th role="columnheader" scope="col">Statement</th></tr></thead><tbody role="rowgroup">${rows.join("") || '<tr role="row"><td role="cell" colspan="8" class="muted">No assessment recorded.</td></tr>'}</tbody></table></div>
 <p class="wp-assessments-note">${m.assessments.length === 1 ? "One assessment is recorded: WalletWall's own." : `${esc(String(m.assessments.length))} assessments are recorded, each under its own policy and in its own vocabulary.`} WallPrint compares none of them, ranks none above another and computes no consensus. Agreement between assessors is not independent corroboration of the evidence.</p>
@@ -373,7 +550,7 @@ function assessmentsTable(m, vocabulary) {
 function provenanceChain(m) {
   const stages = m.stages.map((s, i) => `<li class="wp-stage" data-stage="${esc(s.key)}" data-present="${s.entries.length > 0}"><span class="wp-stage-mark" aria-hidden="true"></span><span class="wp-stage-title">${esc(s.title)}</span>${s.entries.length ? `<ul class="wp-stage-entries">${s.entries.map((e) => `<li><code>${esc(e.id)}</code> <span class="muted small">${esc(e.sub)}</span></li>`).join("")}</ul>` : '<p class="wp-stage-empty muted small">none in this record</p>'}${s.note ? `<p class="wp-stage-note muted small">${esc(s.note)}</p>` : ""}${i < m.stages.length - 1 ? '<span class="ww-sr">, then </span>' : ""}</li>`);
   const issues = m.provenanceIssues.map((i) => `<li><code>${esc(i.code)}</code>${i.id ? ` <code>${esc(i.id)}</code>` : ""}</li>`);
-  return `<section class="wp-provenance wp-rise" data-wp-step="4" aria-labelledby="wp-prov-${esc(m.id)}"><h3 id="wp-prov-${esc(m.id)}">Provenance</h3>
+  return `<section class="wp-provenance wp-rise" data-wp-step="4" aria-labelledby="wp-prov-${esc(m.id)}" data-wp-target="provenance" id="wp-sec-provenance-${esc(m.id)}"><h3 id="wp-prov-${esc(m.id)}">Provenance</h3>
 <p class="muted small">The lineage the engine traced for the focal claim <code>${esc(m.focalAssertionId ?? "")}</code>, with the evidence references the record carries. A stage the record does not carry is shown empty, never filled in.</p>
 <ol class="wp-chain" aria-label="Provenance chain, from source to assessment">${stages.join("")}</ol>
 ${issues.length ? `<div class="note" data-attention="true"><p>Provenance is incomplete:</p><ul class="limits wp-codes">${issues.join("")}</ul></div>` : ""}
@@ -409,57 +586,129 @@ function history(m, vm, vocabulary) {
   });
   const own = m.supersedes ? `<p>This record <strong>${esc(linkVerb(m.supersedes.kind, false))}</strong> <code>${esc(m.supersedes.id)}</code> and binds that record's committed digest <code>${esc(m.supersedes.digest)}</code>${m.supersedes.reason ? `. Stated reason: <span class="wp-reason-inline">${esc(m.supersedes.reason)}</span>` : "."} The earlier record stays committed and selectable above.</p>` : "";
   const by = m.supersededBy ? `<p data-attention="true" class="note">This record was <strong>${esc(linkVerb(m.supersededBy.kind, true))}</strong> by <code>${esc(m.supersededBy.id)}</code> (successor digest <code>${esc(m.supersededBy.digest)}</code>). The history appended that event to this record; it did not rewrite or remove the record. Whether the bytes shown here are its committed bytes is checked under Verify.</p>` : "";
-  return `<section class="wp-history wp-rise" data-wp-step="4" aria-labelledby="wp-hist-${esc(m.id)}"><h3 id="wp-hist-${esc(m.id)}">Corrections and supersessions</h3>
+  return `<section class="wp-history wp-rise" data-wp-step="4" aria-labelledby="wp-hist-${esc(m.id)}" data-wp-target="history" id="wp-sec-history-${esc(m.id)}"><h3 id="wp-hist-${esc(m.id)}">Corrections and supersessions</h3>
 ${chain.length > 1 ? '<p class="muted small">Every version of this lineage stays visible and selectable. A correction or supersession is a new record that binds the predecessor by digest; the predecessor is never edited or deleted.</p>' : '<p class="muted small">No correction or supersession is recorded for this lineage.</p>'}
 <ol class="wp-lineage" aria-label="Lineage, root first">${nodes.join("")}</ol>
 ${own}${by}${diffGroups(m, vocabulary)}
 </section>`;
 }
 
-function verify(m, vocabulary) {
+/**
+ * Verify: four separate questions (record, digest, receipt, replay), each answered only by the engine's recorded result,
+ * then the registration readout (every identifier, digest, version and instant, exact and copyable) and the derivation
+ * chain from the canonical payload to the commitment comparison. The questions are never combined into one state.
+ */
+function verify(m, vm, vocabulary) {
   const fact = (dt, dd) => `<div><dt>${dt}</dt><dd>${dd}</dd></div>`;
+  const notStated = '<span class="muted">not stated</span>';
+  const code = (v) => (typeof v === "string" && v !== "" ? `<code>${esc(v)}</code>` : notStated);
   const map = (o) => {
     const entries = Object.entries(isObject(o) ? o : {});
     return entries.length ? `<ul class="limits wp-codes">${entries.map(([k, v]) => `<li><code>${esc(k)}</code> <code>${esc(v)}</code></li>`).join("")}</ul>` : '<span class="muted">none</span>';
   };
+  const check = (key, no, title, status, chipHtml, meaning, body, extra = "") => `<li class="wp-check${key === "receipt" ? " wp-receipt" : key === "replay" ? " wp-replay" : ""}" data-check="${key}" ${key === "receipt" ? `data-receipt="${esc(status)}" data-wp-target="receipt" id="wp-sec-receipt-${esc(m.id)}"` : key === "replay" ? `data-replay="${esc(status)}" data-wp-target="replay" id="wp-sec-replay-${esc(m.id)}"` : `data-result="${esc(status)}"`}${extra}><h4 id="wp-ck-${key}-${esc(m.id)}"><span class="wp-check-no" aria-hidden="true">${no}</span>${title}</h4><p class="wp-check-q">${CHECK_QUESTIONS[key]}</p><p class="wp-check-a">${chipHtml} <span class="wp-check-meaning">${esc(meaning)}</span></p>${body}</li>`;
+
+  // 1. Record: is this a structurally valid WallPrint record? The engine's validation result, or its absence.
+  const findings = isObject(m.validation) ? list(m.validation.findings).filter(isObject).map((f) => `<li><code>${esc(f.code)}</code> at <code>${esc(f.path === "" ? "(record)" : f.path)}</code></li>`) : [];
+  const recordCheck = check("record", "1", "Record", m.recordStatus, resultChip(m.recordStatus), lookup(RECORD_PRESENTATION, m.recordStatus) ?? "", m.recordStatus === "INVALID" ? `<ul class="limits wp-codes">${findings.join("")}</ul>` : "");
+
+  // 2. Digest: do these canonical bytes produce the embedded digest? Self-consistency only; the receipt asks about commitment.
   const d = m.digest;
-  // The digest check is self-consistency: the embedded digest against the SHA-256 of the disclosed bytes. It cannot say
-  // what was committed; that is the receipt's question. Absence of the check is said as absence.
-  const digestLine = d === null ? '<span class="chip" data-state="NA">not carried</span> <span class="muted small">this fixture carries no digest check</span>' : d.hasDigest !== true ? '<span class="chip" data-state="NA" data-attention="true">no digest</span>' : d.matches === true ? `<span class="chip" data-state="MATCH">MATCH</span> <span class="muted small">the embedded digest is the SHA-256 of the disclosed canonical record: the bytes are self-consistent with the digest they carry</span>` : `<span class="chip" data-state="MISMATCH" data-attention="true">MISMATCH</span> <span class="muted small">the embedded digest is not the SHA-256 of the disclosed canonical record: the bytes or the digest changed after the other</span>`;
-  const findings = m.validation === null ? [] : list(m.validation.findings).filter(isObject).map((f) => `<li><code>${esc(f.code)}</code> at <code>${esc(f.path === "" ? "(record)" : f.path)}</code></li>`);
-  const validationLine = m.validation === null ? '<span class="chip" data-state="NA">not carried</span> <span class="muted small">this fixture carries no validation result</span>' : m.validation.ok === true ? '<span class="chip" data-state="VALID">VALID</span> <span class="muted small">every rule the builder applies holds</span>' : `<span class="chip" data-state="INVALID" data-attention="true">INVALID</span><ul class="limits wp-codes">${findings.join("") || "<li>no findings listed</li>"}</ul>`;
+  const embedded = m.digestEmbedded ? exact(m.digestEmbedded, "record digest") : '<span class="muted">none</span>';
+  const computed = isObject(d) && typeof d.computedDigest === "string" && d.computedDigest !== "" ? exact(d.computedDigest, "computed digest") : d === null ? '<span class="muted">not carried</span>' : '<span class="muted">could not be computed</span>';
+  const digestFields = `<dl class="states wp-facts wp-check-fields"><div><dt>Embedded digest</dt><dd>${embedded}</dd></div><div><dt>Computed digest</dt><dd>${computed}</dd></div></dl>`;
+  const digestCheck = check("digest", "2", "Digest", m.digestStatus, resultChip(m.digestStatus), lookup(DIGEST_PRESENTATION, m.digestStatus) ?? "", digestFields);
+
+  // 3. Receipt: does the disclosed record match the committed record? The engine's verification, its fields, the boundary,
+  //    and the other versions' receipts of this lineage, listed and never merged.
+  const issued = m.receipt.issued;
   const rv = m.receipt.verification;
-  const receiptReasons = rv ? codes(rv.reasons, RECEIPT_REASON_LABELS) : null;
-  const receiptBlock = `<div class="wp-receipt" data-receipt="${esc(m.receiptStatus)}"><h4>Receipt</h4><p>${chip(m.receiptStatus, ["MATCH", "MISMATCH", "UNAVAILABLE", "UNCHECKED"])} <span class="muted small">${esc(RECEIPT_PRESENTATION[m.receiptStatus])}</span></p>${receiptReasons ? receiptReasons : ""}${
-    m.receipt.issued
-      ? `<dl class="states wp-facts"><div><dt>Receipt for</dt><dd><code>${esc(m.receipt.issued.recordId)}</code></dd></div><div><dt>Receipt digest</dt><dd>${exact(m.receipt.issued.digest, "receipt digest")}</dd></div><div><dt>Receipt bundle digest</dt><dd>${exact(m.receipt.issued.bundleDigest, "receipt bundle digest")}</dd></div><div><dt>Receipt versions</dt><dd>${map(m.receipt.issued.versions)}</dd></div>${rv ? `<div><dt>Engine says</dt><dd><code>matches: ${rv.matches === true ? "true" : "false"}</code></dd></div>` : ""}</dl>`
-      : '<p class="muted small">No receipt fields to show.</p>'
-  }<p class="wp-boundary"><strong>${esc(vocabulary.receipt.establishes)}</strong> A matching receipt does not establish ${vocabulary.receipt.doesNotEstablish.map((x) => esc(x)).join(", ")}.</p></div>`;
+  const compared = m.receiptStatus === "MISMATCH" || m.receiptStatus === "MATCH";
+  const receiptReasons = compared && rv ? codes(rv.reasons, RECEIPT_REASON_LABELS) : null;
+  // `matches: false` returned before any comparison (the receipt or the record is not checkable) is told as not compared.
+  const uncompared = m.receiptStatus === "MISMATCH" && list(rv && rv.reasons).every((x) => x === "RECORD_INVALID" || x === "RECEIPT_INVALID");
+  const receiptMeaning = uncompared ? RECEIPT_PRESENTATION.MISMATCH_UNCOMPARED : lookup(RECEIPT_PRESENTATION, m.receiptStatus) ?? "";
+  // The engine's own boolean is printed only when the result is one the document recognises; an inconsistent result never
+  // leaks its optimistic half.
+  const engineResult = compared ? `<code>matches: ${rv.matches ? "true" : "false"}</code>` : m.receiptStatus === UNRECOGNISED ? '<span class="chip" data-attention="true" data-state="UNRECOGNISED">not recognised</span> <span class="muted small">the carried result is not in the engine&#39;s shape and is not shown</span>' : '<span class="muted">not carried</span>';
+  const receiptFields = issued
+    ? `<dl class="states wp-facts wp-receipt-fields"><div><dt>Receipt for record</dt><dd>${exact(str(issued.recordId), "receipt record id")}</dd></div><div><dt>Commitment digest (receipt)</dt><dd>${exact(str(issued.digest), "receipt digest")}</dd></div><div><dt>Embedded digest (record)</dt><dd>${embedded}</dd></div><div><dt>Receipt bundle digest</dt><dd>${exact(str(issued.bundleDigest), "receipt bundle digest")}</dd></div><div><dt>Receipt versions</dt><dd>${map(issued.versions)}</dd></div>${
+        m.supersedes ? `<div><dt>Predecessor digest bound</dt><dd>${exact(str(m.supersedes.digest), "predecessor digest")} <span class="muted small">the committed digest of <code>${esc(m.supersedes.id)}</code>, bound by this record</span></dd></div>` : ""
+      }<div><dt>Engine result</dt><dd>${engineResult}</dd></div></dl>`
+    : '<p class="muted small">No receipt fields to show.</p>';
+  const life = currency(m, vocabulary);
+  const standing = issued && life.superseded ? `<p class="note wp-receipt-standing" data-attention="true">This receipt belongs to a record whose lifecycle is <code>${esc(life.state)}</code>: not the current record. A later version does not replace this commitment, and a withdrawal does not erase it.</p>` : "";
+  const byId = new Map(vm.records.map((r) => [r.id, r]));
+  const others = (m.lineageChain.length ? m.lineageChain.map((id) => byId.get(id)).filter((r) => r !== undefined) : vm.records).filter((r) => r.id !== m.id);
+  const lineageReceipts = others.length
+    ? `<div class="wp-receipt-lineage"><p class="wp-eyebrow">Receipts across this lineage</p><ul class="limits wp-codes">${others
+        .map((r) => `<li><span class="wp-version-label">${esc(r.version)}</span> <code>${esc(r.id)}</code> · lifecycle ${chip(r.lifecycle.state, vocabulary.lifecycleStates)} · receipt ${resultChip(r.receiptStatus)} · <button type="button" class="wp-version-inline" data-wp-version="${esc(r.id)}" data-wp-then="receipt">Show ${esc(r.version)} receipt</button></li>`)
+        .join("")}</ul><p class="muted small">Each version carries its own receipt; the receipts listed here belong to those versions and are never merged into this one.</p></div>`
+    : "";
+  // The boundary is a definition of what a match would mean, prefixed so that on a mismatch it never reads as an assertion.
+  const boundary = `<p class="wp-boundary"><strong>What a matching receipt establishes:</strong> ${esc(vocabulary.receipt.establishes)} A matching receipt demonstrates consistency between this disclosed record and its commitment. A matching receipt does not establish ${list(vocabulary.receipt.doesNotEstablish).map((x) => esc(x)).join(", ")}.</p>`;
+  const receiptCheck = check("receipt", "3", "Receipt", m.receiptStatus, resultChip(m.receiptStatus), receiptMeaning, `${standing}${receiptReasons ?? ""}${receiptFields}${lineageReceipts}${boundary}`);
+
+  // 4. Replay: can the historical evaluation be reproduced under the recorded context? The engine's outcome and reasons.
   const r = m.replay;
   const outcome = str(r.outcome);
-  const replayBlock = `<div class="wp-replay" data-replay="${esc(outcome ?? "NONE")}"><h4>Replay</h4><p>${chip(outcome, vocabulary.replayOutcomes)} <span class="muted small">${esc(REPLAY_OUTCOME_HINTS[outcome] ?? "No replay result is recorded.")}</span></p>${list(r.reasons).length ? `<p class="muted small">Reasons, as the engine reported them:</p>${codes(r.reasons, REPLAY_REASON_LABELS)}` : ""}<dl class="states wp-facts"><div><dt>Recomputed digest</dt><dd>${typeof r.recomputedDigest === "string" ? exact(r.recomputedDigest, "recomputed digest") : '<span class="muted">nothing was recomputed</span>'}</dd></div><div><dt>Sections that differ</dt><dd>${list(r.mismatches).length ? list(r.mismatches).map((s) => `<code>${esc(s)}</code>`).join(" ") : '<span class="muted">none</span>'}</dd></div></dl>${outcome === "UNREPLAYABLE" ? '<p class="wp-boundary"><strong>UNREPLAYABLE is not INCORRECT.</strong> Missing historical inputs are reported, never filled in, and present-day policy is never substituted.</p>' : ""}</div>`;
-  return `<section class="wp-verify wp-rise" data-wp-step="5" aria-labelledby="wp-ver-${esc(m.id)}"><h3 id="wp-ver-${esc(m.id)}">Verify</h3>
-<p class="wp-boundary"><strong>Digest match = record integrity. Digest match &ne; factual correctness.</strong> A matching digest shows that the disclosed bytes are the bytes their embedded digest covers. Whether they are the committed bytes is the receipt's question below; whether any claim in them is true is neither.</p>
-<dl class="states wp-facts wp-verify-grid">
+  const replayHint = m.replayStatus === NOT_CARRIED ? "No replay result is recorded." : m.replayStatus === UNRECOGNISED ? "The carried replay result is not in a form this document recognises. No result is shown." : lookup(REPLAY_OUTCOME_HINTS, outcome) ?? "";
+  // A recognised result prints its reasons and fields; an inconsistent or absent one prints nothing in their place.
+  const replayBody =
+    m.replayStatus === UNRECOGNISED || m.replayStatus === NOT_CARRIED
+      ? '<p class="muted small">The carried replay fields are not shown.</p>'
+      : `${list(r.reasons).length ? `<p class="muted small">Reasons, as the engine reported them:</p>${codes(r.reasons, REPLAY_REASON_LABELS)}` : ""}<dl class="states wp-facts wp-check-fields"><div><dt>Recomputed digest</dt><dd>${typeof r.recomputedDigest === "string" && r.recomputedDigest !== "" ? exact(r.recomputedDigest, "recomputed digest") : '<span class="muted">nothing was recomputed</span>'}</dd></div><div><dt>Sections that differ</dt><dd>${list(r.mismatches).length ? list(r.mismatches).map((s) => `<code>${esc(s)}</code>`).join(" ") : '<span class="muted">none</span>'}</dd></div></dl>${m.replayStatus === "UNREPLAYABLE" ? '<p class="wp-boundary"><strong>UNREPLAYABLE is not INCORRECT.</strong> Missing historical inputs are reported, never filled in, and present-day policy is never substituted.</p>' : ""}`;
+  const replayCheck = check("replay", "4", "Replay", m.replayStatus, replayChip(m, vocabulary), replayHint, replayBody);
+
+  // Registration: everything the record carries that identifies it, exactly as recorded.
+  const eventAt = (state) => {
+    const e = m.lifecycle.events.find((x) => x.state === state);
+    return e ? instant(e.at) : '<span class="muted">not reached</span>';
+  };
+  const withdrawn = m.lifecycle.events.find((x) => x.state === "WITHDRAWN");
+  const registration = `<div class="wp-registration"><h4>Registration</h4><p class="muted small">The identifiers, digests, versions and instants this record carries, exactly as recorded, each with an exact-value copy control.</p><dl class="states wp-facts wp-verify-grid">
 ${fact("WallPrint ID", exact(m.id, "WallPrint id"))}
-${fact("WallPrint version", m.wallprintVersion ? `<code>${esc(m.wallprintVersion)}</code>` : '<span class="muted">not stated</span>')}
-${fact("Canonicalization", m.canonicalization ? `<code>${esc(m.canonicalization)}</code> <span class="muted small">RFC 8785 JSON Canonicalization Scheme</span>` : '<span class="muted">not stated</span>')}
-${fact("Digest algorithm", m.digestAlgorithm ? `<code>${esc(m.digestAlgorithm)}</code>` : '<span class="muted">not stated</span>')}
-${fact("Digest (embedded)", m.digestEmbedded ? exact(m.digestEmbedded, "record digest") : '<span class="muted">none</span>')}
-${fact("Digest (computed from the disclosed bytes)", `${d !== null && typeof d.computedDigest === "string" ? exact(d.computedDigest, "computed digest") : d === null ? '<span class="muted">not carried</span>' : '<span class="muted">could not be computed</span>'}<p class="wp-digest-check">${digestLine}</p>`)}
-${fact("Record validation", validationLine)}
-${fact("WWEP version", m.versions.wwep ? `<code>${esc(m.versions.wwep)}</code>` : '<span class="muted">not stated</span>')}
-${fact("Registry", `${m.versions.registry ? `<code>${esc(m.versions.registry)}</code>` : '<span class="muted">not stated</span>'}${m.versions.registryDigest ? `<br>digest ${exact(m.versions.registryDigest, "registry digest")}` : ""}`)}
-${fact("Policies", `${m.versions.policies ? `<code>${esc(m.versions.policies)}</code>` : '<span class="muted">not stated</span>'}${m.versions.policiesDigest ? `<br>digest ${exact(m.versions.policiesDigest, "policies digest")}` : ""}`)}
-${fact("Rules (engine)", m.versions.rules ? `<code>${esc(m.versions.rules)}</code>` : '<span class="muted">not stated</span>')}
+${fact("WallPrint version", code(m.wallprintVersion))}
+${fact("Canonicalization", m.canonicalization ? `<code>${esc(m.canonicalization)}</code> <span class="muted small">RFC 8785 JSON Canonicalization Scheme</span>` : notStated)}
+${fact("Digest algorithm", code(m.digestAlgorithm))}
+${fact("WWEP version", code(m.versions.wwep))}
+${fact("Registry", `${code(m.versions.registry)}${m.versions.registryDigest ? `<br>digest ${exact(m.versions.registryDigest, "registry digest")}` : ""}`)}
+${fact("Policies", `${code(m.versions.policies)}${m.versions.policiesDigest ? `<br>digest ${exact(m.versions.policiesDigest, "policies digest")}` : ""}`)}
+${fact("Rules (engine)", code(m.versions.rules))}
 ${fact("Policy versions", map(m.policyVersions))}
 ${fact("Rule versions (declared by the evidence)", map(m.ruleVersions))}
 ${fact("Evidence bundle digest", m.bundleDigest ? exact(m.bundleDigest, "evidence bundle digest") : '<span class="muted">none</span>')}
 ${fact("Evidence references", m.evidenceCounts.map((c) => `<code>${esc(c.kind)}</code> ${esc(String(c.count))}`).join(" · "))}
-</dl>
-${receiptBlock}
-${replayBlock}
-<details class="wp-more wp-raw"><summary>Raw canonical payload (advanced)</summary><p class="muted small">The digest preimage in RFC 8785 form, as the engine serialized it: the record without its own <code>digest</code>. Shown exactly; not reformatted.</p>${m.canonical ? `<div class="wp-copyable wp-raw-body"><code class="wp-raw-text">${esc(m.canonical)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full canonical payload">Copy</button></div>` : '<p class="muted">not carried by this fixture</p>'}</details>
+${fact("Snapshot", instant(m.snapshotAt))}
+${fact("Committed", eventAt("COMMITTED"))}
+${fact("Disclosed", eventAt("DISCLOSED"))}
+${withdrawn ? fact("Withdrawn", instant(withdrawn.at)) : ""}
+</dl></div>`;
+
+  // Derivation: payload -> RFC 8785 -> canonical bytes -> SHA-256 -> digest -> receipt comparison. The raw payload is an
+  // advanced fold inside the first step; every value is the engine's.
+  const rawFold = `<details class="wp-more wp-raw"><summary>Raw canonical payload (advanced)</summary><p class="muted small">The digest preimage in RFC 8785 form, as the engine serialized it: the record without its own <code>digest</code>. Shown exactly; not reformatted.</p>${m.canonical ? `<div class="wp-copyable wp-raw-body"><code class="wp-raw-text">${esc(m.canonical)}</code><button type="button" class="copy" data-wp-copy aria-label="Copy the full canonical payload">Copy</button></div>` : '<p class="muted">not carried by this fixture</p>'}</details>`;
+  const step = (key, title, body) => `<li class="wp-step" data-step="${key}"><span class="wp-step-title">${title}</span>${body}</li>`;
+  const derivation = `<div class="wp-derivation"><h4>From payload to commitment</h4><p class="muted small">How the digest is derived from the record, and how the receipt relates to it. Every value is the engine's; nothing is recomputed here.</p><ol class="wp-steps" aria-label="Derivation, from payload to commitment">
+${step("payload", "Canonical payload", `<p class="muted small">The record without its own <code>digest</code>: the digest preimage.</p>${rawFold}`)}
+${step("canonical", "Canonicalization", `<p>${code(m.canonicalization)} <span class="muted small">RFC 8785 JSON Canonicalization Scheme produces the canonical bytes.</span></p>`)}
+${step("hash", "Digest algorithm", `<p>${code(m.digestAlgorithm)} <span class="muted small">over the canonical bytes.</span></p>`)}
+${step("digest", "Digest", `<dl class="states wp-facts wp-check-fields"><div><dt>Embedded</dt><dd>${embedded}</dd></div><div><dt>Computed</dt><dd>${computed}</dd></div></dl><p class="wp-check-a">${resultChip(m.digestStatus)} <span class="muted small">the Digest check above</span></p>`)}
+${step("receipt", "Receipt", issued ? `<dl class="states wp-facts wp-check-fields"><div><dt>Commitment digest (receipt)</dt><dd>${exact(str(issued.digest), "receipt digest")}</dd></div></dl><p class="wp-check-a">${resultChip(m.receiptStatus)} <span class="muted small">the Receipt check above: the receipt's digest against the embedded digest, together with the bundle digest and the versions</span></p>` : '<p class="muted">No receipt is carried in this disclosure, so nothing here represents the commitment to compare against.</p>')}
+</ol></div>`;
+
+  return `<section class="wp-verify wp-rise" data-wp-step="5" aria-labelledby="wp-ver-${esc(m.id)}"><h3 id="wp-ver-${esc(m.id)}">Verify</h3>
+<p class="wp-boundary"><strong>Digest match = record integrity. Digest match &ne; factual correctness.</strong> A matching digest shows that the disclosed bytes are the bytes their embedded digest covers. Whether they are the committed bytes is the receipt's question; whether any claim in them is true is neither.</p>
+<p class="muted small wp-verify-intro">Four separate questions, each answered only by the engine's recorded result. They are not interchangeable, and this document never combines them into one state.</p>
+<ol class="wp-checks" aria-label="Verification: four separate questions">
+${recordCheck}
+${digestCheck}
+${receiptCheck}
+${replayCheck}
+</ol>
+<p class="wp-independent">Receipt and replay are separate questions: a matching receipt beside a replay mismatch, or beside an unreplayable record, is a consistent result. This document never combines them into one state.</p>
+${registration}
+${derivation}
 </section>`;
 }
 
@@ -468,13 +717,14 @@ function invariants(vocabulary) {
 }
 
 function article(m, vm, vocabulary, labels) {
-  return `<article class="wp-record" data-record-id="${esc(m.id)}" data-version="${esc(m.version)}"${m.focused ? "" : " hidden"} aria-labelledby="wp-h-${esc(m.id)}" tabindex="-1">
+  const life = currency(m, vocabulary);
+  return `<article class="wp-record" data-record-id="${esc(m.id)}" data-version="${esc(m.version)}"${life.known ? ` data-lifecycle="${esc(life.state)}"` : ""}${m.focused ? "" : " hidden"} aria-labelledby="wp-h-${esc(m.id)}" tabindex="-1">
 ${head(m, vocabulary, labels)}
 <div class="wp-columns">${why(m, vocabulary, labels)}${recordBox(m)}</div>
 ${assessmentsTable(m, vocabulary)}
 ${provenanceChain(m)}
 ${history(m, vm, vocabulary)}
-${verify(m, vocabulary)}
+${verify(m, vm, vocabulary)}
 </article>`;
 }
 

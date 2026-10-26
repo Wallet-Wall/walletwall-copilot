@@ -228,11 +228,14 @@ Subject (`record.subject`); Current WalletWall assessment (the `WALLETWALL` entr
 (authority, freshness, finality, corroboration, conflicts, limitations and violations from the focal claim);
 Assessments (one row per assessor, never merged); Record (`view.lifecycle.events`); Provenance (`record.provenance`
 and the `evidence` references); Corrections & supersessions (`view.supersedes`, `view.supersededBy`, `lineage`,
-`diffWallPrints`); Verify (canonical payload, digest, versions, `validateWallPrintRecord`, `verifyWallPrintDigest`,
-`verifyReceipt`, `replayWallPrint`). Its input is `wallprint-fixtures.mjs`, generated from this module by
-`scripts/gen-wallprint-fixtures.ts` through `packages/mcp/test/support/wallprint-disclosures.ts`: synthetic lineages
-whose every verdict is an engine output. The page quotes the principle, the invariants and the receipt boundary from
-the module's exports and decides nothing.
+`diffWallPrints`); Verify (four separate questions, each a 1:1 projection of one engine result and never combined: Record from
+`validateWallPrintRecord`, Digest from `verifyWallPrintDigest`, Receipt from `verifyReceipt`, Replay from
+`replayWallPrint`; then a registration readout and the canonical payload). Its input is `wallprint-fixtures.mjs`,
+generated from this module by `scripts/gen-wallprint-fixtures.ts` through
+`packages/mcp/test/support/wallprint-disclosures.ts`: synthetic lineages whose every verdict is an engine output. One
+lineage carries its issued receipt without the verification result; the view shows that as unchecked, a
+disclosure-layer state (`verifyReceipt` itself always returns a result). The page quotes the principle, the invariants
+and the receipt boundary from the module's exports and decides nothing.
 
 ## Non-negotiable invariants
 
@@ -271,6 +274,19 @@ UNREPLAYABLE != INCORRECT
   `validateWallPrintRecord` refuses the record with `CONFLICTS_MISMATCH` on that claim: such an evaluation is not
   recordable in WallPrint 0.1. Found by the disclosure UI lane and reported here; admitting it is a contract decision
   (the conflict-consistency rule in `record.ts` would need a third cause for propagated conflicts), not a UI patch.
+- A receipt carries no issuance instant and no identifier of its own; it is identified by its record id and digest. The
+  disclosure view prints the disclosure instant from the lifecycle ledger and invents no receipt id. Whether a receipt
+  should carry an issuance instant or a digest of its own is a contract decision for a later lane.
+- `verifyReceipt` returns `matches: false` with `RECEIPT_INVALID` or `RECORD_INVALID` before any comparison, so an input
+  it could not check and a compared non-match share one boolean, and the field comparisons are not run on an invalid
+  record (the altered-copy fixture reports `RECORD_INVALID` alone although its digest also differs). The disclosure
+  view tells that case as "not compared". Likewise `verifyWallPrintDigest` folds a canonicalization failure into
+  `{ matches: false, computedDigest: null }`, which the view shows as "not computable". A tri-state or a `compared`
+  flag is a contract decision, not a UI patch. Found by the Receipt verification UX lane's adversarial review.
+- The disclosure view's input shape (a record with its digest check, validation, lifecycle, receipt and verification,
+  replay and diff) is defined in `packages/mcp/test/support/wallprint-disclosures.ts`, and `ReplayResult` has a
+  TypeScript interface but no runtime schema, so the view re-states their consistency rules in its own projections. A
+  canonical runtime schema for both is a contract follow-up.
 
 ## Prototype reconciliation
 
