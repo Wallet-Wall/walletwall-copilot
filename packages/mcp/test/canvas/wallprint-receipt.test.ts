@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { pathToFileURL } from "node:url";
+import { runInNewContext } from "node:vm";
 import { ROOT } from "../support/harness.ts";
 import type { DisclosureFixture, DisclosureRecord } from "../support/wallprint-disclosures.ts";
 
@@ -327,5 +328,143 @@ describe("registration readout and derivation chain", () => {
     assert.ok(receipt.includes(`<code class="wp-exact">${r.receipt.issued!.digest}</code>`) && receipt.includes('data-state="MISMATCH"'));
     const none = articleOf(fragment("unreplayable"), focusOf("unreplayable").id);
     assert.ok(none.slice(none.indexOf('data-step="receipt"')).includes("No receipt is carried, so there is no commitment to compare against."));
+  });
+});
+
+describe("local section focus: a deterministic action inside the document, never a URL", () => {
+  const SECTIONS = ["receipt", "replay", "history", "assessments", "provenance"];
+
+  test("every article has one jump nav with the five section controls, each naming a target that exists exactly once in the same article", () => {
+    for (const [name, label, r] of records()) {
+      const a = articleOf(fragment(name), r.id);
+      const navStart = a.indexOf('<nav class="wp-jump');
+      assert.ok(navStart >= 0, `${label}: jump nav`);
+      const nav = a.slice(navStart, a.indexOf("</nav>", navStart));
+      assert.ok(nav.includes('aria-label="Go to a section of this record"'), label);
+      const controls = [...nav.matchAll(/<button type="button" data-wp-jump="([a-z]+)" aria-controls="([^"]+)">([^<]+)<\/button>/g)].map((m) => [m[1], m[2], m[3]]);
+      assert.deepEqual(controls.map((c) => c[0]), SECTIONS, label);
+      assert.deepEqual(controls.map((c) => c[2]), ["Receipt", "Replay", "History", "Assessments", "Provenance"], label);
+      for (const [key, id] of controls) {
+        assert.equal(id, `wp-sec-${key}-${r.id}`, `${label}: ${key} follows the id scheme`);
+        assert.equal((a.match(new RegExp(` id="${id}"`, "g")) ?? []).length, 1, `${label}: ${key} target exists once in its article`);
+        assert.ok(a.includes(`data-wp-target="${key}" id="${id}"`), `${label}: the target carries data-wp-target`);
+      }
+      assert.ok(!/href=|javascript:|location\./i.test(nav), `${label}: no link and no URL`);
+    }
+    const html = fragment("corrected");
+    assert.equal(new Set([...html.matchAll(/ id="(wp-sec-[a-z]+-[^"]+)"/g)].map((m) => m[1])).size, 10, "a lineage of two records has ten distinct targets");
+  });
+
+  interface FakeEl {
+    dataset: Record<string, string>;
+    hidden: boolean;
+    attrs: Record<string, string>;
+    setAttribute: (k: string, v: string) => void;
+    removeAttribute: (k: string) => void;
+    getAttribute: (k: string) => string | null;
+    querySelector: (s: string) => unknown;
+    closest: (s: string) => unknown;
+    focus: () => void;
+    textContent: string;
+    focused?: boolean;
+    scrollIntoView?: (o: unknown) => void;
+  }
+  const el = (dataset: Record<string, string>, extra: Partial<FakeEl> = {}): FakeEl => {
+    const e: FakeEl = {
+      dataset,
+      hidden: false,
+      attrs: {},
+      setAttribute: (k, v) => (e.attrs[k] = v),
+      removeAttribute: (k) => delete e.attrs[k],
+      getAttribute: (k) => e.attrs[k] ?? null,
+      querySelector: () => null,
+      closest: () => null,
+      focus: () => (e.focused = true),
+      textContent: "",
+      ...extra,
+    };
+    return e;
+  };
+
+  /** Two versions, each with an h2 and a receipt target whose heading can take focus; v2 is in view. */
+  function page(): { run: (target: unknown) => Promise<void>; records: FakeEl[]; headings: Record<string, FakeEl>; h2: FakeEl[]; announcer: FakeEl; scrolled: string[]; root: FakeEl } {
+    const scrolled: string[] = [];
+    const headings: Record<string, FakeEl> = {};
+    const h2 = [el({}), el({})];
+    const record = (id: string, version: string, hidden: boolean): FakeEl => {
+      headings[`${id}:receipt`] = el({});
+      const target = el({ wpTarget: "receipt" }, { querySelector: (s: string) => (s === "h3, h4" ? headings[`${id}:receipt`] : null), scrollIntoView: () => scrolled.push(`${id}:receipt`) });
+      return el({ recordId: id, version }, { hidden, querySelector: (s: string) => (s === "h2" ? h2[id === "v1" ? 0 : 1] : s === '[data-wp-target="receipt"]' ? target : null) });
+    };
+    const records = [record("v1", "v1", true), record("v2", "v2", false)];
+    const root = el({ wpFocus: "v2" });
+    const announcer = el({});
+    let onClick: ((e: unknown) => void) | undefined;
+    const app = {
+      dataset: {},
+      addEventListener: (type: string, h: (e: unknown) => void) => {
+        if (type === "click") onClick = h;
+      },
+      querySelector: (s: string) => (s === ".wp" ? root : null),
+      querySelectorAll: (s: string) => (s === ".wp-record" ? records : []),
+    };
+    const context = {
+      document: { getElementById: (id: string) => (id === "app" ? app : id === "copy-status" ? el({}) : id === "view-status" ? announcer : null), createRange: () => ({ selectNodeContents: () => undefined }), execCommand: () => false },
+      window: { getSelection: () => ({ removeAllRanges: () => undefined, addRange: () => undefined }) },
+      navigator: { clipboard: { writeText: () => Promise.resolve() } },
+      setTimeout: () => 0,
+      clearTimeout: () => undefined,
+    };
+    runInNewContext(render.WALLPRINT_JS, context);
+    assert.ok(onClick, "the script registers its click handler");
+    const run = async (target: unknown): Promise<void> => {
+      onClick!({ target });
+      for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    };
+    return { run, records, headings, h2, announcer, scrolled, root };
+  }
+
+  test("a jump control focuses the named section's heading of its own record, scrolls it into view and announces it; nothing else changes", async () => {
+    const p = page();
+    const jump = el({ wpJump: "receipt" }, { closest: (s: string) => (s === ".wp-record" ? p.records[1] : null) });
+    await p.run({ closest: (s: string) => (s === "[data-wp-jump]" ? jump : null) });
+    assert.equal(p.headings["v2:receipt"]!.focused, true);
+    assert.equal(p.headings["v2:receipt"]!.attrs["tabindex"], "-1");
+    assert.deepEqual(p.scrolled, ["v2:receipt"]);
+    assert.equal(p.announcer.textContent, "Receipt of v2: v2.");
+    assert.deepEqual(p.records.map((r) => r.hidden), [true, false], "no version changed");
+    assert.equal(p.headings["v1:receipt"]!.focused, undefined);
+  });
+
+  test("a version control that names a section shows that version and focuses its own section, so a predecessor's receipt is reached without passing through the successor's", async () => {
+    const p = page();
+    const version = el({ wpVersion: "v1", wpThen: "receipt" });
+    await p.run({ closest: (s: string) => (s === "[data-wp-version]" ? version : null) });
+    assert.deepEqual(p.records.map((r) => r.hidden), [false, true]);
+    assert.equal(p.headings["v1:receipt"]!.focused, true);
+    assert.equal(p.headings["v2:receipt"]!.focused, undefined);
+    assert.equal(p.h2[0]!.focused, undefined, "focus goes to the section, not the record heading");
+    assert.equal(p.root.dataset["wpFocus"], "v1");
+    assert.equal(p.announcer.textContent, "Showing v1 of this lineage: v1. Receipt section. The other versions stay available.");
+  });
+
+  test("a hostile or unknown section key is refused without echo, without a throw and without moving focus", async () => {
+    const p = page();
+    for (const key of ["evil", "__proto__", "constructor", "<script>", "RECEIPT", ""]) {
+      const jump = el({ wpJump: key }, { closest: (s: string) => (s === ".wp-record" ? p.records[1] : null) });
+      await p.run({ closest: (s: string) => (s === "[data-wp-jump]" ? jump : null) });
+      assert.equal(p.announcer.textContent, "That section is not part of this record.", key);
+      assert.ok(!p.announcer.textContent.includes(key) || key === "", `${key}: not echoed`);
+    }
+    assert.equal(p.headings["v2:receipt"]!.focused, undefined);
+    assert.deepEqual(p.scrolled, []);
+    // A recognised key whose section the record does not carry is said in words.
+    const jump = el({ wpJump: "history" }, { closest: (s: string) => (s === ".wp-record" ? p.records[1] : null) });
+    await p.run({ closest: (s: string) => (s === "[data-wp-jump]" ? jump : null) });
+    assert.equal(p.announcer.textContent, "The History section is not in this record.");
+  });
+
+  test("the page script still stores nothing, talks to no origin, writes no markup and never touches the location", () => {
+    assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie|fetch\(|EventSource|XMLHttpRequest|postMessage|innerHTML|outerHTML|insertAdjacentHTML|location\.|history\.(push|replace)State|window\.open/.test(render.WALLPRINT_JS));
   });
 });

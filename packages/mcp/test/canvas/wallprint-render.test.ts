@@ -474,7 +474,7 @@ describe("safety and accessibility of the markup", () => {
     const poison = (v: unknown): unknown => (typeof v === "string" ? `${v}${evil}` : Array.isArray(v) ? v.map(poison) : v !== null && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, poison(x)])) : v);
     const poisoned = poison(f) as DisclosureFixture;
     const html = render.renderView({ status: "wallprint", source: evil, fixture: evil, disclosure: poisoned, vocabulary: poison(WALLPRINT_VOCABULARY) });
-    const allowed = new Set(["h1", "h2", "h3", "h4", "p", "code", "strong", "span", "div", "dl", "dt", "dd", "ul", "ol", "li", "button", "section", "article", "header", "details", "summary", "table", "thead", "tbody", "tr", "th", "td", "svg", "circle", "path", "time", "q", "br"]);
+    const allowed = new Set(["h1", "h2", "h3", "h4", "p", "code", "strong", "span", "div", "dl", "dt", "dd", "ul", "ol", "li", "button", "section", "article", "header", "nav", "details", "summary", "table", "thead", "tbody", "tr", "th", "td", "svg", "circle", "path", "time", "q", "br"]);
     for (const m of html.matchAll(/<\/?([a-zA-Z][a-zA-Z0-9]*)/g)) assert.ok(allowed.has(m[1] as string), `unexpected element <${m[1]}>`);
     assert.ok(!/<img|<script/.test(html));
     assert.ok(html.includes("&lt;script&gt;"));

@@ -27,6 +27,14 @@ export const ASSESSOR_ROLE_LABELS = {
   OTHER: "Other",
 };
 
+/**
+ * The sections a local jump may focus inside one record, in the order the controls appear. Each target is rendered with
+ * `data-wp-target="<key>" id="wp-sec-<key>-<record id>"`, so the same vocabulary can address a section later without
+ * any URL existing in this lane.
+ */
+export const WALLPRINT_SECTIONS = ["receipt", "replay", "history", "assessments", "provenance"];
+export const SECTION_LABELS = { receipt: "Receipt", replay: "Replay", history: "History", assessments: "Assessments", provenance: "Provenance" };
+
 export const CLAIM_LABELS = {
   ASSET_IDENTITY: "Asset identity",
   TOKEN_BALANCE_AT_BLOCK: "Token balance at block",
@@ -407,7 +415,13 @@ function head(m, vocabulary, labels) {
 <div class="wp-head-top"><svg class="wp-reg wp-rise" data-wp-step="0" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="6.5"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5"/></svg><p class="wp-eyebrow wp-rise" data-wp-step="0">WallPrint · disclosure record</p><p class="wp-id wp-rise" data-wp-step="0"><span class="ww-sr">WallPrint id </span>${exact(m.id, "WallPrint id")}<span class="wp-version-of muted small">${esc(m.version)} of ${esc(String(m.total))}</span></p></div>
 <div class="wp-identity wp-rise" data-wp-step="1"><h2 id="wp-h-${esc(m.id)}" class="wp-title">${esc(m.title)}</h2><p class="wp-subtitle">${esc(m.claimLabel)}${m.temporality ? ` · <code>${esc(m.temporality)}</code>` : ""} · ${chain}</p>${m.symbolPresented && m.registry.asset && m.symbolPresented !== m.registry.asset.symbol ? `<p class="note" data-attention="true">The symbol as presented, <code>${esc(m.symbolPresented)}</code>, differs from the registry symbol <code>${esc(m.registry.asset.symbol)}</code>. A symbol is not an identity.</p>` : ""}<div class="wp-subject-record"><p class="wp-eyebrow">Subject identity, as recorded</p>${flat(m.identity, m.chainId ?? undefined)}</div></div>
 <div class="wp-current wp-rise" data-wp-step="2"><p class="wp-eyebrow">${eyebrow}</p><p class="wp-assessment">${assessment}</p>${hint ? `<p class="wp-assessment-hint">${esc(hint)}</p>` : ""}<p class="wp-principle">${esc(vocabulary.principle)}</p><p class="wp-status-line"><span class="wp-eyebrow-inline">Lifecycle</span> ${chip(m.lifecycle.state, vocabulary.lifecycleStates)} <span class="wp-eyebrow-inline">Snapshot</span> ${instant(m.snapshotAt)}</p>${standing}</div>
+${jump(m)}
 </header>`;
+}
+
+/** Local section controls: one real button per section of this record, each naming its server-rendered target. */
+function jump(m) {
+  return `<nav class="wp-jump wp-rise" data-wp-step="2" aria-label="Go to a section of this record">${WALLPRINT_SECTIONS.map((key) => `<button type="button" data-wp-jump="${key}" aria-controls="wp-sec-${key}-${esc(m.id)}">${SECTION_LABELS[key]}</button>`).join("")}</nav>`;
 }
 
 function why(m, vocabulary, labels) {
@@ -463,7 +477,7 @@ function assessmentsTable(m, vocabulary) {
     const lims = list(a.limitations);
     return `<tr role="row"><th role="rowheader" scope="row"><code>${esc(a.assessor)}</code></th><td role="cell" data-label="Role">${esc(role)}</td><td role="cell" data-label="Assessment">${code}</td><td role="cell" data-label="Policy"><code>${esc(a.policy)}</code></td><td role="cell" data-label="Policy version"><code>${esc(a.policyVersion)}</code></td><td role="cell" data-label="Assessed">${instant(a.assessedAt)}</td><td role="cell" data-label="Limitations">${lims.length ? lims.map((l) => `<code>${esc(l)}</code>`).join(" ") : '<span class="muted">none</span>'}</td><td role="cell" data-label="Statement">${typeof a.statement === "string" ? `<q class="wp-attributed" data-attributed="true">${esc(a.statement)}</q>` : '<span class="muted">no statement</span>'}</td></tr>`;
   });
-  return `<section class="wp-assessments wp-rise" data-wp-step="4" aria-labelledby="wp-as-${esc(m.id)}"><h3 id="wp-as-${esc(m.id)}">Assessments</h3>
+  return `<section class="wp-assessments wp-rise" data-wp-step="4" aria-labelledby="wp-as-${esc(m.id)}" data-wp-target="assessments" id="wp-sec-assessments-${esc(m.id)}"><h3 id="wp-as-${esc(m.id)}">Assessments</h3>
 <p class="muted small">One row per named assessor and policy, as recorded. WalletWall's row is the focal claim's evaluated support state; every other row is an attributed statement, recorded verbatim. Absence of an assessment is not a failed assessment.</p>
 <div class="ww-table-wrap"><table class="wp-table" role="table" aria-label="Assessments"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Assessor</th><th role="columnheader" scope="col">Role</th><th role="columnheader" scope="col">Assessment</th><th role="columnheader" scope="col">Policy</th><th role="columnheader" scope="col">Policy version</th><th role="columnheader" scope="col">Assessed</th><th role="columnheader" scope="col">Limitations</th><th role="columnheader" scope="col">Statement</th></tr></thead><tbody role="rowgroup">${rows.join("") || '<tr role="row"><td role="cell" colspan="8" class="muted">No assessment recorded.</td></tr>'}</tbody></table></div>
 <p class="wp-assessments-note">${m.assessments.length === 1 ? "One assessment is recorded: WalletWall's own." : `${esc(String(m.assessments.length))} assessments are recorded, each under its own policy and in its own vocabulary.`} WallPrint compares none of them, ranks none above another and computes no consensus. Agreement between assessors is not independent corroboration of the evidence.</p>
@@ -473,7 +487,7 @@ function assessmentsTable(m, vocabulary) {
 function provenanceChain(m) {
   const stages = m.stages.map((s, i) => `<li class="wp-stage" data-stage="${esc(s.key)}" data-present="${s.entries.length > 0}"><span class="wp-stage-mark" aria-hidden="true"></span><span class="wp-stage-title">${esc(s.title)}</span>${s.entries.length ? `<ul class="wp-stage-entries">${s.entries.map((e) => `<li><code>${esc(e.id)}</code> <span class="muted small">${esc(e.sub)}</span></li>`).join("")}</ul>` : '<p class="wp-stage-empty muted small">none in this record</p>'}${s.note ? `<p class="wp-stage-note muted small">${esc(s.note)}</p>` : ""}${i < m.stages.length - 1 ? '<span class="ww-sr">, then </span>' : ""}</li>`);
   const issues = m.provenanceIssues.map((i) => `<li><code>${esc(i.code)}</code>${i.id ? ` <code>${esc(i.id)}</code>` : ""}</li>`);
-  return `<section class="wp-provenance wp-rise" data-wp-step="4" aria-labelledby="wp-prov-${esc(m.id)}"><h3 id="wp-prov-${esc(m.id)}">Provenance</h3>
+  return `<section class="wp-provenance wp-rise" data-wp-step="4" aria-labelledby="wp-prov-${esc(m.id)}" data-wp-target="provenance" id="wp-sec-provenance-${esc(m.id)}"><h3 id="wp-prov-${esc(m.id)}">Provenance</h3>
 <p class="muted small">The lineage the engine traced for the focal claim <code>${esc(m.focalAssertionId ?? "")}</code>, with the evidence references the record carries. A stage the record does not carry is shown empty, never filled in.</p>
 <ol class="wp-chain" aria-label="Provenance chain, from source to assessment">${stages.join("")}</ol>
 ${issues.length ? `<div class="note" data-attention="true"><p>Provenance is incomplete:</p><ul class="limits wp-codes">${issues.join("")}</ul></div>` : ""}
@@ -509,7 +523,7 @@ function history(m, vm, vocabulary) {
   });
   const own = m.supersedes ? `<p>This record <strong>${esc(linkVerb(m.supersedes.kind, false))}</strong> <code>${esc(m.supersedes.id)}</code> and binds that record's committed digest <code>${esc(m.supersedes.digest)}</code>${m.supersedes.reason ? `. Stated reason: <span class="wp-reason-inline">${esc(m.supersedes.reason)}</span>` : "."} The earlier record stays committed and selectable above.</p>` : "";
   const by = m.supersededBy ? `<p data-attention="true" class="note">This record was <strong>${esc(linkVerb(m.supersededBy.kind, true))}</strong> by <code>${esc(m.supersededBy.id)}</code> (successor digest <code>${esc(m.supersededBy.digest)}</code>). The history appended that event to this record; it did not rewrite or remove the record. Whether the bytes shown here are its committed bytes is checked under Verify.</p>` : "";
-  return `<section class="wp-history wp-rise" data-wp-step="4" aria-labelledby="wp-hist-${esc(m.id)}"><h3 id="wp-hist-${esc(m.id)}">Corrections and supersessions</h3>
+  return `<section class="wp-history wp-rise" data-wp-step="4" aria-labelledby="wp-hist-${esc(m.id)}" data-wp-target="history" id="wp-sec-history-${esc(m.id)}"><h3 id="wp-hist-${esc(m.id)}">Corrections and supersessions</h3>
 ${chain.length > 1 ? '<p class="muted small">Every version of this lineage stays visible and selectable. A correction or supersession is a new record that binds the predecessor by digest; the predecessor is never edited or deleted.</p>' : '<p class="muted small">No correction or supersession is recorded for this lineage.</p>'}
 <ol class="wp-lineage" aria-label="Lineage, root first">${nodes.join("")}</ol>
 ${own}${by}${diffGroups(m, vocabulary)}
