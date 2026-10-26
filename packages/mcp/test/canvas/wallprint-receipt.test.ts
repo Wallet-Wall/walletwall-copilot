@@ -24,7 +24,7 @@ interface WallPrintMod {
   receiptStatusOf: (receipt: unknown) => string;
   recordStatusOf: (validation: unknown) => string;
   digestStatusOf: (digest: unknown) => string;
-  replayStatusOf: (replay: unknown, outcomes: unknown) => string;
+  replayStatusOf: (replay: unknown, outcomes: unknown, unreplayableReasons?: unknown) => string;
 }
 const render = (await import(pathToFileURL(`${EXT}/render.mjs`).href)) as RenderMod;
 const wp = (await import(pathToFileURL(`${EXT}/wallprint-render.mjs`).href)) as WallPrintMod;
