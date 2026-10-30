@@ -130,7 +130,7 @@ describe("agent plugin and MCP metadata stay valid and unprivileged", () => {
     const plugin = json<{ name: string; version: string; license: string; repository: string; homepage: string }>("plugin/plugin.json");
     const entry = json<{ plugins: { name: string; version: string; license: string; repository: string; homepage: string }[] }>(".github/plugin/marketplace.json").plugins[0]!;
     for (const k of ["name", "version", "license", "repository", "homepage"] as const) assert.equal(entry[k], plugin[k], k);
-    assert.equal(plugin.repository, "https://github.com/Wallet-Wall/walletwallrus-copilot");
+    assert.equal(plugin.repository, "https://github.com/Wallet-Wall/walletwall-copilot");
     assert.equal(plugin.license, "Apache-2.0");
   });
 });
@@ -141,12 +141,12 @@ describe("Agent Finder draft artifacts (prepared, not submitted)", () => {
   const plugin = json<{ name: string; description: string }>("plugin/plugin.json");
 
   test("the catalog entry describes the plugin at its real manifest path, with the public description and no canvas-only tag", () => {
-    assert.equal(entry.identifier, "urn:ai:github.com:Wallet-Wall:walletwallrus-copilot:walletwall");
+    assert.equal(entry.identifier, "urn:ai:github.com:Wallet-Wall:walletwall-copilot:walletwall");
     assert.equal(entry.displayName, "WalletWall");
     assert.equal(entry.mediaType, "application/vnd.github.copilot-plugin");
     assert.equal(entry.description, plugin.description);
-    assert.deepEqual(entry.metadata, { sourceSet: "Wallet-Wall/walletwallrus-copilot", repoPath: "plugin/plugin.json" });
-    assert.equal(entry.url, "https://github.com/Wallet-Wall/walletwallrus-copilot/blob/main/plugin/plugin.json");
+    assert.deepEqual(entry.metadata, { sourceSet: "Wallet-Wall/walletwall-copilot", repoPath: "plugin/plugin.json" });
+    assert.equal(entry.url, "https://github.com/Wallet-Wall/walletwall-copilot/blob/main/plugin/plugin.json");
     assert.ok(!(entry.tags ?? []).includes("canvas-only"), "the plugin also ships a skill and an MCP server");
     assert.ok(!/compliance|investment advi|custody|transaction system|truth engine/i.test(JSON.stringify(entry)));
   });

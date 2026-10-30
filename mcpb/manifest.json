@@ -11,11 +11,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Wallet-Wall/walletwallrus-copilot.git"
+    "url": "https://github.com/Wallet-Wall/walletwall-copilot.git"
   },
-  "homepage": "https://github.com/Wallet-Wall/walletwallrus-copilot",
-  "documentation": "https://github.com/Wallet-Wall/walletwallrus-copilot/blob/main/README.md",
-  "support": "https://github.com/Wallet-Wall/walletwallrus-copilot/issues",
+  "homepage": "https://github.com/Wallet-Wall/walletwall-copilot",
+  "documentation": "https://github.com/Wallet-Wall/walletwall-copilot/blob/main/README.md",
+  "support": "https://github.com/Wallet-Wall/walletwall-copilot/issues",
   "server": {
     "type": "node",
     "entry_point": "server/walletwall-mcp.mjs",
