@@ -8,7 +8,7 @@ These names are used consistently in this repository.
 | Copilot plugin | `WalletWall` (manifest identifier `walletwall`) |
 | Canvas | `WalletWall` (internal canvas id `walletwall-evidence-explorer`, kept to avoid churn) |
 | MCP server | `WalletWall MCP` (server id `walletwall-mcp`, MCP server key `walletwall`) |
-| GitHub repository | `walletwallrus-copilot` |
+| GitHub repository | `walletwall-copilot` |
 | GitHub App registration (reserved identity, not registered) | `WalletWallrus-Copilot` |
 | Future public MCP package | `@walletwall/mcp` (not published) |
 | Evidence specification | WalletWall Evidence Profile (WWEP) |

@@ -33,7 +33,7 @@ The Canvas remains loopback-only with the existing Host/Origin protections and C
 After this release is published from `main`:
 
 ```text
-copilot plugin marketplace add Wallet-Wall/walletwallrus-copilot
+copilot plugin marketplace add Wallet-Wall/walletwall-copilot
 copilot plugin install walletwall@walletwall
 ```
 

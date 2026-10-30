@@ -114,7 +114,7 @@ describe("privacy static proofs", () => {
         const loopbackOnly = relative(f).startsWith("plugin/com.github.copilot/") && /^http:\/\/127\.0\.0\.1(:\$\{[^}]+\})?/.test(m[0]);
         const licenseText = relative(f) === "plugin/THIRD_PARTY_NOTICES.md" && LICENSE_TEXT_URLS.has(m[0]);
         assert.ok(
-          loopbackOnly || licenseText || /^https:\/\/github\.com\/Wallet-Wall\/walletwallrus-copilot/.test(m[0]) || /^https:\/\/agent-plugins\.org\/schemas\/1\.0\.0\/(plugin|mcp)\.schema\.json$/.test(m[0]),
+          loopbackOnly || licenseText || /^https:\/\/github\.com\/Wallet-Wall\/walletwall-copilot/.test(m[0]) || /^https:\/\/agent-plugins\.org\/schemas\/1\.0\.0\/(plugin|mcp)\.schema\.json$/.test(m[0]),
           `${relative(f)} references ${m[0]}`,
         );
       }

@@ -156,8 +156,8 @@
     },
     {
       "path": "plugin/plugin.json",
-      "sha512": "18809b394d9a01a12d532e668fe4ae6f046d8bfd498905a73d08fd087d8cbe61542a2c19385a3d22916cbcd6a17f11dd7e014bb32356d4866e603f6ce1b04dca",
-      "bytes": 532
+      "sha512": "d743aad8a51ffdb088c86292154fcf6aae6c8b75e5257c600848accaf6fc1e2589084c01999c3b827d3f58df801d0a17eaad4ce9f15007fb1503d9aa21cd1829",
+      "bytes": 526
     },
     {
       "path": "plugin/server/walletwall-mcp.mjs",
