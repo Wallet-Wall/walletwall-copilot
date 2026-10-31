@@ -6,9 +6,13 @@ import { RESOLVER_ROUTE, isResolverBase } from "../../mcp/src/wallprint/referenc
  * page's security headers, and the shell itself.
  *
  * Every rule is scoped to the route and no site-wide setting is carried (no cleanUrls, trailingSlash or redirects), so
- * merging changes nothing outside `/wallprint`. Immutable caching is given only to names that change when their bytes
- * change: the content-hashed script, stylesheet, fonts and mark, and an artifact named by its record's digest (the bytes
- * beside the record in that file are kept fixed by the publisher's no-overwrite rule, not by the name). The security rule
+ * merging changes nothing outside `/wallprint`. Immutable caching is given only to the content-hashed script,
+ * stylesheet, fonts and mark: a hashed name never serves different bytes. Their rule answers a 404 the same way;
+ * docs/WALLPRINT_PUBLIC_RESOLVER.md says what a host does about that. Record JSON is revalidated (CACHE_SHORT), the
+ * artifact by digest included: a host applies a path's header rule to whatever the path answers, a 404 included, and a
+ * record URL goes from 404 to 200 when the record is published, so an immutable rule there would cache the 404 of a
+ * not-yet-published artifact for a year in every browser and shared cache that saw it. The artifact's bytes stay fixed
+ * by the publisher's no-overwrite rule, so revalidating an unchanged artifact costs a 304. The security rule
  * comes last among these rules; whether it is the route's word on the policy also depends on where the rules are merged
  * relative to the product's own `/(.*)` rule (docs/WALLPRINT_PUBLIC_RESOLVER.md says: after it). The shell carries the
  * same policy as a meta tag, so the document is held to it either way.
@@ -44,7 +48,7 @@ export function hostConfig(): HostConfig {
       { source: RECORD_PATH, destination: SHELL },
     ],
     headers: [
-      { source: "/wallprint/records/([a-z0-9][a-z0-9_-]{2,63})/([0-9a-f]{64})\\.json", headers: [header("Cache-Control", CACHE_IMMUTABLE)] },
+      { source: "/wallprint/records/([a-z0-9][a-z0-9_-]{2,63})/([0-9a-f]{64})\\.json", headers: [header("Cache-Control", CACHE_SHORT)] },
       { source: "/wallprint/records/([a-z0-9][a-z0-9_-]{2,63})/index\\.json", headers: [header("Cache-Control", CACHE_SHORT)] },
       { source: "/wallprint/index\\.json", headers: [header("Cache-Control", CACHE_SHORT)] },
       { source: "/wallprint/index\\.html", headers: [header("Cache-Control", CACHE_SHORT)] },

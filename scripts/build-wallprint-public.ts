@@ -19,7 +19,9 @@ import { hostConfig, shellHtml } from "../packages/wallprint-web/lib/host-config
  *   npm run verify:wallprint-public     build into an owned temp directory and prove the bundle is inert and bounded
  *
  * Every name served with immutable caching changes when its bytes change: the script, the stylesheet, every font and
- * the mark carry a content hash in their names; artifacts are named by their digest. The bundle must stay inert and lean:
+ * the mark carry a content hash in their names. Artifacts are named by their digest but revalidated, because the host's
+ * rule for their paths also answers the 404 of a record not yet published (lib/host-config.ts).
+ * The bundle must stay inert and lean:
  * no Node module, no clock, no identifier, no persistence, no code evaluation, no navigation primitive, no host name, one
  * same-origin fetch, one markup sink, and none of the canvas's embedded font, fixture or client data. Nothing is deleted
  * (only the owned-temp helper removes paths): a rebuild overwrites what it produces and reports stale hashed assets.
