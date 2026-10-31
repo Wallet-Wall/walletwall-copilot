@@ -316,7 +316,8 @@ history is refused. A corrected, superseded or withdrawn record stays published 
 to a successor; its standing names the successor, and the page links to it as a choice.
 
 **The store** is static files under the route, served by the existing product deployment with no compute:
-`records/<id>/<digest>.json` (immutable bytes, long-lived immutable caching), `records/<id>/index.json` (the standing,
+`records/<id>/<digest>.json` (immutable bytes, short revalidating caching, because a host's rule for the path also
+answers the 404 of an artifact not yet published), `records/<id>/index.json` (the standing,
 short caching), `index.json` (the publication index: base, route, one small entry per publication, short caching). The
 page (`packages/wallprint-web`) fetches exactly the standing and one artifact of the record named, same origin, without
 credentials, refusing redirects, and proves the bytes itself: the artifact is one canonical-form JSON object of the fixed

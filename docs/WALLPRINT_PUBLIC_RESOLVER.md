@@ -41,7 +41,7 @@ the codec's `isResolverBase` check.
 
 | Path (under `/wallprint/`) | What | Mutability | Cache |
 | --- | --- | --- | --- |
-| `records/<id>/<digest>.json` | the immutable public disclosure: RFC 8785 bytes of the artifact (type, version, record id, digest, canonical preimage, title, construction, registry names, validation, digest check, receipt, replay, diff, supersedes) | written once; identical bytes are idempotent, different bytes are a conflict | `public, max-age=31536000, immutable` |
+| `records/<id>/<digest>.json` | the immutable public disclosure: RFC 8785 bytes of the artifact (type, version, record id, digest, canonical preimage, title, construction, registry names, validation, digest check, receipt, replay, diff, supersedes) | written once; identical bytes are idempotent, different bytes are a conflict | `public, max-age=300, must-revalidate` |
 | `records/<id>/index.json` | the record's standing: publications (digest, WallPrint version, instant), lifecycle ledger, supersedes, successor, lineage | append-only; a rewritten history is refused | `public, max-age=300, must-revalidate` |
 | `index.json` | the publication index: resolver base, route, one small entry per publication (id, digest, version, instant, lifecycle state, successor, predecessor) | regenerated from the standings | `public, max-age=300, must-revalidate` |
 | `index.html` | the one page shell every record URL is rewritten to | rebuilt with each release | `public, max-age=300, must-revalidate` |
@@ -50,7 +50,15 @@ the codec's `isResolverBase` check.
 
 An artifact's name is its record's digest, which covers the canonical record; the other bytes in that file (title,
 registry names, carried engine results) are kept fixed by the publisher's no-overwrite rule (different bytes under the
-same id and digest are a conflict), which is what makes immutable caching of the whole file correct.
+same id and digest are a conflict). Its caching is nevertheless short and revalidating, like the standing's: a host
+applies a path's header rule to whatever the path answers, a 404 included, and a record URL goes from 404 to 200 when
+the record is published, so an immutable rule for artifacts would keep the 404 of a not-yet-published artifact in every
+browser and shared cache that saw it for a year. Revalidating an unchanged artifact costs a 304. Only the content-hashed
+script, stylesheet, fonts and mark are immutable: a hashed name never serves different bytes. Their rule answers a 404
+the same way, so a hashed name requested from a deployment that lacks it stays a 404 in the caches that saw it: a newer
+shell reaching an older deployment after an instant rollback, an older shell reaching a release that dropped the
+previous assets, or a name computed ahead of its release. A host keeps the previous release's hashed assets and rolls
+forward, not back, across a resolver release, which removes the first two.
 
 Record ids are the WallPrint grammar restricted to one path segment on every filesystem and URL
 (`[a-z0-9][a-z0-9_-]{2,63}`, and no Windows reserved device name such as `con` or `nul`); a record with another id is
@@ -131,7 +139,9 @@ outside the route changes. Requirements:
   held to it either way); check it on a preview deployment with `curl -sI` on a record URL and an artifact URL;
 - a missing file under `/wallprint/records/` must answer **404**. The product's SPA catch-all excludes `.json` paths
   today, so it does; keep it that way. A host that answers 200 with another page for an unknown JSON path turns every
-  unpublished record into "Store unreachable" instead of "Record unavailable" (never into a record).
+  unpublished record into "Store unreachable" instead of "Record unavailable" (never into a record). The record rules
+  give that 404 the short, revalidating policy, never an immutable one, so a record published later is seen within
+  five minutes.
 
 Static files win over rewrites, so the store's JSON files are served directly; `/wallprint/<id>` has no file and is
 rewritten to the shell. The product's existing `test/product-subdomain-navigation.test.mjs` pins the `/api` and SPA
@@ -146,8 +156,9 @@ Preview deployments of the product repository exercise the real routing; product
 Static delivery only: no function, no database, no standing compute. One record is one artifact of roughly 5 to 11 KB
 plus a standing of about 1 KB; the committed store of 13 synthetic records is about 130 KB. A page view fetches the shell
 (short cache), the hashed script (about 167 KB, immutable) and stylesheet (about 68 KB, immutable), four fonts (about
-100 KB, immutable) and two small JSON files; every repeat view of the same record is served from caches. Marginal cost per
-record is storage and bandwidth in the product deployment's existing plan; no new service is introduced.
+100 KB, immutable) and two small JSON files; a repeat view within five minutes is served from caches, after that the
+shell and the two JSON files are revalidated (a 304 each when unchanged) while the hashed assets stay cached. Marginal
+cost per record is storage and bandwidth in the product deployment's existing plan; no new service is introduced.
 
 ## What it is not
 
