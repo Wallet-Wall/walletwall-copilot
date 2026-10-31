@@ -8,7 +8,7 @@ Status: Pre-release
 WWEP: 0.1  
 Registry: point-in-time verified
 
-WalletWall does not sign, custody, trade, broadcast transactions, provide investment advice or certify regulatory compliance. Nothing here has been published to npm or a Copilot marketplace. Source and release artifacts are on GitHub Releases ([v0.2.0](https://github.com/Wallet-Wall/walletwallrus-copilot/releases/tag/v0.2.0)), and the local MCP server's metadata is listed in the official MCP Registry as `io.github.Wallet-Wall/walletwall`.
+WalletWall does not sign, custody, trade, broadcast transactions, provide investment advice or certify regulatory compliance. Nothing here has been published to npm or a Copilot marketplace. Source and release artifacts are on GitHub Releases ([v0.2.0](https://github.com/Wallet-Wall/walletwall-copilot/releases/tag/v0.2.0)), and the local MCP server's metadata is listed in the official MCP Registry as `io.github.Wallet-Wall/walletwall`.
 
 > Inspect stablecoin identity, wallet state, source lineage, conflicts, and vault readiness through WalletWall MCP.
 
@@ -51,7 +51,7 @@ Wallet addresses you put in a prompt are processed by Copilot and the model prov
 From this repository on GitHub (verified with GitHub Copilot CLI 1.0.103 against the public repository, with no credentials):
 
 ```text
-copilot plugin marketplace add Wallet-Wall/walletwallrus-copilot
+copilot plugin marketplace add Wallet-Wall/walletwall-copilot
 copilot plugin install walletwall@walletwall
 ```
 

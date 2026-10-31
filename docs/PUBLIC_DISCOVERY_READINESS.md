@@ -47,7 +47,7 @@ copilot plugin install walletwall@walletwall             ->  Plugin "walletwall"
 copilot plugin list --json                               ->  { name: "walletwall", marketplace: "walletwall", version: "0.2.0", enabled: true, source: "live" }
 ```
 
-The CLI help documents `copilot plugin marketplace add <source>` with `owner/repo` for GitHub. That form was **not** run: it would register the repository's `main`, which carries the old name until this change is merged. Re-check `copilot plugin marketplace add Wallet-Wall/walletwallrus-copilot` after merge before documenting it.
+The CLI help documents `copilot plugin marketplace add <source>` with `owner/repo` for GitHub. The canonical form, `copilot plugin marketplace add Wallet-Wall/walletwall-copilot`, has since been verified.
 
 ## Agent Plugins 1.0 conformance
 
@@ -156,6 +156,6 @@ No telemetry, write permission, remote HTTP MCP, authentication, WalletWall clou
 
 1. Re-run `npm run verify` and CI on the merge commit; confirm the five hashes above.
 2. Create the `v0.2.0` release from that commit with the assets above.
-3. Re-test `copilot plugin marketplace add Wallet-Wall/walletwallrus-copilot` and `copilot plugin install walletwall@walletwall`, then document the GitHub form.
+3. Re-test `copilot plugin marketplace add Wallet-Wall/walletwall-copilot` and `copilot plugin install walletwall@walletwall`, then document the GitHub form.
 4. Open the Agent Finder plugin-only catalog pull request from the draft entry.
 5. Decide separately whether to build an `mcpb` artifact for the official MCP Registry.

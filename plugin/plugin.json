@@ -6,8 +6,8 @@
   "author": {
     "name": "WalletWall"
   },
-  "homepage": "https://github.com/Wallet-Wall/walletwallrus-copilot",
-  "repository": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+  "homepage": "https://github.com/Wallet-Wall/walletwall-copilot",
+  "repository": "https://github.com/Wallet-Wall/walletwall-copilot",
   "license": "Apache-2.0",
   "keywords": ["walletwall", "evidence", "provenance", "stablecoin", "mcp", "canvas", "offline", "read-only"]
 }

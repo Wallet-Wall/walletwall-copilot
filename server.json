@@ -4,14 +4,14 @@
   "title": "WalletWall",
   "description": "Stablecoin intelligence and vault readiness through WalletWall MCP.",
   "repository": {
-    "url": "https://github.com/Wallet-Wall/walletwallrus-copilot",
+    "url": "https://github.com/Wallet-Wall/walletwall-copilot",
     "source": "github"
   },
   "version": "0.2.1",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Wallet-Wall/walletwallrus-copilot/releases/download/v0.2.1/walletwall.mcpb",
+      "identifier": "https://github.com/Wallet-Wall/walletwall-copilot/releases/download/v0.2.1/walletwall.mcpb",
       "fileSha256": "ea034481c9319bd0221b7de686fa82d163f870247d32249239171689131963cc",
       "transport": {
         "type": "stdio"
