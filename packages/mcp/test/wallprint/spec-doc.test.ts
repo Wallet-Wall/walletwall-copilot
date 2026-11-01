@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { SUPPORT_STATES } from "../../src/schemas.ts";
+import { ASSESSOR_IMPORT_INVARIANTS, ASSESSOR_IMPORT_MAX_BYTES, ASSESSOR_IMPORT_MAX_INPUTS, ASSESSOR_IMPORT_REFUSALS, ASSESSOR_IMPORT_VERSION } from "../../src/wallprint/assessor-import.ts";
 import { REFERENCE_IDENTIFIES, REFERENCE_OUTCOMES, REFERENCE_TARGETS } from "../../src/wallprint/reference.ts";
 import { LIFECYCLE_STATES, WALLPRINT_INVARIANTS, WALLPRINT_PRINCIPLE, WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
 import { ROOT } from "../support/harness.ts";
@@ -71,6 +72,28 @@ describe("WallPrint specification document", () => {
       assert.ok(flat.includes(p), p);
       assert.ok(existsSync(`${ROOT}${p}`), `${p} exists`);
     }
+  });
+
+  test("states the external assessor import: the envelope, its own version, the bounds, attribution without authentication, no authority, no lifecycle, no public write endpoint", () => {
+    assert.ok(doc.includes("## External assessor import"));
+    assert.ok(doc.includes('{ "assessmentImportVersion": "0.1",') && flat.includes(`\`assessmentImportVersion\` \`${ASSESSOR_IMPORT_VERSION}\``));
+    assert.ok(flat.includes(`at most ${ASSESSOR_IMPORT_MAX_BYTES / 1024} KiB`) && flat.includes(`at most ${ASSESSOR_IMPORT_MAX_INPUTS} inputs per call`));
+    for (const s of ["a repeated key", "`__proto__`", "ASSESSOR_IMPORT_REFUSALS"]) assert.ok(flat.includes(s), s);
+    assert.ok(ASSESSOR_IMPORT_REFUSALS.includes("DUPLICATE_KEY") && ASSESSOR_IMPORT_REFUSALS.includes("FORBIDDEN_STRUCTURE"));
+    for (const inv of ASSESSOR_IMPORT_INVARIANTS) assert.ok(doc.includes(inv), inv);
+    for (const s of ["attribution, not authentication", "IMPORTED", "REFUSED", "atomic", "no score, trust level, confidence, rank, approval, certification, issuer-endorsement flag, verified flag, consensus or signature field exists"]) {
+      assert.ok(flat.includes(s), s);
+    }
+    assert.ok(/WallPrint record version stays `0\.1`/.test(flat) && /versioned independently as `assessmentImportVersion`/.test(flat), "the import version is distinct from the record version");
+    assert.ok(/Importing builds, commits, discloses, corrects, supersedes, withdraws and publishes nothing/.test(flat));
+    assert.ok(/no public or remote assessor import endpoint/.test(flat) && /no write route/.test(flat));
+    assert.ok(!/There is no external assessor import/.test(flat), "the old blanket statement is gone; the local import now exists");
+    for (const p of ["packages/mcp/src/wallprint/assessor-import.ts", "packages/mcp/src/wallprint/strict-json.ts", "packages/mcp/test/wallprint/assessor-import.test.ts", "packages/mcp/test/wallprint/assessor-import-mutation.test.ts"]) {
+      assert.ok(existsSync(`${ROOT}${p}`), p);
+    }
+    for (const name of ["assessor-import.ts", "strict-json.ts", "assessor-import.test.ts", "assessor-import-mutation.test.ts", "externalAssessmentAdmissionFindings"]) assert.ok(doc.includes(name), name);
+    const resolver = readFileSync(`${ROOT}docs/WALLPRINT_PUBLIC_RESOLVER.md`, "utf8").replace(/\s+/g, " ");
+    assert.ok(/no public or remote assessor import/.test(resolver) && !/no search endpoint and no assessor import/.test(resolver));
   });
 
   test("the modules and tests it names exist", () => {

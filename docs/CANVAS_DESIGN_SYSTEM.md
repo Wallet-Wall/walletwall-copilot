@@ -269,4 +269,4 @@ The WallPrint view (`wallprint-render.mjs`, `wallprint-styles.mjs`, `wallprint-c
 
 ## Deferred
 
-Immutable snapshots of a live bundle, Merkle roots, receipts and replay for anything but the bundled disclosure lineages, signing or attestation of references and records, external assessor import, a simulation engine, paid or live data, hosted runtimes and bring-your-own providers. The affordances above reserve their place; none of them is implemented.
+Immutable snapshots of a live bundle, Merkle roots, receipts and replay for anything but the bundled disclosure lineages, signing or attestation of references and records, a canvas control for external assessor import (the engine's import boundary exists; the canvas has no import control), a simulation engine, paid or live data, hosted runtimes and bring-your-own providers. The affordances above reserve their place; none of them is implemented.

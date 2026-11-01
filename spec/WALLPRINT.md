@@ -6,8 +6,9 @@ This module is the domain contract and its tests. The canvas renders a fixture-b
 (`canvas/README.md`, items 11 to 15) that adds no presentation field to the record and computes nothing, and prints
 each record's portable reference (a locator: record id, committed digest, WallPrint version) as text and as a locally
 drawn QR code. A public HTTPS resolver ("Public resolver" below) serves deliberately published disclosures as static
-files and proves their bytes before showing them; it is a locator, not an authority. There is no external assessor
-import, no hosted compute, no chain write and no signature system.
+files and proves their bytes before showing them; it is a locator, not an authority. A local, pure external assessor
+import boundary exists in the engine ("External assessor import" below); there is no public or remote assessor import
+endpoint, no hosted compute, no chain write and no signature system.
 
 ## Principle
 
@@ -143,6 +144,92 @@ references into the bundle and WWEP limitation codes.
 
 Three assessors may disagree (`SUPPORTED` / `CONFIRMED` / `NOT_AVAILABLE`); all three remain, and no field anywhere
 holds an overall or consensus verdict.
+
+## External assessor import
+
+An external assessment arrives from someone else, often as text. `buildWallPrintSnapshot({ assessments })` already
+records attributed external assessments and `validateWallPrintRecord` already enforces the attribution rules above; what
+the engine lacked was a boundary for assessments that arrive as untrusted serialized input. `importExternalAssessments`
+(`packages/mcp/src/wallprint/assessor-import.ts`, with the strict reader `strict-json.ts`) is that boundary and nothing
+more: it reads one closed envelope per assessment and returns the existing `ExternalAssessmentInput`, unchanged, for the
+caller to pass to `buildWallPrintSnapshot`. It defines no second assessment model and no second rule set.
+
+```text
+{ "assessmentImportVersion": "0.1",
+  "externalAssessment": { "assessor", "assessorRole", "assessment", "statement"?, "policy", "policyVersion",
+                          "assessedAt", "evidenceRefs", "limitations"? } }
+```
+
+The inner field names, types and bounds are `ExternalAssessmentInputSchema`'s. The envelope adds only its own version and
+the wrapper: no score, trust level, confidence, rank, approval, certification, issuer-endorsement flag, verified flag,
+consensus or signature field exists, and an unknown field is refused, never dropped. The import format is versioned
+independently as `assessmentImportVersion` `0.1` (`ASSESSOR_IMPORT_VERSION`); the WallPrint record version stays `0.1`
+because the record, its digest preimage and its admission rules are unchanged: an imported assessment becomes exactly the
+structure a natively supplied one has, digested the same way (`assessor-import.test.ts`).
+
+**Input boundary.** `importExternalAssessments(inputs, { bundle, focalAssertionId })` takes UTF-8 bytes or text (text is
+taken as its UTF-8 encoding) and the bundle and focal assertion the assessments are about. Each input is at most 16 KiB
+(`ASSESSOR_IMPORT_MAX_BYTES`, refused unread when larger), at most 32 inputs per call (the builder's own cap), and is read
+by a strict JSON reader that refuses malformed UTF-8, a byte-order mark, any text JSON does not allow, nesting deeper
+than the closed shape and, because `JSON.parse` would keep the last of two equal keys, a repeated key (compared after
+escapes are decoded). The importer then refuses an own `__proto__`, `constructor` or `prototype` key (the reader builds
+prototype-less objects, so such a key is inert until it is refused). The envelope is then parsed with the closed schema;
+credential-shaped text is refused in every slot.
+
+**Attribution.** The assessments pass the same rules a native caller-supplied assessment passes, by the same code
+(`externalAssessmentAdmissionFindings` in `record.ts`, which `buildWallPrintSnapshot` now calls too): no `WALLETWALL`
+role, no identity that reads as WalletWall or WallPrint, no policy in the `wwap`, `wwdr` or `wwvr` namespaces, an `ISSUER`
+only for the focal deployment's registry authority (and never on an unregistered subject), a registry authority identity
+under no other role, every evidence reference naming an item of the bundle, and one assessor assessing once per policy,
+case-insensitively. Duplicates fail closed, a byte-identical repeat included: there is no overwrite, no last-write-wins
+and no merge. The caller then passes the list to `buildWallPrintSnapshot`, which applies every rule again to the whole
+list, and `validateWallPrintRecord` checks the record. `IMPORTED` speaks for the assessments: the bundle's own
+preconditions for building a record (a focal subject that carries its identity keys, unique ids) remain the builder's, so
+the builder may still refuse a bundle the importer accepted as context.
+
+**Result and failure.** `{ status: "IMPORTED", assessments }` carries, per input and in input order, the assessment exactly
+as stated, ready to pass to `buildWallPrintSnapshot`. No import receipt or digest of the input is returned: the caller holds
+the bytes, an identical import re-derives the identical assessment, and a digest computed in the engine would add a
+SHA-256 site that `security/integrity-policy.json` gates, for no audit value the caller cannot get by hashing what it
+passed in; a durable store, if one is built, is where a digest of the original input belongs.
+`{ status: "REFUSED", reason, findings }` carries one reason from a closed list
+(`ASSESSOR_IMPORT_REFUSALS`) and findings made of fixed codes and fixed paths; it never echoes caller text. The reason is
+the first refused input's, in input order; the findings name every refused input (at most eight each, so one input cannot
+crowd out another). Import is atomic: one refused input refuses the set, and nothing is dropped, rewritten, summarized,
+inferred or "fixed". Zero inputs import nothing and succeed, given a usable context, because absence of assessment is not
+a failed assessment. The importer never throws: a hole in the list, or an element that cannot be inspected, is a refused
+input, never a skipped one.
+
+**What `IMPORTED` means.** Only that the input passed the structural and attribution admission rules and is recorded as
+the named assessor stated it. An imported assessment may say `CERTIFIED` or `VERIFIED`; that is the assessor's attributed
+statement, and WalletWall's own entry is still generated from the engine's support state. It does not mean the conclusion
+is true, that WalletWall agrees, or that the assessor is who the input says: the identity is attribution, not
+authentication. No signature, key, certificate, DID, wallet signature or chain anchor exists in this lane; signing and
+issuer attestation remain a later trust-model lane.
+
+```text
+external != trusted                        assessor identity != issuer identity
+external != verified                       assessor agreement != independent corroboration
+assessment != evidence state               absence of assessment != failed assessment
+assessment != authority                    digest integrity != factual truth
+```
+
+**Authority firewall.** The importer never evaluates a bundle and returns nothing but assessments, so an imported
+assessment cannot change a claim's support, freshness, finality, authority, corroboration, independence groups,
+conflicts, violations, provenance or readiness: an external `SUPPORTED` does not turn a `NOT_ESTABLISHED` claim into
+`SUPPORTED`, an external issuer's `CONFIRMED` does not touch the engine's authority state, and two agreeing assessors
+count as zero independent corroboration. The tests pin each (`assessor-import.test.ts`, `assessor-import-mutation.test.ts`).
+
+**Independent of the lifecycle.** Importing builds, commits, discloses, corrects, supersedes, withdraws and publishes
+nothing. Assessment import and the disclosure lifecycle are separate dimensions; a caller may later build and commit a
+record that contains the imported assessments through the existing mechanisms.
+
+**Local only.** The importer is a pure function: no clock, no generated identifier, no network, no file access, no
+credential, no environment. It is not an MCP tool or resource (the six tools and eleven resources are unchanged), not an
+HTTP endpoint, not part of the public resolver (which stays a static, read-only locator with no write route), and not in
+the shipped MCP bundle. The canvas renders recorded assessments and has no paste, upload or import control: it computes
+no canonical WallPrint semantics, so a control for it is a separate follow-up that would call the engine, never the
+other way round.
 
 ## Assurance-language guard
 
@@ -351,7 +438,8 @@ ends in a fixed sentence written as text.
 **What it is not.** The resolver does not recompute evidence state, authority, receipt or replay semantics, assessor
 independence or factual correctness: it prints the engine's recorded results as published. Resolution is an integrity
 check, not a signature: a digest match proves bytes, not who published them or whether any claim is true. There is no
-public write endpoint, no search endpoint, no signing, no assessor import. Record ids are intentionally public, and the
+public write endpoint, no search endpoint, no signing, and no public or remote assessor import (the engine's local
+import boundary, "External assessor import" above, is not reachable from the resolver). Record ids are intentionally public, and the
 publication index lists them: enumeration of deliberately published disclosures is not a leak. The deployment of the
 store on the product domain is described in `docs/WALLPRINT_PUBLIC_RESOLVER.md`; the engine repository holds the
 publisher, the page and the published store, and no hosted runtime. Modules: `packages/mcp/src/wallprint/publication.ts`,
@@ -363,7 +451,10 @@ publisher, the page and the published store, and no hosted runtime. Modules: `pa
 
 `WALLPRINT_VERSION` is `0.1` and is versioned independently from the application, from WWEP (`wwepVersion`), from the
 registry and rules versions and from the MCP and plugin surfaces (`VERSIONING.md`). A change to the record shape, the
-canonical form, the lifecycle table or the admission rules is a WallPrint version change.
+canonical form, the lifecycle table or the admission rules is a WallPrint version change. The external assessor import
+envelope has its own version, `assessmentImportVersion` `0.1`: adding the importer changed no part of the record, its
+digest or the admission rules, so the WallPrint version did not move; a change to the envelope's fields or limits is an
+import format version change, and one that changes what a record may hold is a WallPrint version change as well.
 
 ## The disclosure UI (fixture-backed)
 
@@ -416,6 +507,23 @@ UNREPLAYABLE != INCORRECT
   second successor after a withdrawal would reintroduce branching; the choice is left to a later lane.
 - `UPSTREAM_AUTHORITY` assessors are bound only by the reserved-identity rules, not to a registry record, because the
   registry names issuer and protocol authorities only.
+- An imported assessor is identified because the input says who it is and passes the attribution rules above. That is
+  attribution, not authentication: nothing proves the named assessor wrote the input, and an `ISSUER` entry shows that the
+  name matches the registry authority, not that the issuer made the statement. Signing and issuer attestation are a later
+  trust-model lane. Because identity is a name, one party can appear under several spellings (`reviewer-y`, `reviewer.y`),
+  each its own assessor, so a consumer must never count assessors as independent parties.
+- The attribution guards are a token-run rule for WalletWall and WallPrint identities and an exact case-folded match for
+  registry authority identities, so some spellings are admitted, for native and imported assessments alike: a registry
+  authority spelling variant under another role (`issuer-circle`), a name that fuses or extends a stem (`walletwallprint`,
+  `walletwall2`), an engine authority id as an `UPSTREAM_AUTHORITY` assessor (`canonical-chain-state`), and a policy that
+  only begins with a stem (`walletwall-policy`, `wwap2`). None of them reaches an evidence state; closing any of them is an
+  admission-rule change and therefore a WallPrint version change (`assessor-cases.ts` pins each).
+- The reserved policy namespace is the prefix `wwap`, `wwdr` or `wwvr` followed by a separator (or the end), in any letter
+  case. A separator inside the prefix (`ww-ap/review`) is not reserved by the current rule, imported or native
+  (`assessor-cases.ts` pins it). Closing that is an admission-rule change and therefore a WallPrint version change.
+- An import rejects a repeat of the same assessor and policy even when the two inputs are byte-identical; it never merges
+  or de-duplicates. A caller that holds assessments from several sources passes them all to `buildWallPrintSnapshot`,
+  which applies the one-assessor-one-policy rule to the whole list.
 - The record is not an MCP tool or resource in this lane; `main.ts`, `server.ts` and `tools.ts` do not import it, so
   the shipped bundle and manifests are unchanged.
 - A claim whose `CONFLICTING` state is propagated from a dependency (a derived readiness claim over two conflicting

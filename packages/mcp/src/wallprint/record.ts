@@ -287,7 +287,8 @@ function issueCode(issue: z.core.$ZodIssue): string {
   }
 }
 
-function issuesToFindings(error: z.ZodError): Finding[] {
+/** Zod issues as findings: a fixed code and a path of fixed schema segments. Shared with the external assessment import boundary (assessor-import.ts). */
+export function issuesToFindings(error: z.ZodError): Finding[] {
   return error.issues.slice(0, 64).map((issue) => finding(issueCode(issue), renderPath(issue.path)));
 }
 
@@ -321,7 +322,7 @@ function recordStructureFinding(value: unknown): Finding | null {
 }
 
 /** Credential-shaped text in any string slot of a value, with the path of each hit. */
-function secretFindings(value: unknown, path: string): Finding[] {
+export function secretFindings(value: unknown, path: string): Finding[] {
   const out: Finding[] = [];
   const walk = (v: unknown, p: string): void => {
     if (typeof v === "string") {
@@ -395,6 +396,25 @@ function externalAssessmentFindings(list: readonly ExternalLike[], knownIds: Rea
     seen.add(key);
   });
   return out;
+}
+
+/**
+ * The attribution rules for a list of caller-supplied external assessments about one focal assertion of a bundle: the
+ * ids an evidence reference may name and the focal deployment's registry authority are derived here, once, from the
+ * bundle itself. `buildWallPrintSnapshot` and the import boundary (assessor-import.ts) both call this, so a rule cannot
+ * drift between them. `path` names the list element in each finding.
+ */
+export function externalAssessmentAdmissionFindings(
+  list: readonly ExternalAssessmentInput[],
+  bundle: Bundle,
+  focalAssertionId: string,
+  path: (i: number) => string = (i) => `assessments[${i}]`,
+): Finding[] {
+  const idx = indexBundle(bundle);
+  const focal = idx.assertions.get(focalAssertionId);
+  if (focal === undefined) return [finding("UNKNOWN_FOCAL_ASSERTION", "focalAssertionId")];
+  const bundleIds = new Set<string>([...idx.sources.keys(), ...idx.observations.keys(), ...idx.assertions.keys(), ...idx.derivations.keys()]);
+  return externalAssessmentFindings(list, bundleIds, focalRegistryAuthority(focal.claimType, focal.subject), path);
 }
 
 function claimRecord(e: AssertionEvaluation, subject: FlatRecordValue, value: FlatRecordValue | null): ClaimRecord {
@@ -668,8 +688,7 @@ function build(input: SnapshotInput): WallPrintRecord {
   const identity = pick(focalAssertion.subject, subjectIdentityKeys(focalAssertion.claimType));
   if (identity === null) findings.push(finding("INVALID_FOCAL_SUBJECT", "focalAssertionId"));
 
-  const bundleIds = new Set<string>([...idx.sources.keys(), ...idx.observations.keys(), ...idx.assertions.keys(), ...idx.derivations.keys()]);
-  findings.push(...externalAssessmentFindings(externals, bundleIds, focalRegistryAuthority(focalAssertion.claimType, focalAssertion.subject), (i) => `assessments[${i}]`));
+  findings.push(...externalAssessmentAdmissionFindings(externals, bundle, focalAssertionId));
   externals.forEach((a, i) => findings.push(...secretFindings({ assessor: a.assessor, policy: a.policy, policyVersion: a.policyVersion, statement: a.statement ?? null }, `assessments[${i}]`)));
   findings.push(...secretFindings(id, "id"));
   findings.push(...supersedesFindings(supersedes, id));

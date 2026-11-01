@@ -89,3 +89,23 @@ export {
   tryReference,
 } from "./reference.ts";
 export type { FoundRecord, ReferenceOutcome, ReferenceParse, ReferenceProblem, ReferenceResolution, ReferenceTarget, WallPrintPortableReference, WallPrintReferenceEnvelope } from "./reference.ts";
+
+export {
+  ASSESSOR_IMPORT_DOES_NOT_ESTABLISH,
+  ASSESSOR_IMPORT_ESTABLISHES,
+  ASSESSOR_IMPORT_INVARIANTS,
+  ASSESSOR_IMPORT_MAX_BYTES,
+  ASSESSOR_IMPORT_MAX_DEPTH,
+  ASSESSOR_IMPORT_MAX_INPUTS,
+  ASSESSOR_IMPORT_REFUSALS,
+  ASSESSOR_IMPORT_STATUSES,
+  ASSESSOR_IMPORT_VERSION,
+  importExternalAssessments,
+} from "./assessor-import.ts";
+export type {
+  AssessorImportContext,
+  AssessorImportInput,
+  AssessorImportRefusal,
+  AssessorImportResult,
+  AssessorImportStatus,
+} from "./assessor-import.ts";
