@@ -138,9 +138,11 @@ export function replayWallPrint(raw: unknown, deps: { evidence: EvidenceStore })
       focalAssertionId: record.subject.focalAssertionId,
       assessments: record.assessments.filter((a) => a.assessorRole !== "WALLETWALL").map(toInput),
       supersedes: record.supersedes,
+      // A historical record is rebuilt under the admission rules it was committed under, never under today's.
+      wallprintVersion: record.wallprintVersion,
     });
   } catch {
-    // This engine's admission rules refuse to rebuild from the record's own inputs: the record cannot be replayed here.
+    // The admission rules of the record's own version refuse to rebuild from the record's own inputs: it cannot be replayed here.
     return unreplayable(["REBUILD_REFUSED"]);
   }
   if (recomputed.digest === record.digest) return { outcome: "REPRODUCED", reasons: [], recomputedDigest: recomputed.digest, mismatches: [] };

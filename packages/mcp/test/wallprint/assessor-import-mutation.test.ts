@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { canonicalize } from "../../src/canonical.ts";
 import { SUPPORT_STATES, type Bundle } from "../../src/schemas.ts";
+import { WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
 import { importExternalAssessments, type AssessorImportContext, type AssessorImportResult } from "../../src/wallprint/assessor-import.ts";
 import { ExternalAssessmentInputSchema, buildWallPrintSnapshot, wallPrintDigest, wallPrintPayload, type SnapshotInput, type WallPrintRecord } from "../../src/wallprint/record.ts";
 import { ATTRIBUTION_CASES } from "./assessor-cases.ts";
@@ -17,7 +18,7 @@ type ImportFn = (inputs: readonly (string | Uint8Array)[], ctx: AssessorImportCo
 type BuildFn = (input: SnapshotInput) => WallPrintRecord;
 
 const env = (a: unknown): string => JSON.stringify({ assessmentImportVersion: "0.1", externalAssessment: a });
-const ctx = (bundle: Bundle = golden(), focalAssertionId = "a-identity"): AssessorImportContext => ({ bundle: clone(bundle), focalAssertionId });
+const ctx = (bundle: Bundle = golden(), focalAssertionId = "a-identity"): AssessorImportContext => ({ bundle: clone(bundle), focalAssertionId, wallprintVersion: WALLPRINT_VERSION });
 const text = (b: string | Uint8Array): string => (typeof b === "string" ? b : Buffer.from(b).toString("utf8"));
 const unregistered = ATTRIBUTION_CASES.find((c) => c.bundle !== undefined)?.bundle as Bundle;
 

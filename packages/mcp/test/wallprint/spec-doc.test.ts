@@ -84,7 +84,7 @@ describe("WallPrint specification document", () => {
     for (const s of ["attribution, not authentication", "IMPORTED", "REFUSED", "atomic", "no score, trust level, confidence, rank, approval, certification, issuer-endorsement flag, verified flag, consensus or signature field exists"]) {
       assert.ok(flat.includes(s), s);
     }
-    assert.ok(/WallPrint record version stays `0\.1`/.test(flat) && /versioned independently as `assessmentImportVersion`/.test(flat), "the import version is distinct from the record version");
+    assert.ok(/WallPrint record version moved from `0\.1` to `0\.2`|moved WallPrint from 0\.1 to 0\.2/.test(flat) && /versioned independently as `assessmentImportVersion`/.test(flat), "the import version is distinct from the record version");
     assert.ok(/Importing builds, commits, discloses, corrects, supersedes, withdraws and publishes nothing/.test(flat));
     assert.ok(/no public or remote assessor import endpoint/.test(flat) && /no write route/.test(flat));
     assert.ok(!/There is no external assessor import/.test(flat), "the old blanket statement is gone; the local import now exists");

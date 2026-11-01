@@ -1,5 +1,6 @@
 /**
- * WallPrint 0.1 on WWEP 0.1 — the canonical disclosure record and its append-only history.
+ * WallPrint 0.2 on WWEP 0.1 (0.1 records stay valid under their own rules) — the canonical disclosure record and its
+ * append-only history.
  *
  *   WalletWall isn't always right. WallPrint keeps the record.
  *
@@ -18,6 +19,7 @@ export {
   UNREPLAYABLE_REASONS,
   RESERVED_ASSURANCE_TERMS,
   RESERVED_IDENTITY_STEMS,
+  RESERVED_POLICY_NAMESPACES,
   SUPERSESSION_KINDS,
   WALLETWALL_ASSESSOR_ID,
   WALLPRINT_CANONICALIZATION,
@@ -26,8 +28,12 @@ export {
   WALLPRINT_LIMITS,
   WALLPRINT_PRINCIPLE,
   WALLPRINT_VERSION,
+  WALLPRINT_VERSIONS,
 } from "./vocabulary.ts";
-export type { AssessorRole, DiffCategory, EvidenceItemKind, LifecycleState, ReplayOutcome, ReplayReason, SupersessionKind } from "./vocabulary.ts";
+export type { AssessorRole, DiffCategory, EvidenceItemKind, LifecycleState, ReplayOutcome, ReplayReason, SupersessionKind, WallPrintVersion } from "./vocabulary.ts";
+
+export { ADMISSION_RULES, admissionRulesFor, identitySkeleton, identityWords } from "./admission.ts";
+export type { AdmissionRules } from "./admission.ts";
 
 export { WallPrintError, finding } from "./errors.ts";
 export type { Finding, WallPrintErrorCode } from "./errors.ts";

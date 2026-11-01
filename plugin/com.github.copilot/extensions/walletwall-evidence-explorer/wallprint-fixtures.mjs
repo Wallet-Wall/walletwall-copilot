@@ -4,7 +4,7 @@
 
 // The engine's own vocabulary and boundary statements, so the page quotes them instead of restating them.
 export const WALLPRINT_VOCABULARY = {
-  "version": "0.1",
+  "version": "0.2",
   "canonicalization": "RFC8785",
   "digestAlgorithm": "SHA-256",
   "principle": "WalletWall isn't always right. WallPrint keeps the record.",

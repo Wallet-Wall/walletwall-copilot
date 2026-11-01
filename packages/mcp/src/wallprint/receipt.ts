@@ -4,7 +4,7 @@ import { SAFE_TEXT_RE, hasForbiddenStructure } from "../schemas.ts";
 import { WallPrintError } from "./errors.ts";
 import { deepFreeze } from "./freeze.ts";
 import { HEX64_RE, RECORD_ID_RE, validateWallPrintRecord, wallPrintDigest } from "./record.ts";
-import { WALLPRINT_CANONICALIZATION, WALLPRINT_DIGEST_ALGORITHM, WALLPRINT_VERSION } from "./vocabulary.ts";
+import { WALLPRINT_CANONICALIZATION, WALLPRINT_DIGEST_ALGORITHM, WALLPRINT_VERSIONS } from "./vocabulary.ts";
 
 /**
  * Receipt boundary.
@@ -33,7 +33,7 @@ const Hex64 = z.string().regex(HEX64_RE);
 const SafeText64 = z.string().regex(SAFE_TEXT_RE).max(64);
 
 export const WallPrintReceiptSchema = z.strictObject({
-  wallprintVersion: z.literal(WALLPRINT_VERSION),
+  wallprintVersion: z.enum(WALLPRINT_VERSIONS),
   recordId: z.string().regex(RECORD_ID_RE),
   canonicalization: z.literal(WALLPRINT_CANONICALIZATION),
   digestAlgorithm: z.literal(WALLPRINT_DIGEST_ALGORITHM),
@@ -59,7 +59,7 @@ export function wallPrintReceipt(raw: unknown): WallPrintReceipt {
   if (!v.ok) throw new WallPrintError("INVALID_RECORD", v.findings);
   const r = v.record;
   return deepFreeze({
-    wallprintVersion: WALLPRINT_VERSION,
+    wallprintVersion: r.wallprintVersion,
     recordId: r.id,
     canonicalization: WALLPRINT_CANONICALIZATION,
     digestAlgorithm: WALLPRINT_DIGEST_ALGORITHM,
@@ -80,6 +80,7 @@ export function verifyReceipt(rawReceipt: unknown, rawRecord: unknown): ReceiptV
   const reasons: ReceiptReason[] = [];
   if (receipt.data.recordId !== r.id) reasons.push("RECORD_ID_MISMATCH");
   if (receipt.data.digest !== r.digest || receipt.data.digest !== wallPrintDigest(r)) reasons.push("DIGEST_MISMATCH");
+  if (receipt.data.wallprintVersion !== r.wallprintVersion) reasons.push("VERSION_MISMATCH");
   if (receipt.data.bundleDigest !== r.evidence.bundleDigest) reasons.push("BUNDLE_DIGEST_MISMATCH");
   const v = receipt.data.versions;
   if (v.wwep !== r.versions.wwep || v.registry !== r.versions.registry || v.policies !== r.versions.policies || v.rules !== r.versions.rules) reasons.push("VERSION_MISMATCH");

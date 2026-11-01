@@ -1,5 +1,5 @@
 /**
- * WallPrint vocabulary (WallPrint 0.1 on WWEP 0.1).
+ * WallPrint vocabulary (WallPrint 0.2 on WWEP 0.1; 0.1 records remain valid under their own rules).
  *
  *   WalletWall isn't always right. WallPrint keeps the record.
  *
@@ -15,7 +15,17 @@
  * withdrawal are appends and the committed bytes never change.
  */
 
-export const WALLPRINT_VERSION = "0.1";
+/**
+ * The WallPrint contract versions this engine reads, oldest first. A record carries the version it was committed under
+ * (`wallprintVersion`, digest-covered) and is judged by that version's rules for ever: the record shape and the
+ * canonical form are the same in every version listed here, and what a version fixes is its admission rules
+ * (admission.ts). 0.1 admitted some spellings of reserved identities that 0.2 refuses; a record committed under 0.1 is
+ * never reinterpreted, rewritten or re-digested because a later version is stricter.
+ */
+export const WALLPRINT_VERSIONS = ["0.1", "0.2"] as const;
+export type WallPrintVersion = (typeof WALLPRINT_VERSIONS)[number];
+/** The version new records are built under. Historical records keep theirs; building under an older version is explicit. */
+export const WALLPRINT_VERSION: WallPrintVersion = "0.2";
 export const WALLPRINT_CANONICALIZATION = "RFC8785";
 export const WALLPRINT_DIGEST_ALGORITHM = "SHA-256";
 
@@ -48,8 +58,11 @@ export type AssessorRole = (typeof ASSESSOR_ROLES)[number];
 /** WalletWall's own assessment is attributed to its rule engine, the same agent provenance.ts names. */
 export const WALLETWALL_ASSESSOR_ID = "walletwall-rules";
 
-/** Identity stems no external assessor may carry, compared after lower-casing and stripping `.`, `_`, `-` and `:`. */
+/** Identity stems no external assessor may carry (how a stem is recognised is a version's admission rule: language.ts for 0.1, admission.ts for 0.2). */
 export const RESERVED_IDENTITY_STEMS = ["walletwall", "wallprint"] as const;
+
+/** WalletWall's own policy and rule namespaces: no external policy id may sit in one (WWEP `wwap`, `wwdr`, `wwvr`). */
+export const RESERVED_POLICY_NAMESPACES = ["wwap", "wwdr", "wwvr"] as const;
 
 export const EVIDENCE_ITEM_KINDS = ["SOURCE", "OBSERVATION", "ASSERTION", "DERIVATION"] as const;
 export type EvidenceItemKind = (typeof EVIDENCE_ITEM_KINDS)[number];

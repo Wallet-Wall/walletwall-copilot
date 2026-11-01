@@ -101,6 +101,8 @@ export function diffWallPrints(rawA: unknown, rawB: unknown): WallPrintDiff {
 
   // Two committed records with different bytes are different records, whatever else the diff can name.
   c.add("record", "digest", a.digest, b.digest);
+  // The version is digest-covered, so it already shows in the digest; naming it keeps a 0.1 record and a 0.2 record from reading as one semantic record.
+  c.add("record", "wallprintVersion", a.wallprintVersion, b.wallprintVersion);
   c.add("subject", "id", a.id, b.id);
   c.add("subject", "subject.focalAssertionId", a.subject.focalAssertionId, b.subject.focalAssertionId);
   c.add("subject", "subject.claimType", a.subject.claimType, b.subject.claimType);

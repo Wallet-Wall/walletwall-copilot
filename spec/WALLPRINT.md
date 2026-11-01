@@ -1,7 +1,11 @@
-# WallPrint 0.1 on WWEP 0.1 — DRAFT
+# WallPrint 0.2 on WWEP 0.1 — DRAFT
 
 Status: **draft, pre-release**. WallPrint is a WalletWall-defined disclosure record built on the WalletWall Evidence
 Profile (WWEP 0.1, `EVIDENCE_PROFILE.md`). It is not an industry standard and has not been reviewed outside WalletWall.
+Two WallPrint contract versions exist and both are read by this engine: **0.1**, under which every record committed
+before 0.2 was built and which stays valid under its own rules, and **0.2**, the current version, which differs from 0.1
+in exactly one thing: the external-assessor admission rules ("Admission rules by version" below). The record shape, the
+canonical form, the digest, the lifecycle and every other rule are the same in both.
 This module is the domain contract and its tests. The canvas renders a fixture-backed disclosure view of these records
 (`canvas/README.md`, items 11 to 15) that adds no presentation field to the record and computes nothing, and prints
 each record's portable reference (a locator: record id, committed digest, WallPrint version) as text and as a locally
@@ -50,13 +54,14 @@ A record has at most one successor, so a history never branches and cannot cycle
 
 ## The record
 
-`buildWallPrintSnapshot({ id, bundle, evaluatedAt, focalAssertionId, assessments?, supersedes? })` is a pure function
-of its inputs (no clock, no I/O, no generated identifiers). It parses the WWEP bundle with the closed schema,
+`buildWallPrintSnapshot({ id, bundle, evaluatedAt, focalAssertionId, assessments?, supersedes?, wallprintVersion? })` is a pure function
+of its inputs (no clock, no I/O, no generated identifiers). `wallprintVersion` names the contract the record is built
+under and defaults to the current one; replay passes the record's own. It parses the WWEP bundle with the closed schema,
 evaluates it with `evaluateBundle`, checks the invariants, traces provenance for the focal assertion, and emits:
 
 | Field | Source |
 | --- | --- |
-| `wallprintVersion` | `0.1` (WallPrint contract version, see Versioning) |
+| `wallprintVersion` | `0.2` for a record built today, `0.1` for a historical record (WallPrint contract version, digest-covered, selects the admission rules; see Versioning) |
 | `id` | caller-supplied, lower-case token so case variants of one id cannot coexist |
 | `subject` | focal assertion id, claim type, temporality, and the exact-string identity under the policy's subject keys (`identity.ts`) |
 | `snapshotAt` | the WWEP `evaluatedAt`, recorded as evaluated |
@@ -132,11 +137,11 @@ references into the bundle and WWEP limitation codes.
   state, attributed to `walletwall-rules` under the focal claim's policy id and `policiesVersion`, and a record whose
   WalletWall assessment differs from its focal claim is invalid.
 - An `ISSUER` assessment must be attributed to the registry `authorityId` of the focal deployment (`issuer:circle`
-  for the registered USDC deployments); an unregistered subject admits no issuer assessment; and a registry authority
-  identity, in any letter case, may not be used under any other role.
-- No external assessor may use an identity that reads as WalletWall or WallPrint (a run of separator-delimited tokens
-  joining to the stem, so `wallet-wall` and `wall.print` are refused while `firewall-print-shop` is not), nor a policy
-  id in the `wwap`, `wwdr` or `wwvr` namespaces in any case or separator spelling.
+  for the registered USDC deployments), spelled exactly as the registry spells it; an unregistered subject admits no issuer
+  assessment; and a registry authority identity may not be used under any other role (0.1: in any letter case; 0.2: in
+  any spelling that differs only by case or separators, and the engine's own authority ids too).
+- No external assessor may use an identity that reads as WalletWall or WallPrint, nor a policy id in a WalletWall policy
+  or rule namespace. What "reads as" and "in" mean is the version's admission rule, in "Admission rules by version" below.
 - Evidence references must name bundle items; one assessor assesses once per policy, assessor ids compared
   case-insensitively.
 - A record with no external assessment is valid. `NOT_AVAILABLE` is recorded as said. Absence of assessment is not
@@ -144,6 +149,76 @@ references into the bundle and WWEP limitation codes.
 
 Three assessors may disagree (`SUPPORTED` / `CONFIRMED` / `NOT_AVAILABLE`); all three remain, and no field anywhere
 holds an overall or consensus verdict.
+
+## Admission rules by version
+
+Admission decides only whether a name or a policy id may be attributed to an external assessor at all, because some are
+not the assessor's to claim: WalletWall's own identity, WalletWall's own policy and rule namespaces, and an authority the
+registry or the engine names. It proves nothing about who an assessor is, and it never rewrites what the assessor
+supplied: a refused spelling is refused, an admitted one is recorded exactly as stated (`issuer-circle` is never stored
+as `issuer:circle`). The rules are part of the contract, so they belong to the WallPrint version: one table,
+`ADMISSION_RULES` (`packages/mcp/src/wallprint/admission.ts`), selected by `wallprintVersion`, is applied by the builder,
+by `validateWallPrintRecord` (so by history, receipt, diff, replay and publication, which all trust it) and by the import
+boundary, through one function (`externalAssessmentFindings`). Nothing else holds a copy of a rule.
+
+**0.1** (frozen, `language.ts`): an identity is reserved when some run of whole separator-delimited words, joined, equals
+`walletwall` or `wallprint`; a policy is reserved when it begins with the literal `wwap`, `wwdr` or `wwvr` followed by a
+separator or the end; a registry authority is reserved under a role other than `ISSUER` when it equals the assessor id
+after lower-casing. It admits several spellings of the same identity (the gaps listed under Known limitations).
+
+**0.2** answers the same three questions with one model of "the same spelling". It compares skeletons and rewrites
+nothing.
+
+| Term | Definition |
+| --- | --- |
+| fold | ASCII `A-Z` to `a-z`. Nothing else: no Unicode normalization (assessor and policy ids are ASCII by construction), no confusable or leet folding, no edit distance, no phonetics. |
+| separators | `.` `_` `:` `-` and `/`, the punctuation the id grammars admit (`/` only in a policy id). A run of separators is one separator. A *word* is a maximal run between separators. |
+| skeleton | the words joined without separators. |
+
+1. **Identity.** An assessor id reads as WalletWall or WallPrint (stems `walletwall`, `wallprint`) when (a) some run of
+   whole words spells a stem, optionally followed by a number (`wallet-wall`, `wall.print`, `wallet-wall2`,
+   `wall-print-2024`), or (b) some word *begins* with a stem (`walletwall2`, `walletwallprint`, `wallprinters`): a stem
+   fused with more letters is the reserved name with decoration, the omitted-separator spelling of `walletwall-official`.
+   A stem buried inside a word is not a reading of the stem (`firewall-print-shop`, `stonewall`, `officialwalletwall`), and
+   neither is one that would have to end inside a later word (`wallet-wallpaper`): the separators the assessor supplied are
+   the only word boundaries WalletWall has, and it does not segment words without a lexicon. Order matters:
+   `print-wall` is not `wallprint`.
+2. **Policy namespace.** A policy id is in a WalletWall namespace only at its start: the leading words spell `wwap`,
+   `wwdr` or `wwvr` (separators allowed anywhere inside: `ww-ap`, `WW.DR`) followed by an optional number that belongs to
+   the namespace (`wwap2`), or the leading words read as WalletWall or WallPrint by rule 1 (`walletwall-policy`,
+   `wallet-wall/review`). The namespace ends at the next separator or the end of the id, so `wwapi`, `wwapp`, `wwdrive`,
+   `ww-api` and `wwap2x` are not in it, and neither is `acme/wwap/x` or `acme/walletwall-review`, which merely mention one.
+3. **Authority.** Under every role other than `ISSUER`, an assessor id whose skeleton equals the skeleton of a registry
+   deployment authority (`issuer:circle`, `issuer:tether`, `protocol:sky`) or of an engine authority
+   (`canonical-chain-state`, `issuer-publication`; `walletwall-rules` is reserved by rule 1, and `none` names the absence of an
+   authority, not an authority) is refused: `issuer-circle`, `issuer_circle`, `issuer.circle`, `ISSUER-CIRCLE` and
+   `issuercircle` are the registry authority under another role. Whole-skeleton equality only: `issuer:circle-labs`,
+   `circle` and `issuer:acme` are not the registry authority. An `ISSUER` must still be spelled exactly as the registry
+   spells its authority (the spelling `issuer-circle` under `ISSUER` is `ISSUER_AUTHORITY_MISMATCH`). Role comes from the
+   registry and the contract, never from a name that looks like an issuer's: `issuer-acme` is an ordinary name under any
+   role but `ISSUER`, and is refused under `ISSUER`.
+
+0.2 is strictly stricter than 0.1: whatever 0.1 refuses, 0.2 refuses (`admission-versions.test.ts` pins it over a seeded
+fuzz). Findings keep their 0.1 codes (`ASSESSOR_IDENTITY_RESERVED`, `RESERVED_POLICY_NAMESPACE`) and paths.
+
+**Unchanged in every version.** One assessor assesses once per policy, compared case-insensitively. Spelling variants of
+one name (`reviewer-y`, `reviewer.y`) remain different assessors, deliberately: folding them would be inventing identity
+resolution, which needs authentication. So the rules protect reserved identities, namespaces and authority roles and
+nothing more, and no number of assessors, spellings or agreeing assessments is authority:
+
+```text
+assessor agreement != independent corroboration
+assessor count != authority
+assessor identity != issuer identity
+attribution != authentication
+```
+
+**Which version applies.** A record is judged by the version it carries, for ever: `validateWallPrintRecord` selects the rules
+from `wallprintVersion`, replay rebuilds a record under its own version, and a record committed under 0.1 is never rewritten,
+re-digested or reinterpreted because 0.2 is stricter (`admission-characterization.test.ts` and the committed 0.1 corpus pin
+it). A new record is built under the current version unless the caller names one. The version label is not authenticated
+(nothing signs a record), so 0.1 stays buildable only by naming it, and a consumer that requires the 0.2 rules requires
+`wallprintVersion` `0.2`; a 0.1 record is what it always was.
 
 ## External assessor import
 
@@ -163,11 +238,13 @@ caller to pass to `buildWallPrintSnapshot`. It defines no second assessment mode
 The inner field names, types and bounds are `ExternalAssessmentInputSchema`'s. The envelope adds only its own version and
 the wrapper: no score, trust level, confidence, rank, approval, certification, issuer-endorsement flag, verified flag,
 consensus or signature field exists, and an unknown field is refused, never dropped. The import format is versioned
-independently as `assessmentImportVersion` `0.1` (`ASSESSOR_IMPORT_VERSION`); the WallPrint record version stays `0.1`
-because the record, its digest preimage and its admission rules are unchanged: an imported assessment becomes exactly the
-structure a natively supplied one has, digested the same way (`assessor-import.test.ts`).
+independently as `assessmentImportVersion` `0.1` (`ASSESSOR_IMPORT_VERSION`). The admission rules moved WallPrint from 0.1 to 0.2 and
+the envelope did not move, because the serialization is identical: the envelope version describes the interface shape, the WallPrint
+version describes the record and its admission semantics, and an imported assessment becomes exactly the structure a natively
+supplied one has, digested the same way (`assessor-import.test.ts`). What the importer does need to know is which admission rules it
+is checking against, so the caller names the target: see "Target version" below.
 
-**Input boundary.** `importExternalAssessments(inputs, { bundle, focalAssertionId })` takes UTF-8 bytes or text (text is
+**Input boundary.** `importExternalAssessments(inputs, { bundle, focalAssertionId, wallprintVersion })` takes UTF-8 bytes or text (text is
 taken as its UTF-8 encoding) and the bundle and focal assertion the assessments are about. Each input is at most 16 KiB
 (`ASSESSOR_IMPORT_MAX_BYTES`, refused unread when larger), at most 32 inputs per call (the builder's own cap), and is read
 by a strict JSON reader that refuses malformed UTF-8, a byte-order mark, any text JSON does not allow, nesting deeper
@@ -177,13 +254,20 @@ prototype-less objects, so such a key is inert until it is refused). The envelop
 credential-shaped text is refused in every slot.
 
 **Attribution.** The assessments pass the same rules a native caller-supplied assessment passes, by the same code
-(`externalAssessmentAdmissionFindings` in `record.ts`, which `buildWallPrintSnapshot` now calls too): no `WALLETWALL`
-role, no identity that reads as WalletWall or WallPrint, no policy in the `wwap`, `wwdr` or `wwvr` namespaces, an `ISSUER`
+(`externalAssessmentAdmissionFindings` in `record.ts`, which `buildWallPrintSnapshot` calls too, and which reaches
+`externalAssessmentFindings` in `admission.ts`, the one place the rules live): no `WALLETWALL`
+role, no identity that reads as WalletWall or WallPrint, no policy in a WalletWall namespace, an `ISSUER`
 only for the focal deployment's registry authority (and never on an unregistered subject), a registry authority identity
 under no other role, every evidence reference naming an item of the bundle, and one assessor assessing once per policy,
-case-insensitively. Duplicates fail closed, a byte-identical repeat included: there is no overwrite, no last-write-wins
+case-insensitively; each as the target version's rules say. Duplicates fail closed, a byte-identical repeat included: there is no overwrite, no last-write-wins
 and no merge. The caller then passes the list to `buildWallPrintSnapshot`, which applies every rule again to the whole
-list, and `validateWallPrintRecord` checks the record. `IMPORTED` speaks for the assessments: the bundle's own
+list, and `validateWallPrintRecord` checks the record.
+
+**Target version.** `wallprintVersion` is required in the import context and is never defaulted to whatever the engine builds today:
+an unsupported or missing value refuses the call as `INVALID_CONTEXT` before any input is read. The same bytes, the same bundle context
+and the same target version give the same result, and for every version the import admits exactly what `buildWallPrintSnapshot` admits for
+the same assessment, bundle, focal assertion and version (`admission-parity.test.ts` runs a seeded differential across both). A caller
+imports for a version and builds under the same one. `IMPORTED` speaks for the assessments: the bundle's own
 preconditions for building a record (a focal subject that carries its identity keys, unique ids) remain the builder's, so
 the builder may still refuse a bundle the importer accepted as context.
 
@@ -275,10 +359,12 @@ rather than edited, because the spec text is embedded in the generated bundle an
 
 `replayWallPrint(record, { evidence })` re-derives a record from the evidence store (keyed by bundle digest) and the
 engine's registry, policies and rules, and returns `REPRODUCED`, `MISMATCH` or `UNREPLAYABLE` with sorted reasons.
+The rebuild runs under the admission rules of the record's own `wallprintVersion`, so a historical 0.1 record is judged
+by 0.1 and reproduces, never by a stricter version it was not committed under.
 It is `UNREPLAYABLE` (`WWEP_VERSION_MISMATCH`, `MISSING_POLICY_VERSION`, `MISSING_REGISTRY_VERSION`,
 `MISSING_RULE_VERSION`, `MISSING_EVIDENCE`, `EVIDENCE_DIGEST_MISMATCH`, `RECORD_INVALID`, `REBUILD_REFUSED`) whenever
-a required historical input is not the committed one, the record is invalid, the store fails, or this engine's
-admission rules refuse to rebuild from the record's own inputs; then nothing is recomputed: replay never evaluates
+a required historical input is not the committed one, the record is invalid, the store fails, or the admission rules of the
+record's version refuse to rebuild from the record's own inputs; then nothing is recomputed: replay never evaluates
 historical evidence under present-day policy and never fills in evidence. The rule versions a bundle's derivations
 declare are evidence (the engine flags them with `RULES_VERSION_MISMATCH`) and do not gate replay; only the engine's
 own rules version does, and the policies digest pins the rules table. A `MISMATCH` carries `DIGEST_MISMATCH` plus one
@@ -291,7 +377,8 @@ reason per differing top-level section (`SUBJECT_MISMATCH`, `SNAPSHOT_MISMATCH`,
 ## Diff
 
 `diffWallPrints(a, b)` returns `{ changed, changes }` with one entry per semantic change in the categories record
-(the digest, present whenever the two records differ at all), subject, snapshot, claims, evidence, assessments,
+(the digest, present whenever the two records differ at all, and `wallprintVersion` when the two were committed under
+different contract versions: a 0.1 record and a 0.2 record are never one semantic record, even when nothing else differs), subject, snapshot, claims, evidence, assessments,
 limitations, conflicts, violations, policyVersions, ruleVersions, versions, provenance and lifecycle (the predecessor
 id, digest, kind and reason), each with a path, before and after values and, where it applies, a reason (`WEAKER` /
 `STRONGER` by `SUPPORT_RANK` for a support-state change; the supersession kind for a lifecycle link). It carries record
@@ -449,12 +536,29 @@ publisher, the page and the published store, and no hosted runtime. Modules: `pa
 
 ## Versioning
 
-`WALLPRINT_VERSION` is `0.1` and is versioned independently from the application, from WWEP (`wwepVersion`), from the
+`WALLPRINT_VERSION` is `0.2` (the version a new record is built under) and `WALLPRINT_VERSIONS` is `["0.1", "0.2"]`, the
+versions this engine reads. WallPrint is versioned independently from the application, from WWEP (`wwepVersion`), from the
 registry and rules versions and from the MCP and plugin surfaces (`VERSIONING.md`). A change to the record shape, the
-canonical form, the lifecycle table or the admission rules is a WallPrint version change. The external assessor import
-envelope has its own version, `assessmentImportVersion` `0.1`: adding the importer changed no part of the record, its
-digest or the admission rules, so the WallPrint version did not move; a change to the envelope's fields or limits is an
-import format version change, and one that changes what a record may hold is a WallPrint version change as well.
+canonical form, the lifecycle table or the admission rules is a WallPrint version change, and a version already issued is
+never edited: a record carries the version it was committed under, digest-covered, and is judged by that version's rules for
+ever. 0.2 is the admission-rule change (the registry-authority spellings, the fused and numbered WalletWall / WallPrint
+names and the reserved policy namespaces 0.1 admitted; "Admission rules by version"); it changes no field, no canonical form
+and no other rule. The four mechanisms that could have carried it were checked, and only the first fits: a new
+`wallprintVersion` selects admission rules and is already digest-covered; silently tightening 0.1 would make a committed 0.1
+record that this engine could validly produce (`wp-historical-0-1-gaps`, `fixtures/wallprint-0.1-admission-gaps.json`)
+invalid, which the history, receipt, diff, replay and publication paths would then refuse; the WWEP policies, registry and
+rules versions are recorded evidence versions (replay gates on them) and move for evidence reasons, not for how a name is
+spelled; and a new record field would itself be a record-shape change, so a WallPrint version change.
+
+What a version change does and does not touch: a 0.2 record has a different digest from the same content under 0.1,
+because the version is covered; no 0.1 record, receipt, reference, published artifact or fixture is rewritten, re-digested
+or reinterpreted (the pinned 0.1 fixture digest is unchanged); a portable reference names the version its record was committed
+under and keeps it; `record id` and `digest` already locate one record, and one record id carries one digest in a store, so a
+0.2 record under an id a 0.1 record holds is a conflict and never an overwrite, exactly as before; a 0.2 record may correct or
+supersede a 0.1 record (a successor is judged by its own version), and the diff between them names the version. The external
+assessor import envelope has its own version, `assessmentImportVersion` `0.1`: it versions the serialization, which no
+admission rule changes, so adding 0.2 did not move it; a change to the envelope's fields or limits is an import format version
+change, and one that changes what a record may hold is a WallPrint version change as well.
 
 ## The disclosure UI (fixture-backed)
 
@@ -510,17 +614,34 @@ UNREPLAYABLE != INCORRECT
 - An imported assessor is identified because the input says who it is and passes the attribution rules above. That is
   attribution, not authentication: nothing proves the named assessor wrote the input, and an `ISSUER` entry shows that the
   name matches the registry authority, not that the issuer made the statement. Signing and issuer attestation are a later
-  trust-model lane. Because identity is a name, one party can appear under several spellings (`reviewer-y`, `reviewer.y`),
-  each its own assessor, so a consumer must never count assessors as independent parties.
-- The attribution guards are a token-run rule for WalletWall and WallPrint identities and an exact case-folded match for
-  registry authority identities, so some spellings are admitted, for native and imported assessments alike: a registry
-  authority spelling variant under another role (`issuer-circle`), a name that fuses or extends a stem (`walletwallprint`,
-  `walletwall2`), an engine authority id as an `UPSTREAM_AUTHORITY` assessor (`canonical-chain-state`), and a policy that
-  only begins with a stem (`walletwall-policy`, `wwap2`). None of them reaches an evidence state; closing any of them is an
-  admission-rule change and therefore a WallPrint version change (`assessor-cases.ts` pins each).
-- The reserved policy namespace is the prefix `wwap`, `wwdr` or `wwvr` followed by a separator (or the end), in any letter
-  case. A separator inside the prefix (`ww-ap/review`) is not reserved by the current rule, imported or native
-  (`assessor-cases.ts` pins it). Closing that is an admission-rule change and therefore a WallPrint version change.
+  trust-model lane.
+- Because identity is a name, one party can appear under several spellings (`reviewer-y`, `reviewer.y`), each its own
+  assessor, so a consumer must never count assessors as independent parties. The 0.2 rules close the spellings of
+  *reserved* identities, namespaces and authority roles; they do not, and cannot without authentication, tell two spellings
+  of an ordinary name apart from two parties.
+- The 0.1 attribution rules (a token-run rule for WalletWall and WallPrint identities, an exact case-folded match for registry
+  authority identities, a literal-prefix policy rule) admit some spellings, for native and imported assessments alike, and
+  stay as they are for every record committed under 0.1: a registry authority spelling variant under another role
+  (`issuer-circle`), a name that fuses or extends a stem (`walletwallprint`, `walletwall2`), an engine authority id as an
+  `UPSTREAM_AUTHORITY` assessor (`canonical-chain-state`), and a policy that only begins with a stem or splits the reserved
+  prefix (`walletwall-policy`, `wwap2`, `ww-ap/review`). None of them reaches an evidence state. 0.2 refuses all of them
+  (`admission-versions.test.ts`, `assessor-cases.ts`), and a 0.1 record carrying one stays valid, replayable, receipted,
+  referenceable and diffable under 0.1.
+- The 0.2 rules are bounded, not exhaustive. They fold case and separators and nothing else, so a homoglyph or leet spelling
+  with a digit for a letter (`wa11et-wall`), a stem buried inside a longer word (`officialwalletwall`, the same class as
+  `firewall-print-shop`), a stem that ends inside a later word (`wallet-wallofficial`) and a decorated authority
+  (`issuer:circle2`) remain admissible, and a word that begins with a stem is refused even when innocent (`wallprinters`).
+  Closing more would need a lexicon or fuzzy matching, which WalletWall deliberately does not do, and would refuse legitimate
+  names (`wallet-wallpaper`).
+- The reserved authority identities are derived from the engine's own registry and policies at load, so a registry that names a
+  new authority protects it immediately, and the same registry change alters what an unversioned reading of the rules would
+  admit. Every record pins its registry version and digest and replay refuses a different one (`MISSING_REGISTRY_VERSION`);
+  `admission-versions.test.ts` pins today's set so a registry change that moves it is a conscious one.
+- The WallPrint version a record carries is not authenticated: nothing signs a record, so anyone who can present a record
+  can label it 0.1. A 0.1 record is judged by 0.1's rules, which are the rules it was committed under; a consumer that wants
+  the 0.2 rules requires `wallprintVersion` 0.2.
+- The reserved policy namespace under 0.1 is the prefix `wwap`, `wwdr` or `wwvr` followed by a separator (or the end), in any
+  letter case (`assessor-cases.ts` pins it); 0.2's namespace rule is "Admission rules by version".
 - An import rejects a repeat of the same assessor and policy even when the two inputs are byte-identical; it never merges
   or de-duplicates. A caller that holds assessments from several sources passes them all to `buildWallPrintSnapshot`,
   which applies the one-assessor-one-policy rule to the whole list.
@@ -529,7 +650,7 @@ UNREPLAYABLE != INCORRECT
 - A claim whose `CONFLICTING` state is propagated from a dependency (a derived readiness claim over two conflicting
   balances, conformance `CNF-004`) carries no `conflictsWith` entry and no `OBSERVATION_DISAGREEMENT` limitation, so
   `validateWallPrintRecord` refuses the record with `CONFLICTS_MISMATCH` on that claim: such an evaluation is not
-  recordable in WallPrint 0.1. Found by the disclosure UI lane and reported here; admitting it is a contract decision
+  recordable in WallPrint (0.1 or 0.2). Found by the disclosure UI lane and reported here; admitting it is a contract decision
   (the conflict-consistency rule in `record.ts` would need a third cause for propagated conflicts), not a UI patch.
 - A receipt carries no issuance instant and no identifier of its own; it is identified by its record id and digest. The
   disclosure view prints the disclosure instant from the lifecycle ledger and invents no receipt id. Whether a receipt
@@ -563,8 +684,8 @@ UNREPLAYABLE != INCORRECT
 - A reference identifies a record by id and committed digest and nothing else; it is not a signature, and a digest match
   on resolution proves bytes, not who committed them or whether any claim is true. Signing, attestation keys and any
   trust model are a separate decision; `DIGEST_MISMATCH` is reported as an integrity finding and never as forgery.
-- Only reference version `0.1` and WallPrint version `0.1` resolve. A reference to a later version is
-  `UNSUPPORTED_VERSION`; nothing is guessed about its grammar.
+- Reference version `0.1` and WallPrint versions `0.1` and `0.2` resolve: a reference keeps the WallPrint version its record
+  was committed under. A reference to any other version is `UNSUPPORTED_VERSION`; nothing is guessed about its grammar.
 - A self-contained reference (the record's canonical payload inside the code) is deliberately not offered: a record is
   tens of kilobytes, a copy goes stale while the reference does not, and the payload is already printed and copyable in
   the disclosure document. The reference-only form is the only form.

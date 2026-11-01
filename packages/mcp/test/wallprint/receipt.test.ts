@@ -13,7 +13,7 @@ import { baseInput, issuerAssessment } from "./support.ts";
  */
 describe("WallPrint receipt boundary", () => {
   test("a receipt carries exactly the integrity data: record id, canonicalization, digest algorithm, digest, bundle digest, versions", () => {
-    const record = buildWallPrintSnapshot(baseInput());
+    const record = buildWallPrintSnapshot(baseInput({ wallprintVersion: "0.1" }));
     const receipt = wallPrintReceipt(record);
     assert.deepEqual(receipt, {
       wallprintVersion: "0.1",

@@ -18,8 +18,15 @@ export interface AttributionCase {
   /** The bundle the assessments are about. Defaults to the golden world focused on `a-identity` (a registered USDC deployment). */
   bundle?: Bundle;
   assessments: unknown[];
+  /** What WallPrint 0.1 says: the contract the table was first written against. */
   expected: "BUILT" | { error: "INVALID_INPUT" | "INVALID_RECORD"; findings: ExpectedFinding[] };
+  /** What WallPrint 0.2 says, for the rows whose outcome the 0.2 admission rules changed; every other row is the same in both versions. */
+  v02?: AttributionCase["expected"];
 }
+
+/** The WallPrint contract versions the table is held to, with each row's expectation under that version. */
+export const ATTRIBUTION_VERSIONS = ["0.1", "0.2"] as const;
+export const expectedUnder = (c: AttributionCase, version: (typeof ATTRIBUTION_VERSIONS)[number]): AttributionCase["expected"] => (version === "0.2" && c.v02 !== undefined ? c.v02 : c.expected);
 
 const unregisteredSubject = (): Bundle => {
   const b = clone(golden());
@@ -55,18 +62,22 @@ export const ATTRIBUTION_CASES: readonly AttributionCase[] = [
   { name: "a limitation that is not a WWEP limitation code", assessments: [reviewerAssessment({ limitations: ["NOT_A_CODE" as never] })], expected: input({ code: "INVALID_ENUM", path: "assessments[0].limitations[0]" }) },
   { name: "an assessment code that is not an upper-case code", assessments: [reviewerAssessment({ assessment: "confirmed" })], expected: input({ code: "INVALID_FORMAT", path: "assessments[0].assessment" }) },
   { name: "an ISSUER spelled in another letter case is not the registry authority", assessments: [issuerAssessment({ assessor: "Issuer:Circle" })], expected: record({ code: "ISSUER_AUTHORITY_MISMATCH", path: "assessments[0].assessor" }) },
-  // Pinned as the contract stands (known limits, identical for native and imported assessments). The identity guard is a
-  // token-run rule and the registry guard is an exact case-folded match, so a fused or re-spelled name is admitted, and
-  // so are engine authority ids as UPSTREAM_AUTHORITY assessors. None of this reaches an evidence state. Closing any of it
-  // is an admission-rule change, therefore a WallPrint version change, and is recorded as a follow-up.
-  { name: "known limit: a registry authority spelling variant (issuer-circle) under another role is admitted", assessments: [reviewerAssessment({ assessor: "issuer-circle" })], expected: "BUILT" },
-  { name: "known limit: a name that fuses the WalletWall and WallPrint stems (walletwallprint) is admitted", assessments: [reviewerAssessment({ assessor: "walletwallprint" })], expected: "BUILT" },
-  { name: "known limit: an engine authority id as an UPSTREAM_AUTHORITY assessor (canonical-chain-state) is admitted", assessments: [reviewerAssessment({ assessor: "canonical-chain-state", assessorRole: "UPSTREAM_AUTHORITY" })], expected: "BUILT" },
-  { name: "known limit: a policy that only begins with the WalletWall stem (walletwall-policy, wwap2) is not in a reserved namespace", assessments: [reviewerAssessment({ policy: "walletwall-policy" }), reviewerAssessment({ assessor: "reviewer-z", policy: "wwap2" })], expected: "BUILT" },
-  // Pinned as the contract stands: the reserved namespace is the prefix `wwap`, `wwdr` or `wwvr` followed by a separator,
-  // in any letter case. A separator inside the prefix (`ww-ap/`) is not reserved. Changing it is an admission-rule change,
-  // therefore a WallPrint version change, and is recorded as a follow-up rather than altered by the import lane.
-  { name: "a policy that splits the reserved prefix with a separator (ww-ap/...) is not in the reserved namespace", assessments: [reviewerAssessment({ policy: "ww-ap/review" })], expected: "BUILT" },
+  // The 0.1 gaps, as the 0.1 contract stood (identical for native and imported assessments) and as 0.2 closes them. The identity guard
+  // was a token-run rule and the registry guard an exact case-folded match, so a fused or re-spelled name was admitted, and so were
+  // engine authority ids as UPSTREAM_AUTHORITY assessors. None of it reached an evidence state; closing it is an admission-rule
+  // change, so it is a WallPrint version change: these rows stay admitted under 0.1 and are refused under 0.2.
+  { name: "0.1 gap: a registry authority spelling variant (issuer-circle) under another role", assessments: [reviewerAssessment({ assessor: "issuer-circle" })], expected: "BUILT", v02: record(reserved("assessments[0].assessor")) },
+  { name: "0.1 gap: a name that fuses the WalletWall and WallPrint stems (walletwallprint)", assessments: [reviewerAssessment({ assessor: "walletwallprint" })], expected: "BUILT", v02: record(reserved("assessments[0].assessor")) },
+  { name: "0.1 gap: an engine authority id as an UPSTREAM_AUTHORITY assessor (canonical-chain-state)", assessments: [reviewerAssessment({ assessor: "canonical-chain-state", assessorRole: "UPSTREAM_AUTHORITY" })], expected: "BUILT", v02: record(reserved("assessments[0].assessor")) },
+  {
+    name: "0.1 gap: a policy that only begins with the WalletWall stem (walletwall-policy, wwap2)",
+    assessments: [reviewerAssessment({ policy: "walletwall-policy" }), reviewerAssessment({ assessor: "reviewer-z", policy: "wwap2" })],
+    expected: "BUILT",
+    v02: record({ code: "RESERVED_POLICY_NAMESPACE", path: "assessments[0].policy" }, { code: "RESERVED_POLICY_NAMESPACE", path: "assessments[1].policy" }),
+  },
+  // 0.1: the reserved namespace is the prefix `wwap`, `wwdr` or `wwvr` followed by a separator, in any letter case; a separator inside
+  // the prefix (`ww-ap/`) was not reserved. 0.2 folds separators inside the prefix.
+  { name: "0.1 gap: a policy that splits the reserved prefix with a separator (ww-ap/...)", assessments: [reviewerAssessment({ policy: "ww-ap/review" })], expected: "BUILT", v02: record({ code: "RESERVED_POLICY_NAMESPACE", path: "assessments[0].policy" }) },
   { name: "a stem buried in a longer token (firewall-print-shop) is not an impersonation", assessments: [reviewerAssessment({ assessor: "firewall-print-shop" })], expected: "BUILT" },
   { name: "an assurance-like statement and code are admitted as the assessor's own words", assessments: [issuerAssessment({ assessment: "CERTIFIED", statement: "Certified and audited by the issuer." })], expected: "BUILT" },
 ];

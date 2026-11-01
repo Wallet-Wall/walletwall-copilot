@@ -25,7 +25,7 @@ import { baseInput } from "./support.ts";
  * so it is deterministic, lossless and carries the reference's own versions. Parsing is as strict as the reference's own.
  */
 
-const record = buildWallPrintSnapshot(baseInput());
+const record = buildWallPrintSnapshot(baseInput({ wallprintVersion: "0.1" }));
 // Assembled at run time so the engine's own "no URL literal in src" scan has nothing to find in this test's intent either.
 const BASE = ["https:", "//", "walletwall.org"].join("");
 const ref = referenceOf(record);

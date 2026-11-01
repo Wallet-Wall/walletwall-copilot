@@ -12,12 +12,15 @@ import { COMMIT_AT, baseInput, golden } from "./support.ts";
 
 /**
  * Characterization of WallPrint 0.1's external-assessor admission, written BEFORE any admission rule changed and run
- * against the unmodified engine. It is the compatibility oracle for historical records: whatever a later contract
- * version decides, a record committed under 0.1 is judged by these rows.
+ * against the unmodified engine (the first commit of this lane, where the builder took no version). It is the
+ * compatibility oracle for historical records: whatever a later contract version decides, a record committed under 0.1 is
+ * judged by these rows. Since 0.2 exists, the 0.1 rules are selected explicitly (`wallprintVersion: "0.1"`) and the rows
+ * are unchanged.
  */
 const outcomeOf = (c: AdmissionCase): Outcome => {
   try {
-    const record = buildWallPrintSnapshot(baseInput({ assessments: [assessmentOf(c)] }));
+    const record = buildWallPrintSnapshot(baseInput({ assessments: [assessmentOf(c)], wallprintVersion: "0.1" }));
+    assert.equal(record.wallprintVersion, "0.1");
     assert.equal(validateWallPrintRecord(record).ok, true, "a built record always validates");
     return "ADMIT";
   } catch (e) {
@@ -63,8 +66,8 @@ describe("the historical 0.1 corpus: a committed record whose assessors the 0.1 
     for (const p of ["walletwall-policy", "wwap2", "ww-ap/review"]) assert.ok(policies.has(p), p);
   });
 
-  test("the engine still builds exactly these bytes from the stored input", () => {
-    const rebuilt = buildWallPrintSnapshot({ ...corpus.input, bundle: golden() });
+  test("the engine still builds exactly these bytes from the stored input, under the version the record carries", () => {
+    const rebuilt = buildWallPrintSnapshot({ ...corpus.input, bundle: golden(), wallprintVersion: corpus.record.wallprintVersion });
     assert.equal(canonicalize(rebuilt), canonicalize(corpus.record));
     assert.equal(rebuilt.digest, corpus.record.digest);
   });

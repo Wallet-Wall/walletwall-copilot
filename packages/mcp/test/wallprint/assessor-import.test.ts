@@ -27,10 +27,10 @@ import { createWallPrintHistory } from "../../src/wallprint/history.ts";
 import { ExternalAssessmentInputSchema, buildWallPrintSnapshot, validateWallPrintRecord, type ExternalAssessmentInput, type WallPrintRecord } from "../../src/wallprint/record.ts";
 import { verifyReceipt, wallPrintReceipt } from "../../src/wallprint/receipt.ts";
 import { createEvidenceStore, replayWallPrint } from "../../src/wallprint/replay.ts";
-import { WALLETWALL_ASSESSOR_ID, WALLPRINT_INVARIANTS, WALLPRINT_LIMITS, WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
+import { WALLETWALL_ASSESSOR_ID, WALLPRINT_INVARIANTS, WALLPRINT_LIMITS, WALLPRINT_VERSION, type WallPrintVersion } from "../../src/wallprint/vocabulary.ts";
 import { ROOT } from "../support/harness.ts";
 import { replaceObservation } from "../support/builders.ts";
-import { ATTRIBUTION_CASES } from "./assessor-cases.ts";
+import { ATTRIBUTION_CASES, ATTRIBUTION_VERSIONS, expectedUnder } from "./assessor-cases.ts";
 import { COMMIT_AT, baseInput, clone, golden, issuerAssessment, readinessWorld, reviewerAssessment } from "./support.ts";
 
 /**
@@ -41,7 +41,7 @@ import { COMMIT_AT, baseInput, clone, golden, issuerAssessment, readinessWorld, 
  */
 
 const envelope = (assessment: unknown, over: Record<string, unknown> = {}): string => JSON.stringify({ assessmentImportVersion: ASSESSOR_IMPORT_VERSION, externalAssessment: assessment, ...over });
-const context = (bundle: unknown = golden(), focalAssertionId = "a-identity"): AssessorImportContext => ({ bundle: clone(bundle), focalAssertionId });
+const context = (bundle: unknown = golden(), focalAssertionId = "a-identity", wallprintVersion: WallPrintVersion = WALLPRINT_VERSION): AssessorImportContext => ({ bundle: clone(bundle), focalAssertionId, wallprintVersion });
 
 function imported(result: AssessorImportResult): readonly ExternalAssessmentInput[] {
   assert.equal(result.status, "IMPORTED", JSON.stringify(result));
@@ -61,9 +61,9 @@ const assessmentsOf = (result: AssessorImportResult): ExternalAssessmentInput[] 
 const walletWallEntry = (r: WallPrintRecord) => r.assessments.find((a) => a.assessorRole === "WALLETWALL");
 
 describe("assessor import: the format, its version and its bounds", () => {
-  test("the import format has its own version; the WallPrint record version and limits are untouched", () => {
-    assert.equal(ASSESSOR_IMPORT_VERSION, "0.1");
-    assert.equal(WALLPRINT_VERSION, "0.1");
+  test("the import format has its own version; the WallPrint record version and limits are separate", () => {
+    assert.equal(ASSESSOR_IMPORT_VERSION, "0.1", "admission semantics moved WallPrint to 0.2; the serialization is the same, so the envelope version did not move");
+    assert.equal(WALLPRINT_VERSION, "0.2");
     assert.equal(ASSESSOR_IMPORT_MAX_INPUTS, WALLPRINT_LIMITS.externalAssessments, "a set that imports is always recordable");
     assert.deepEqual([...ASSESSOR_IMPORT_STATUSES], ["IMPORTED", "REFUSED"]);
   });
@@ -241,22 +241,25 @@ describe("assessor import: positive cases, recorded as stated", () => {
   });
 });
 
-describe("assessor import: the attribution rules are the builder's rules, row by row", () => {
+describe("assessor import: the attribution rules are the builder's rules, row by row, per WallPrint version", () => {
   const toBuilderPath = (p: string): string => p.replace(/^inputs\[(\d+)\]\.externalAssessment/, "assessments[$1]");
-  for (const c of ATTRIBUTION_CASES) {
-    test(c.name, () => {
-      const result = importExternalAssessments(c.assessments.map((a) => envelope(a)), context(c.bundle ?? golden()));
-      if (c.expected === "BUILT") {
-        const record = buildWallPrintSnapshot(baseInput({ ...(c.bundle === undefined ? {} : { bundle: c.bundle }), assessments: assessmentsOf(result) }));
-        assert.equal(validateWallPrintRecord(record).ok, true);
-        return;
-      }
-      const expected = c.expected.findings;
-      const onlySecrets = expected.every((f) => f.code === "SUSPECTED_SECRET");
-      const reason: AssessorImportRefusal = c.expected.error === "INVALID_INPUT" ? "INVALID_ENVELOPE" : onlySecrets ? "SUSPECTED_SECRET" : "ATTRIBUTION_REFUSED";
-      refused(result, reason);
-      if (result.status === "REFUSED") assert.deepEqual(result.findings.map((f) => ({ code: f.code, path: toBuilderPath(f.path) })), expected);
-    });
+  for (const version of ATTRIBUTION_VERSIONS) {
+    for (const c of ATTRIBUTION_CASES) {
+      test(`${c.name} [WallPrint ${version}]`, () => {
+        const result = importExternalAssessments(c.assessments.map((a) => envelope(a)), context(c.bundle ?? golden(), "a-identity", version));
+        const expectation = expectedUnder(c, version);
+        if (expectation === "BUILT") {
+          const record = buildWallPrintSnapshot(baseInput({ ...(c.bundle === undefined ? {} : { bundle: c.bundle }), assessments: assessmentsOf(result), wallprintVersion: version }));
+          assert.equal(validateWallPrintRecord(record).ok, true);
+          return;
+        }
+        const expected = expectation.findings;
+        const onlySecrets = expected.every((f) => f.code === "SUSPECTED_SECRET");
+        const reason: AssessorImportRefusal = expectation.error === "INVALID_INPUT" ? "INVALID_ENVELOPE" : onlySecrets ? "SUSPECTED_SECRET" : "ATTRIBUTION_REFUSED";
+        refused(result, reason);
+        if (result.status === "REFUSED") assert.deepEqual(result.findings.map((f) => ({ code: f.code, path: toBuilderPath(f.path) })), expected);
+      });
+    }
   }
 
   test("an import the importer admits is never refused by the builder for attribution; the builder re-applies every rule to the whole list", () => {
@@ -377,9 +380,15 @@ describe("assessor import: hostile serialized input is refused with a fixed reas
     const garbage = ["not json", Buffer.from([0xff])];
     refused(importExternalAssessments(garbage, context({ wwepVersion: "0.2", sources: [], observations: [], assertions: [], derivations: [] })), "INVALID_CONTEXT", "INVALID_BUNDLE", "context.bundle");
     refused(importExternalAssessments(garbage, context(golden(), "a-nobody")), "INVALID_CONTEXT", "UNKNOWN_FOCAL_ASSERTION", "context.focalAssertionId");
-    refused(importExternalAssessments(garbage, { bundle: golden(), focalAssertionId: 7 as never }), "INVALID_CONTEXT", "INVALID_ID");
+    refused(importExternalAssessments(garbage, { bundle: golden(), focalAssertionId: 7 as never, wallprintVersion: WALLPRINT_VERSION }), "INVALID_CONTEXT", "INVALID_ID");
     refused(importExternalAssessments(garbage, null as never), "INVALID_CONTEXT");
-    refused(importExternalAssessments(garbage, { bundle: JSON.parse('{"__proto__":{"x":1}}') as never, focalAssertionId: "a-identity" }), "INVALID_CONTEXT");
+    refused(importExternalAssessments(garbage, { bundle: JSON.parse('{"__proto__":{"x":1}}') as never, focalAssertionId: "a-identity", wallprintVersion: WALLPRINT_VERSION }), "INVALID_CONTEXT");
+    // The target WallPrint version is named by the caller: absent, mistyped or unknown, the context cannot be used and nothing is read.
+    refused(importExternalAssessments(garbage, { bundle: golden(), focalAssertionId: "a-identity" } as never), "INVALID_CONTEXT", "INVALID_TYPE", "context.wallprintVersion");
+    refused(importExternalAssessments(garbage, { bundle: golden(), focalAssertionId: "a-identity", wallprintVersion: 0.2 as never }), "INVALID_CONTEXT", "INVALID_TYPE", "context.wallprintVersion");
+    for (const bad of ["0.3", "1.0", "0.10", "00.1", "0.1 ", "", "latest"]) {
+      refused(importExternalAssessments(garbage, { bundle: golden(), focalAssertionId: "a-identity", wallprintVersion: bad as never }), "INVALID_CONTEXT", "UNSUPPORTED_VERSION", "context.wallprintVersion");
+    }
   });
 
   test("credential-shaped text is refused in every slot, and a refusal never echoes what it refused", () => {
@@ -615,7 +624,7 @@ describe("assessor import: end to end through the existing builder, validator, r
     const without = buildWallPrintSnapshot(baseInput({ assessments: [] }));
     assert.deepEqual(Object.keys(withImport), Object.keys(without));
     assert.deepEqual(Object.keys(withImport.assessments[0] ?? {}), Object.keys(without.assessments[0] ?? {}));
-    assert.equal(withImport.wallprintVersion, "0.1");
+    assert.equal(withImport.wallprintVersion, WALLPRINT_VERSION, "an import changes no record field and does not move the contract version");
   });
 });
 

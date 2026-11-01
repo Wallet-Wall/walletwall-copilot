@@ -221,11 +221,17 @@ describe("WallPrint hardening", () => {
     }
   });
 
-  test("serialization drift: the fixture record's digest is pinned; a change here means every committed WallPrint 0.1 stops verifying", () => {
-    // Pinned from a verified run. If this changes, bump WALLPRINT_VERSION rather than updating the constant.
-    const r = buildWallPrintSnapshot(baseInput());
-    assert.equal(r.digest, "e5041d3a1389b4bd6b17ead9c245362dab8724458442f10ac3db27bfcb45a588");
-    assert.equal(r.evidence.bundleDigest, "9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082");
+  test("serialization drift: the fixture record's digest is pinned per WallPrint version; a change here means every committed record of that version stops verifying", () => {
+    // Pinned from a verified run. If a 0.1 pin changes, historical records have been reinterpreted; bump WALLPRINT_VERSION instead of updating the constant.
+    const r01 = buildWallPrintSnapshot(baseInput({ wallprintVersion: "0.1" }));
+    assert.equal(r01.wallprintVersion, "0.1");
+    assert.equal(r01.digest, "e5041d3a1389b4bd6b17ead9c245362dab8724458442f10ac3db27bfcb45a588", "the digest of the 0.1 fixture record is the one pinned before 0.2 existed");
+    assert.equal(r01.evidence.bundleDigest, "9fa2a1047b79e4df0b297a8b2d1712eeb01bd2be4c230614efcc87f4426eb082");
+    const r02 = buildWallPrintSnapshot(baseInput());
+    assert.equal(r02.wallprintVersion, "0.2");
+    assert.equal(r02.evidence.bundleDigest, r01.evidence.bundleDigest, "the evidence is the same; only the contract version differs");
+    assert.notEqual(r02.digest, r01.digest, "the version is digest-covered, so a 0.2 record is a different record");
+    assert.equal(r02.digest, "2af76e73175ec11fa6a4dbce649d76274a7e5a452dbb18dcc677445396e8c96b");
   });
 
   test("the principle and every invariant are present in the vocabulary", () => {

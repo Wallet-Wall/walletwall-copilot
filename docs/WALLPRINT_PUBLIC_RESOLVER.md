@@ -28,6 +28,14 @@ lossless, and versioned by the reference's own grammar (`toHttpsUrl` / `parseHtt
 page's QR code encodes the HTTPS form so any camera opens it; the `walletwall:` reference is printed beside it as the
 same locator. The canvas's QR code still encodes the `walletwall:` text, because the plugin names no endpoint.
 
+**WallPrint versions.** A reference names the WallPrint version its record was committed under (`wallprint=0.1`,
+`wallprint=0.2`) and keeps it, and the page renders the record version it actually resolved. The store holds both without
+ambiguity: an artifact's path is `records/<id>/<digest>.json`, the digest covers the record's `wallprintVersion`, so a
+0.1 record and a 0.2 record are never the same file, and one id still carries one digest (a 0.2 record published under an id
+a 0.1 record holds is a conflict, never an overwrite). A published 0.1 artifact is immutable and is not touched by 0.2. The
+page proves bytes and does not re-run admission rules (a record is admitted by the publisher, under its own version's rules), so
+nothing in resolution depends on which admission rules a version carries.
+
 ## Canonical public domain
 
 Reconnaissance (2026-10-26): WalletWall runs exactly one Vercel project, `walletwall`, which serves `walletwall.org`
