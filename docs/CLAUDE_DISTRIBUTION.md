@@ -56,7 +56,7 @@ dist/claude-directory/
 
 The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp`: its source, bundled registries and authority policies) into `server/walletwall-mcp.mjs` as unminified ESM without source maps. Third-party packages stay outside that bundle: Node resolves them from the top-level `node_modules/`, which holds unmodified copies of files that `npm ci` installed from the lockfile, apart from one stub:
 
-- `@modelcontextprotocol/sdk`: `package.json`, `LICENSE` and only the SDK modules the server can load. They are read from the module graph of the shipped bundle (`scripts/bundle-config.ts`) and must be on its stdio-only allowlist, so no client, auth, SSE, Streamable HTTP or example module is shipped.
+- `@modelcontextprotocol/sdk`: `package.json`, `LICENSE` and only the SDK modules the server can load. They are read from the module graph of the multi-host plugin bundle (`bundleOptions` in `scripts/bundle-config.ts`: the same entry point, with every dependency bundled) and must be on that bundle's stdio-only allowlist, so no client, auth, SSE, Streamable HTTP or example module is shipped.
 - `dist/esm/validation/ajv-provider.js` in the vendored SDK is replaced by a stub that throws, so Ajv, which compiles schemas with `new Function`, is neither shipped nor loaded.
 - `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`).
 
@@ -65,7 +65,8 @@ The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp
 The builder fails closed if:
 
 - `WALLETWALL_SOURCE_SHA` is set but is not a full lowercase commit SHA, or, in a Git checkout, is not the checked-out `HEAD`;
-- the server's module graph reaches an MCP SDK module outside the stdio allowlist;
+- the server's module graph reaches an MCP SDK module outside the stdio allowlist, or does not reach the stdio server (`server/index.js`, `server/stdio.js`);
+- the vendored SDK holds anything other than `package.json`, `LICENSE`, the stub and allowlisted modules;
 - the artifact exceeds 512 files;
 - any non-image/font file exceeds 256 KiB;
 - the generated server does not start over stdio or does not list exactly the six WalletWall tools;

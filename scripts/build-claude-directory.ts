@@ -62,14 +62,16 @@ function copyRuntimeTree(source: string, destination: string, include: (relative
 }
 
 /**
- * The MCP SDK modules the server can load: the module graph of the shipped bundle (same entry point, Ajv replaced by the
- * stub), held to that bundle's stdio-only allowlist. Client, auth, SSE, Streamable HTTP and example modules stay out.
+ * The MCP SDK modules the server can load: the module graph of the multi-host plugin bundle (same entry point, Ajv
+ * replaced by the stub), held to that bundle's stdio-only allowlist. Client, auth, SSE, Streamable HTTP and example
+ * modules stay out.
  */
 async function reachableSdkModules(): Promise<Set<string>> {
   const { metafile } = await build(bundleOptions(root));
   const modules = Object.keys(metafile.inputs).flatMap((path) => /node_modules\/@modelcontextprotocol\/sdk\/dist\/esm\/(.+)$/.exec(path.replace(/\\/g, "/"))?.[1] ?? []);
   const unexpected = modules.filter((module) => !ALLOWED_SDK_MODULES.includes(module));
   if (unexpected.length > 0) throw new Error(`MCP SDK modules outside the stdio allowlist: ${unexpected.join(", ")}`);
+  for (const required of ["server/index.js", "server/stdio.js"]) if (!modules.includes(required)) throw new Error(`MCP SDK module graph lacks ${required}`);
   return new Set(modules.map((module) => `dist/esm/${module}`));
 }
 
@@ -109,6 +111,13 @@ function validatePackage(): { files: number; largest: string; largestBytes: numb
     }
   }
   if (oversized.length > 0) throw new Error(`Claude Directory non-media files exceed ${MAX_FILE_BYTES} bytes:\n${oversized.join("\n")}`);
+
+  const sdkDir = join(outDir, "node_modules", "@modelcontextprotocol", "sdk");
+  const allowedSdkModules = new Set(ALLOWED_SDK_MODULES.map((module) => `dist/esm/${module}`));
+  const strays = walk(sdkDir)
+    .map((path) => relative(sdkDir, path).replace(/\\/g, "/"))
+    .filter((rel) => rel !== "package.json" && !isLicense(rel) && rel !== AJV_PROVIDER && !allowedSdkModules.has(rel));
+  if (strays.length > 0) throw new Error(`vendored MCP SDK holds files outside the stdio allowlist:\n${strays.join("\n")}`);
 
   return { files: files.length, largest, largestBytes };
 }

@@ -26,7 +26,7 @@ Read `walletwall://spec/wwep` and `walletwall://policies/authority` when you nee
 
 ## WalletWall canvas (only on hosts that provide it)
 
-The WalletWall canvas (canvas id `walletwall-evidence-explorer`) ships with the GitHub Copilot plugin only. Other hosts, Claude Code and Cowork among them, do not have it. Follow this section only when your host gives you an `open_canvas` tool that can open `walletwall-evidence-explorer`. Otherwise do not call `open_canvas` and do not say that a panel was opened or shown: report the states, limitations and conflicts from the WalletWall tool results as text, and use the `walletwall://examples/` resources when the user wants a synthetic example.
+The WalletWall canvas (canvas id `walletwall-evidence-explorer`) ships with the GitHub Copilot plugin only. Other hosts, Claude Code and Cowork among them, do not have it. Follow this section only when your host gives you an `open_canvas` tool that can open `walletwall-evidence-explorer`. Otherwise do not call or offer `open_canvas`, and do not say that a panel was opened or shown: report the states, limitations and conflicts from the WalletWall tool results as text, and use the `walletwall://examples/` resources when the user wants a synthetic example.
 
 When the canvas is available and the user wants to **see** one evidence bundle (not just hear a summary), open it after you have called the WalletWall tools:
 

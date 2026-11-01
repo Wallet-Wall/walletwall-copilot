@@ -10,8 +10,8 @@ export const byPath = (a: { path: string }, b: { path: string }): number => (a.p
 
 /**
  * The source commit PROVENANCE.json records. An explicit WALLETWALL_SOURCE_SHA must be a full lowercase commit SHA and,
- * when the build runs in a Git checkout, the checked-out HEAD, so the manifest cannot name a commit the payload was not
- * built from. Without it the commit is GITHUB_SHA, else "working-tree".
+ * when the build runs in a Git checkout, the checked-out HEAD, so the pin cannot name another commit than the one checked
+ * out (uncommitted changes are not detected). Without it the commit is GITHUB_SHA, else "working-tree".
  */
 export function sourceCommit(env: Record<string, string | undefined>, checkedOut: () => string | undefined): string {
   const pinned = env["WALLETWALL_SOURCE_SHA"];
@@ -19,7 +19,12 @@ export function sourceCommit(env: Record<string, string | undefined>, checkedOut
   if (!/^[0-9a-f]{40}$/.test(pinned)) {
     throw new Error(`WALLETWALL_SOURCE_SHA must be a full 40-character lowercase hex commit SHA; got ${JSON.stringify(pinned)}`);
   }
-  const head = checkedOut();
+  let head: string | undefined;
+  try {
+    head = checkedOut();
+  } catch (error) {
+    throw new Error("cannot verify WALLETWALL_SOURCE_SHA against the checked-out commit", { cause: error });
+  }
   if (head !== undefined && head !== pinned) throw new Error(`WALLETWALL_SOURCE_SHA ${pinned} is not the checked-out commit ${head}`);
   return pinned;
 }
