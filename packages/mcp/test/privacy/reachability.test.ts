@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { build } from "esbuild";
 import { ALLOWED_SDK_MODULES, bundleOptions } from "../../../../scripts/bundle-config.ts";
+import { LITERAL_TRIPWIRE } from "../support/dynamic-code.ts";
 import { ENTRIES, ROOT } from "../support/harness.ts";
 import { createOwnedRun } from "../support/owned-temp.ts";
 import { MEASURABLE, inetSocketsOf } from "../support/sockets.ts";
@@ -66,7 +67,7 @@ describe("HTTP/server reachability: the shipped runtime is stdio only (PRIV-015,
     for (const p of real.filter((x) => x.includes("node_modules/"))) assert.ok(!deny.test(p), `denied module in the bundle graph: ${p}`);
   });
 
-  test("PRIV-015 the shipped bundle text carries no network, server, process-spawn or dynamic-code primitive", () => {
+  test("PRIV-015 the shipped bundle text carries no network, server or process-spawn primitive and no literal eval or Function-constructor text (a bounded tripwire; see privacy/dynamic-code.test.ts)", () => {
     const text = readFileSync(ENTRIES.bundle, "utf8");
     const specs = new Set([...text.matchAll(/\bfrom\s*["'](node:[^"']+)["']/g)].map((m) => m[1]));
     assert.deepEqual([...specs].sort(), ["node:crypto", "node:process"]);
@@ -78,7 +79,7 @@ describe("HTTP/server reachability: the shipped runtime is stdio only (PRIV-015,
       ["argument access", /process\.argv|process\.execArgv/],
       ["listen()", /\.listen\s*\(/],
       ["global network primitive", /\b(fetch|XMLHttpRequest|WebSocket|EventSource|Request|Response|Headers)\s*\(/],
-      ["eval or Function constructor", /\beval\s*\(|new\s+Function\b|\bFunction\s*\(/],
+      ["literal eval or Function-constructor text (bounded tripwire)", LITERAL_TRIPWIRE],
       ["transport class", /StreamableHTTP|SSEServerTransport|WebStandardStreamableHTTP|NodeStreamableHTTP/],
     ];
     for (const [label, re] of forbidden) assert.ok(!re.test(text), `shipped bundle contains ${label}: ${re.exec(text)?.[0]}`);

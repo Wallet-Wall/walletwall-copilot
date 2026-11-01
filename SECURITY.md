@@ -40,11 +40,31 @@ The previous lane could not say whether SDK HTTP/Ajv code in the bundle was reac
 
 - `packages/mcp/src` imports exactly three SDK modules: `server/index.js`, `server/stdio.js` and `types.js` (tested).
 - The esbuild module graph of the shipped bundle contains only an allow-list of SDK modules (`scripts/bundle-config.ts`); no `streamableHttp`, `sse`, `client`, `auth`, `express`, `hono`, `cors` or `ajv` module is in it (tested).
-- The SDK's default JSON Schema validator (Ajv, which compiles schemas with `new Function`) is replaced at build time by a stub that refuses to run. The bundle contains no `new Function`, `eval` or dynamic `import()` (tested).
+- The SDK's default JSON Schema validator (Ajv, which compiles schemas with `new Function`) is replaced at build time by a stub that refuses to run, so no Ajv module is in the bundle (tested). The bundle text contains no literal `eval(`, `new Function` or `Function(` and no dynamic `import()` (tested), but that is a bounded tripwire and not a claim that the bundle generates no code at runtime: see the next section.
 - The bundle text contains no `node:http`, `node:net` or other network/process/filesystem import, no `.listen(`, no `process.env`/`process.argv`, and no global network primitive (tested).
 - With the OS socket table read from outside the process (Windows `netstat`, Linux `/proc`), the server opens **zero** TCP/UDP sockets at startup, including when started with hostile environment variables (`PORT`, `MCP_TRANSPORT=streamable-http`, proxies, …) and hostile arguments (`--http --port 8128 --listen=…`). A positive control proves the reader sees sockets (tested).
 
 Remaining limits: the SDK's HTTP transports still exist in `node_modules` for development tooling and tests (the test client), but no WalletWall entry point imports them.
+
+## Dynamic code generation: what is and is not claimed
+
+Earlier text said that no `new Function` was present in the bundle. That was stronger than the evidence: the bundle includes Zod, and Zod builds functions at runtime. The claim is now limited to what is proved.
+
+**WalletWall-owned code.** `packages/mcp/src` has no `eval`, `new Function` or dynamic `import()`. ESLint (`no-eval`, `no-new-func`, both errors) and the `PRIV-003` source scan check this. Both are syntactic checks that an aliased constructor would evade.
+
+**Vendored Zod 4.6.7** (bundled into `plugin/server/walletwall-mcp.mjs` and therefore the MCPB; shipped as files in the Claude Directory package) reaches the `Function` constructor in three modules, each through `const F = Function`, which is why the literal tripwire never saw it:
+
+| Module | Purpose | State in WalletWall |
+| --- | --- | --- |
+| `zod/v4/core/util.js` | capability probe, `new F("")` | executed once at startup |
+| `zod/v4/core/doc.js` | code builder for the object-schema fast path | executed: one function per object schema, built on its first synchronous parse |
+| `zod/v4/core/compile.js` | ahead-of-time `z.compile()` | present in the bytes, imported into the bundle, never called by WalletWall |
+
+Reachability, measured by recording constructions through the global `Function` binding while the shipped bundle served every example, resource and tool: the bytes are present; the modules are imported; the path is reachable, because WalletWall's own schemas are object schemas parsed synchronously (registry load at startup, `safeParse` in every tool call); and it is exercised, at startup and per call. The generated source is derived from the key names of WalletWall's static schemas. A test sends caller-supplied values through the runtime and finds none in any generated function source. This is an observation for the tested inputs plus a reading of Zod's generator, not a formal proof.
+
+WalletWall does not depend on the generated code: with V8 told to forbid code generation from strings (`--disallow-code-generation-from-strings`) Zod falls back to its interpreted parser and every tested response is identical. Zod's documented `z.config({ jitless: true })` is not enabled. It would remove no code from any artifact, it only stops the execution, and in the Claude Directory package, where the SDK and Zod load as separate files before WalletWall's code runs, it takes effect only after the SDK's own schemas are built unless that package is restructured. Zod already degrades safely where code generation is blocked, so the change buys no further protection.
+
+What the checks prove: the `PRIV-015` literal tripwire (`eval(`, `new Function`, `Function(` in the bundle text) is clean and is a **bounded tripwire**, not proof that no dependency generates code. A separate inventory test fails if any other module in the bundle, or any other `.js` file of the Zod package that the Claude Directory package copies, reaches the `Function` constructor in one of the forms it enumerates (a `Function` bound to a name, a constructor call, `eval(`, `Reflect.construct`/`apply` on `Function`), so a Zod upgrade that adds such a site must be reviewed and this section updated. Neither check sees `(() => {}).constructor(...)`, `globalThis["Function"](...)`, `const g = globalThis; g.Function` or code loaded some other way; WalletWall makes no claim about them beyond the module allow-list and the absence of `require`, `vm` and dynamic `import()`.
 
 ## Runtime and local-owner trust boundary
 

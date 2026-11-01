@@ -3,7 +3,8 @@ import type { BuildOptions, Plugin } from "esbuild";
 /**
  * The SDK's default JSON Schema validator pulls Ajv (which compiles schemas with `new Function`) into the bundle. The
  * server never asks the SDK to validate a schema (it advertises no elicitation and validates tool input itself), so the
- * module is replaced with a stub that refuses to run. This removes dynamic code generation from the shipped artifact.
+ * module is replaced with a stub that refuses to run. This removes Ajv, and its dynamic code generation, from the shipped
+ * artifact. Zod's own function construction is not affected: see SECURITY.md, "Dynamic code generation".
  */
 const AJV_STUB = `export class AjvJsonSchemaValidator {
   getValidator() {

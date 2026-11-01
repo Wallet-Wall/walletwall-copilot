@@ -58,7 +58,7 @@ The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp
 
 - `@modelcontextprotocol/sdk`: `package.json`, `LICENSE` and only the SDK modules the server can load. They are read from the module graph of the multi-host plugin bundle (`bundleOptions` in `scripts/bundle-config.ts`: the same entry point, with every dependency bundled) and must be on that bundle's stdio-only allowlist, so no client, auth, SSE, Streamable HTTP or example module is shipped.
 - `dist/esm/validation/ajv-provider.js` in the vendored SDK is replaced by a stub that throws, so Ajv, which compiles schemas with `new Function`, is neither shipped nor loaded.
-- `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`).
+- `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`). Zod is not stubbed: it builds functions at runtime through an aliased `Function` in `v4/core/util.js`, `v4/core/doc.js` and `v4/core/compile.js` (`SECURITY.md`, "Dynamic code generation"). The server works unchanged where that is blocked.
 
 `PROVENANCE.json` records the source repository, the source commit and the size and SHA-512 digest of every other file. Entries are sorted by the UTF-16 code units of their paths, so the manifest does not depend on the build machine's locale. The source commit is `WALLETWALL_SOURCE_SHA` when that is set, else `GITHUB_SHA`, else `working-tree`. `.gitattributes` (`* -text`) turns off line-ending conversion, so a clone of the distribution keeps the recorded bytes even where Git is configured with `core.autocrlf=true`.
 
