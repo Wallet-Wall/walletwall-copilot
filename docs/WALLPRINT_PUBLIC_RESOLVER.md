@@ -165,7 +165,9 @@ cost per record is storage and bandwidth in the product deployment's existing pl
 The resolver recomputes no evidence state, authority, receipt or replay semantics, assessor independence or factual
 correctness: it prints the engine's recorded results as published. A digest match proves bytes, not who published them
 or whether any claim is true; there is no signature, no key, no DID, no chain anchor and no issuer attestation. There is
-no public write endpoint, no search endpoint and no assessor import. `UNAVAILABLE` is not invalid, `DIGEST_MISMATCH` is
+no public write endpoint, no search endpoint and no public or remote assessor import: the engine's local external
+assessor import (`spec/WALLPRINT.md`, "External assessor import") is a pure function that the resolver neither calls nor
+exposes. `UNAVAILABLE` is not invalid, `DIGEST_MISMATCH` is
 not forgery, `UNREACHABLE` says nothing about the record.
 
 ## Verification
