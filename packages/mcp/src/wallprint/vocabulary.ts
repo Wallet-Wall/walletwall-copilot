@@ -59,10 +59,10 @@ export type AssessorRole = (typeof ASSESSOR_ROLES)[number];
 export const WALLETWALL_ASSESSOR_ID = "walletwall-rules";
 
 /** Identity stems no external assessor may carry (how a stem is recognised is a version's admission rule: language.ts for 0.1, admission.ts for 0.2). */
-export const RESERVED_IDENTITY_STEMS = ["walletwall", "wallprint"] as const;
+export const RESERVED_IDENTITY_STEMS = Object.freeze(["walletwall", "wallprint"] as const);
 
 /** WalletWall's own policy and rule namespaces: no external policy id may sit in one (WWEP `wwap`, `wwdr`, `wwvr`). */
-export const RESERVED_POLICY_NAMESPACES = ["wwap", "wwdr", "wwvr"] as const;
+export const RESERVED_POLICY_NAMESPACES = Object.freeze(["wwap", "wwdr", "wwvr"] as const);
 
 export const EVIDENCE_ITEM_KINDS = ["SOURCE", "OBSERVATION", "ASSERTION", "DERIVATION"] as const;
 export type EvidenceItemKind = (typeof EVIDENCE_ITEM_KINDS)[number];

@@ -23,6 +23,9 @@ import { RESERVED_ASSURANCE_TERMS, RESERVED_IDENTITY_STEMS } from "./vocabulary.
 
 export { RESERVED_ASSURANCE_TERMS, RESERVED_IDENTITY_STEMS };
 
+/** The 0.1 identity stems, a literal of this rule: the frozen 0.1 contract does not read the vocabulary list, which a later edit could change. */
+const STEMS_V01: readonly string[] = Object.freeze(["walletwall", "wallprint"]);
+
 const TERM_MATCHERS: readonly { term: (typeof RESERVED_ASSURANCE_TERMS)[number]; re: RegExp }[] = RESERVED_ASSURANCE_TERMS.map((term) => ({
   term,
   re: term === "INVESTMENT-GRADE" ? /\binvestment[-_ ]grade\b/i : new RegExp(`\\b${term.toLowerCase()}\\b`, "i"),
@@ -53,7 +56,7 @@ export function isReservedIdentity(id: unknown): boolean {
     let run = "";
     for (let j = i; j < tokens.length; j++) {
       run += tokens[j];
-      if ((RESERVED_IDENTITY_STEMS as readonly string[]).includes(run)) return true;
+      if (STEMS_V01.includes(run)) return true;
       if (run.length > 10) break;
     }
   }

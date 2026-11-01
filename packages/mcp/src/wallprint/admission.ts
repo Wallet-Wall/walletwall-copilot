@@ -1,7 +1,6 @@
-import { ASSETS, EXCLUDED_ASSETS, allPolicies } from "../registry.ts";
 import { WallPrintError, finding, type Finding } from "./errors.ts";
 import { isReservedIdentity as isReservedIdentityV01, isReservedPolicyId as isReservedPolicyIdV01 } from "./language.ts";
-import { RESERVED_IDENTITY_STEMS, RESERVED_POLICY_NAMESPACES, WALLPRINT_VERSIONS, type AssessorRole, type WallPrintVersion } from "./vocabulary.ts";
+import { WALLPRINT_VERSIONS, type AssessorRole, type WallPrintVersion } from "./vocabulary.ts";
 
 /**
  * External-assessor ADMISSION, versioned.
@@ -95,8 +94,8 @@ export const identityWords = (s: string): string[] => foldIdentity(s).split(SEPA
 /** The words joined without separators: what two spellings of one identity share. */
 export const identitySkeleton = (s: string): string => identityWords(s).join("");
 
-const STEMS: readonly string[] = RESERVED_IDENTITY_STEMS;
-const NAMESPACES: readonly string[] = RESERVED_POLICY_NAMESPACES;
+const STEMS: readonly string[] = Object.freeze(["walletwall", "wallprint"]);
+const NAMESPACES: readonly string[] = Object.freeze(["wwap", "wwdr", "wwvr"]);
 const NAMESPACE_RE = new RegExp(`^(?:${NAMESPACES.join("|")})[0-9]*$`);
 
 /** Whole words from `from` that spell a stem and then only digits (`wallet-wall`, `wall.print.2`). Stops as soon as no stem can follow. */
@@ -136,24 +135,30 @@ export function inReservedPolicyNamespace(policy: string): boolean {
 }
 
 /**
- * The skeletons of every authority identity an external assessor may not wear under a role other than ISSUER: the
- * registry's deployment authorities, and the engine's authorities (`issuer-publication`, `canonical-chain-state`;
- * `walletwall-rules` is reserved as an identity already, and `none` names the absence of an authority, not an authority).
- * Derived from the engine's own registry and policies, so a registry that names a new authority protects it at once.
+ * The authority identities each version reserves, as literals frozen with the version. A rule table must not read a
+ * mutable source: if a version derived its reserved set from the live registry, adding a deployment authority to the
+ * registry would silently reinterpret every record already committed under that version (a valid `issuer-future`
+ * reviewer would become invalid the day the registry gained `issuer:future`). A registry change that adds an authority is
+ * therefore a conscious decision, pinned by `admission-versions.test.ts`, which compares these lists with the registry's
+ * and the engine's own authorities and fails when they differ: protect the new authority in the next WallPrint version.
  */
-function authoritySkeletons(): ReadonlySet<string> {
-  const ids = [...ASSETS, ...EXCLUDED_ASSETS].map((a) => a.authorityId);
-  for (const p of allPolicies()) if (p.authority.kind !== "NONE") ids.push(p.authority.authorityId);
-  return new Set(ids.filter((id) => !readsAsReservedIdentity(id)).map(identitySkeleton));
-}
-const AUTHORITY_SKELETONS = authoritySkeletons();
+const AUTHORITY_IDS_V01: readonly string[] = Object.freeze(["issuer:circle", "issuer:tether", "protocol:sky"]);
+/**
+ * 0.2: the registry's deployment authorities and the engine's (`issuer-publication`, `canonical-chain-state`). Not
+ * `walletwall-rules`, which is reserved as an identity already, and not `none`, which names the absence of an authority.
+ */
+const AUTHORITY_IDS_V02: readonly string[] = Object.freeze([...AUTHORITY_IDS_V01, "canonical-chain-state", "issuer-publication"]);
+const AUTHORITY_SKELETONS: ReadonlySet<string> = new Set(AUTHORITY_IDS_V02.map(identitySkeleton));
 
-/** The reserved authority identities as skeletons, for tests that pin the set. */
+/** The reserved authority identities, as written, for the tests that pin them against the registry and the engine. */
+export const reservedAuthorityIds = (version: WallPrintVersion): readonly string[] => (version === "0.1" ? AUTHORITY_IDS_V01 : AUTHORITY_IDS_V02);
+
+/** The reserved authority identities of 0.2 as skeletons, for tests that pin the set. */
 export const reservedAuthoritySkeletons = (): readonly string[] => [...AUTHORITY_SKELETONS].sort();
 
 // ─── the 0.1 rules (frozen, language.ts) ─────────────────────────────────────
 
-const REGISTRY_AUTHORITY_IDS_V01: ReadonlySet<string> = new Set([...ASSETS, ...EXCLUDED_ASSETS].map((a) => a.authorityId.toLowerCase()));
+const REGISTRY_AUTHORITY_IDS_V01: ReadonlySet<string> = new Set(AUTHORITY_IDS_V01.map((id) => id.toLowerCase()));
 
 // ─── the table ───────────────────────────────────────────────────────────────
 

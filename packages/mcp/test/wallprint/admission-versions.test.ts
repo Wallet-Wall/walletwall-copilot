@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { canonicalize } from "../../src/canonical.ts";
-import { ADMISSION_RULES, admissionRulesFor, foldIdentity, identitySkeleton, identityWords, inReservedPolicyNamespace, readsAsReservedIdentity, reservedAuthoritySkeletons } from "../../src/wallprint/admission.ts";
+import { ADMISSION_RULES, admissionRulesFor, foldIdentity, identitySkeleton, identityWords, inReservedPolicyNamespace, readsAsReservedIdentity, reservedAuthorityIds, reservedAuthoritySkeletons } from "../../src/wallprint/admission.ts";
+import { ASSETS, EXCLUDED_ASSETS, allPolicies, type Asset } from "../../src/registry.ts";
 import { diffWallPrints } from "../../src/wallprint/diff.ts";
 import { WallPrintError } from "../../src/wallprint/errors.ts";
 import { createWallPrintHistory } from "../../src/wallprint/history.ts";
@@ -59,8 +60,37 @@ describe("WallPrint versions and the admission table", () => {
     assert.deepEqual([...RESERVED_POLICY_NAMESPACES], ["wwap", "wwdr", "wwvr"]);
   });
 
-  test("the reserved authority identities are the registry's and the engine's, as skeletons; a registry change that moves this is a conscious one", () => {
+  test("the reserved authority identities are literals frozen with each version, and today they are exactly the registry's and the engine's: a registry change that moves this is a conscious one", () => {
     assert.deepEqual(reservedAuthoritySkeletons(), ["canonicalchainstate", "issuercircle", "issuerpublication", "issuertether", "protocolsky"]);
+    const registryIds = [...ASSETS, ...EXCLUDED_ASSETS].map((a) => a.authorityId);
+    const engineIds = allPolicies().filter((p) => p.authority.kind !== "NONE").map((p) => p.authority.authorityId);
+    assert.deepEqual([...new Set(registryIds)].sort(), [...reservedAuthorityIds("0.1")].sort(), "0.1 reserves exactly the registry's deployment authorities, as written when 0.1 was committed");
+    const live = [...new Set([...registryIds, ...engineIds])].filter((id) => !readsAsReservedIdentity(id)).sort();
+    assert.deepEqual(live, [...reservedAuthorityIds("0.2")].sort(), "0.2 reserves the registry's and the engine's authorities (walletwall-rules is reserved as an identity, none is no authority). If this fails the registry or the policies gained an authority: protect it in the next WallPrint version, do not edit this list");
+    assert.ok(Object.isFrozen(reservedAuthorityIds("0.1")) && Object.isFrozen(reservedAuthorityIds("0.2")));
+  });
+
+  test("a registry that gains an authority reinterprets no committed record: the rules read no mutable source", () => {
+    const supplied = reviewerAssessment({ assessor: "issuer:future", policy: "future-review" });
+    const before = buildWallPrintSnapshot(baseInput({ assessments: [supplied], wallprintVersion: "0.1" }));
+    const before02 = buildWallPrintSnapshot(baseInput({ assessments: [supplied], wallprintVersion: "0.2" }));
+    const template = ASSETS[0] as Asset;
+    (ASSETS as Asset[]).push({ ...template, authorityId: "issuer:future" });
+    try {
+      assert.equal(validateWallPrintRecord(before).ok, true, "a 0.1 record stays valid");
+      assert.equal(validateWallPrintRecord(before02).ok, true, "so does a 0.2 record: the new authority is protected by the next version, not retroactively by this one");
+      assert.equal(ADMISSION_RULES["0.1"].collidesWithAuthorityIdentity("issuer:future"), false);
+      assert.equal(ADMISSION_RULES["0.2"].collidesWithAuthorityIdentity("issuer-future"), false);
+    } finally {
+      (ASSETS as Asset[]).pop();
+    }
+    assert.equal(ASSETS.some((a) => a.authorityId === "issuer:future"), false);
+  });
+
+  test("the 0.1 stems and namespaces are literals of the 0.1 rule, not the vocabulary lists: editing a list cannot reinterpret 0.1", () => {
+    assert.ok(Object.isFrozen(RESERVED_IDENTITY_STEMS) && Object.isFrozen(RESERVED_POLICY_NAMESPACES));
+    assert.equal(isReservedIdentity("wallet-wall"), true);
+    assert.equal(isReservedPolicyId("wwap/x"), true);
   });
 
   test("an unsupported version is refused when building, as an input problem", () => {

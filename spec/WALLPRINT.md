@@ -192,7 +192,8 @@ nothing.
    deployment authority (`issuer:circle`, `issuer:tether`, `protocol:sky`) or of an engine authority
    (`canonical-chain-state`, `issuer-publication`; `walletwall-rules` is reserved by rule 1, and `none` names the absence of an
    authority, not an authority) is refused: `issuer-circle`, `issuer_circle`, `issuer.circle`, `ISSUER-CIRCLE` and
-   `issuercircle` are the registry authority under another role. Whole-skeleton equality only: `issuer:circle-labs`,
+   `issuercircle` are the registry authority under another role. The reserved authorities are a literal list frozen with the
+   version (the same three deployment authorities for 0.1, spelled exactly), not a read of the live registry. Whole-skeleton equality only: `issuer:circle-labs`,
    `circle` and `issuer:acme` are not the registry authority. An `ISSUER` must still be spelled exactly as the registry
    spells its authority (the spelling `issuer-circle` under `ISSUER` is `ISSUER_AUTHORITY_MISMATCH`). Role comes from the
    registry and the contract, never from a name that looks like an issuer's: `issuer-acme` is an ordinary name under any
@@ -633,10 +634,14 @@ UNREPLAYABLE != INCORRECT
   (`issuer:circle2`) remain admissible, and a word that begins with a stem is refused even when innocent (`wallprinters`).
   Closing more would need a lexicon or fuzzy matching, which WalletWall deliberately does not do, and would refuse legitimate
   names (`wallet-wallpaper`).
-- The reserved authority identities are derived from the engine's own registry and policies at load, so a registry that names a
-  new authority protects it immediately, and the same registry change alters what an unversioned reading of the rules would
-  admit. Every record pins its registry version and digest and replay refuses a different one (`MISSING_REGISTRY_VERSION`);
-  `admission-versions.test.ts` pins today's set so a registry change that moves it is a conscious one.
+- The reserved authority identities are literals frozen with each version (`AUTHORITY_IDS_V01`, `AUTHORITY_IDS_V02`), not
+  read from the live registry, so a registry that gains an authority reinterprets no committed record: a 0.1 or 0.2 record
+  with a reviewer named `issuer:future` stays valid the day the registry names that authority. The cost is that a new
+  registry authority is not protected until the next WallPrint version; `admission-versions.test.ts` compares each list
+  with the registry's and the engine's authorities and fails when they differ, so the decision is made on purpose. The
+  `ISSUER` check still asks the registry which authority attributes the focal deployment, because that is what an issuer
+  assessment is about; every record pins its registry version and digest, and replay refuses a different one
+  (`MISSING_REGISTRY_VERSION`).
 - The WallPrint version a record carries is not authenticated: nothing signs a record, so anyone who can present a record
   can label it 0.1. A 0.1 record is judged by 0.1's rules, which are the rules it was committed under; a consumer that wants
   the 0.2 rules requires `wallprintVersion` 0.2.
