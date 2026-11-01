@@ -176,8 +176,8 @@
     },
     {
       "path": "plugin/skills/walletwall-evidence/SKILL.md",
-      "sha512": "527a38d1dcae1bac3e160afd93f315db5e87bca7cc736d68773cfaa99170e7f142929efadc983b551d51b3fb134a9ebd835e5ca1cd7c256725dc951c95d9aefe",
-      "bytes": 6142
+      "sha512": "ef7c1763475939ecea7554550445678982c8b0654a7cd2d76a5e5d8186c4b19fc37c4ec621bd9869fe9ace6f5337fcf52ee5f87b43bc9baf2b2a17684447737e",
+      "bytes": 6586
     },
     {
       "path": "plugin/skills/walletwall-evidence-audit/SKILL.md",

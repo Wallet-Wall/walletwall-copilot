@@ -1,11 +1,13 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { basename, dirname, join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createOwnedRun } from "../packages/mcp/test/support/owned-temp.ts";
+import { ALLOWED_SDK_MODULES, bundleOptions } from "./bundle-config.ts";
+import { byPath, checkedOutCommit, sourceCommit } from "./claude-directory-provenance.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const check = process.argv.includes("--check");
@@ -27,6 +29,11 @@ const AJV_STUB = `export class AjvJsonSchemaValidator {
   }
 }
 `;
+const AJV_PROVIDER = "dist/esm/validation/ajv-provider.js";
+// A clone of the distribution must keep the exact bytes PROVENANCE.json records; core.autocrlf=true would otherwise
+// rewrite every text file to CRLF on checkout and fail the size and SHA-512 checks.
+const GITATTRIBUTES = "* -text\n";
+const isLicense = (rel: string): boolean => /^LICENSE(?:\.|$)/i.test(rel);
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -41,6 +48,7 @@ function copyStatic(): void {
   cpSync(join(root, "plugin", "skills"), join(outDir, "skills"), { recursive: true });
   cpSync(join(root, "LICENSE"), join(outDir, "LICENSE"));
   cpSync(join(root, "docs", "CLAUDE_DIRECTORY_README.md"), join(outDir, "README.md"));
+  writeFileSync(join(outDir, ".gitattributes"), GITATTRIBUTES);
 }
 
 function copyRuntimeTree(source: string, destination: string, include: (relativePath: string) => boolean): void {
@@ -53,33 +61,33 @@ function copyRuntimeTree(source: string, destination: string, include: (relative
   }
 }
 
-function vendorRuntimeDependencies(): void {
+/**
+ * The MCP SDK modules the server can load: the module graph of the shipped bundle (same entry point, Ajv replaced by the
+ * stub), held to that bundle's stdio-only allowlist. Client, auth, SSE, Streamable HTTP and example modules stay out.
+ */
+async function reachableSdkModules(): Promise<Set<string>> {
+  const { metafile } = await build(bundleOptions(root));
+  const modules = Object.keys(metafile.inputs).flatMap((path) => /node_modules\/@modelcontextprotocol\/sdk\/dist\/esm\/(.+)$/.exec(path.replace(/\\/g, "/"))?.[1] ?? []);
+  const unexpected = modules.filter((module) => !ALLOWED_SDK_MODULES.includes(module));
+  if (unexpected.length > 0) throw new Error(`MCP SDK modules outside the stdio allowlist: ${unexpected.join(", ")}`);
+  return new Set(modules.map((module) => `dist/esm/${module}`));
+}
+
+function vendorRuntimeDependencies(sdkModules: ReadonlySet<string>): void {
   const sdkSource = join(root, "node_modules", "@modelcontextprotocol", "sdk");
   const sdkTarget = join(outDir, "node_modules", "@modelcontextprotocol", "sdk");
-  copyRuntimeTree(
-    sdkSource,
-    sdkTarget,
-    (rel) => rel === "package.json" || /^LICENSE(?:\.|$)/i.test(basename(rel)) || (rel.startsWith("dist/esm/") && rel.endsWith(".js")),
-  );
-  const ajvProvider = join(sdkTarget, "dist", "esm", "validation", "ajv-provider.js");
+  copyRuntimeTree(sdkSource, sdkTarget, (rel) => rel === "package.json" || isLicense(rel) || rel === AJV_PROVIDER || sdkModules.has(rel));
+  const ajvProvider = join(sdkTarget, ...AJV_PROVIDER.split("/"));
   if (!statSync(ajvProvider).isFile()) throw new Error("vendored MCP SDK is missing validation/ajv-provider.js");
   writeFileSync(ajvProvider, AJV_STUB);
 
   const zodSource = join(root, "node_modules", "zod");
   const zodTarget = join(outDir, "node_modules", "zod");
-  copyRuntimeTree(
-    zodSource,
-    zodTarget,
-    (rel) => rel === "package.json" || /^LICENSE(?:\.|$)/i.test(basename(rel)) || rel.endsWith(".js"),
-  );
+  copyRuntimeTree(zodSource, zodTarget, (rel) => rel === "package.json" || isLicense(rel) || rel.endsWith(".js"));
 
   const zodToJsonSource = join(root, "node_modules", "zod-to-json-schema");
   const zodToJsonTarget = join(outDir, "node_modules", "zod-to-json-schema");
-  copyRuntimeTree(
-    zodToJsonSource,
-    zodToJsonTarget,
-    (rel) => rel === "package.json" || /^LICENSE(?:\.|$)/i.test(basename(rel)) || rel.endsWith(".js") || rel.endsWith(".mjs"),
-  );
+  copyRuntimeTree(zodToJsonSource, zodToJsonTarget, (rel) => rel === "package.json" || isLicense(rel) || rel.endsWith(".js") || rel.endsWith(".mjs"));
 }
 
 function validatePackage(): { files: number; largest: string; largestBytes: number } {
@@ -132,13 +140,15 @@ async function smokeArtifact(): Promise<void> {
 }
 
 try {
+  const commit = sourceCommit(process.env, () => checkedOutCommit(root));
   if (!check) {
     if (existsSync(outDir)) throw new Error("dist/claude-directory already exists; remove that generated output explicitly before rebuilding");
     mkdirSync(outDir, { recursive: true });
   }
 
   copyStatic();
-  vendorRuntimeDependencies();
+  const sdkModules = await reachableSdkModules();
+  vendorRuntimeDependencies(sdkModules);
 
   const result = await build({
     absWorkingDir: root,
@@ -156,23 +166,22 @@ try {
     logLevel: "warning",
   });
 
-  const sourceCommit = process.env.WALLETWALL_SOURCE_SHA ?? process.env.GITHUB_SHA ?? "working-tree";
   const files = walk(outDir)
     .map((path) => ({
       path: relative(outDir, path).replace(/\\/g, "/"),
       bytes: statSync(path).size,
       sha512: createHash("sha512").update(readFileSync(path)).digest("hex"),
     }))
-    .sort((a, b) => a.path.localeCompare(b.path));
+    .sort(byPath);
   writeFileSync(
     join(outDir, "PROVENANCE.json"),
-    `${JSON.stringify({ schemaVersion: "1", sourceRepository: "Wallet-Wall/walletwall-copilot", sourceCommit, files }, null, 2)}\n`,
+    `${JSON.stringify({ schemaVersion: "1", sourceRepository: "Wallet-Wall/walletwall-copilot", sourceCommit: commit, files }, null, 2)}\n`,
   );
 
   const summary = validatePackage();
   await smokeArtifact();
   console.log(`Claude Directory package: ${summary.files} files; largest ${summary.largest} ${summary.largestBytes} bytes`);
-  console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
+  console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; vendored MCP SDK modules: ${sdkModules.size} + Ajv stub; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
 } finally {
   ownedRun?.dispose();
 }

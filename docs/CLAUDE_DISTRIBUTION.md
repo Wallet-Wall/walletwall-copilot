@@ -36,28 +36,39 @@ Repository tests fail if those relative server paths diverge.
 dist/claude-directory/
 ├── .claude-plugin/
 │   └── plugin.json
+├── .gitattributes
 ├── .mcp.json
 ├── LICENSE
-├── README.md
 ├── PROVENANCE.json
+├── README.md
+├── node_modules/
+│   ├── @modelcontextprotocol/sdk/
+│   ├── zod/
+│   └── zod-to-json-schema/
 ├── server/
-│   ├── walletwall-mcp.mjs
-│   ├── modules/
-│   ├── vendor/
-│   └── chunks/
+│   └── walletwall-mcp.mjs
 └── skills/
-    ├── walletwall-evidence/
-    ├── walletwall-evidence-audit/
+    ├── vault-readiness/
     ├── walletwall-authority/
-    └── vault-readiness/
+    ├── walletwall-evidence/
+    └── walletwall-evidence-audit/
 ```
 
-The Directory artifact is generated from the same WalletWall source but is deliberately split into readable ESM modules. This keeps the Claude review surface inspectable and prevents a single large bundled file from becoming the Directory security-review boundary.
+The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp`: its source, bundled registries and authority policies) into `server/walletwall-mcp.mjs` as unminified ESM without source maps. Third-party packages stay outside that bundle: Node resolves them from the top-level `node_modules/`, which holds unmodified copies of files that `npm ci` installed from the lockfile, apart from one stub:
+
+- `@modelcontextprotocol/sdk`: `package.json`, `LICENSE` and only the SDK modules the server can load. They are read from the module graph of the shipped bundle (`scripts/bundle-config.ts`) and must be on its stdio-only allowlist, so no client, auth, SSE, Streamable HTTP or example module is shipped.
+- `dist/esm/validation/ajv-provider.js` in the vendored SDK is replaced by a stub that throws, so Ajv, which compiles schemas with `new Function`, is neither shipped nor loaded.
+- `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`).
+
+`PROVENANCE.json` records the source repository, the source commit and the size and SHA-512 digest of every other file. Entries are sorted by the UTF-16 code units of their paths, so the manifest does not depend on the build machine's locale. The source commit is `WALLETWALL_SOURCE_SHA` when that is set, else `GITHUB_SHA`, else `working-tree`. `.gitattributes` (`* -text`) turns off line-ending conversion, so a clone of the distribution keeps the recorded bytes even where Git is configured with `core.autocrlf=true`.
 
 The builder fails closed if:
 
+- `WALLETWALL_SOURCE_SHA` is set but is not a full lowercase commit SHA, or, in a Git checkout, is not the checked-out `HEAD`;
+- the server's module graph reaches an MCP SDK module outside the stdio allowlist;
 - the artifact exceeds 512 files;
 - any non-image/font file exceeds 256 KiB;
+- the generated server does not start over stdio or does not list exactly the six WalletWall tools;
 - the build itself cannot resolve the approved local MCP runtime dependencies.
 
 `dist/` is generated output and is not committed to this source repository. The dedicated Claude distribution repository should contain only a reviewed generated artifact, not a hand-maintained fork.
@@ -142,6 +153,8 @@ Record the Claude host version, Node version, reviewed source commit SHA, genera
 The intended public submission repository is `Wallet-Wall/walletwall-claude`. It is a distribution repository, not an independent source of truth.
 
 Its root should be replaced atomically from one reviewed `dist/claude-directory/` build. `PROVENANCE.json` records the WalletWall source repository and source commit used to produce the package. Changes to evidence semantics, readiness rules, registries, or MCP behavior must originate in `walletwall-copilot` and pass its conformance/security gates before being propagated.
+
+That repository's CI allows only a fixed set of root entries. A generator change that adds a root entry needs the same entry allowed there, in the pull request that moves the pin.
 
 ## Future hosted Guardian
 
