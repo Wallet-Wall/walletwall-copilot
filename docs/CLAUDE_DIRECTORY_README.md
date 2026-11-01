@@ -133,7 +133,17 @@ Skills guide tool use and interpretation. They do not create evidence or overrid
 
 This repository is a generated distribution surface, not a second WalletWall implementation.
 
-`PROVENANCE.json` records the exact `Wallet-Wall/walletwall-copilot` source commit and SHA-512 digest for every generated payload file. Repository CI independently verifies the provenance manifest, package bounds, local MCP startup, exact six-tool surface, and read-only execution boundary.
+The payload is every tracked file outside `.github/`, which holds this repository's own workflows, source pin and policies. `PROVENANCE.json` records the `Wallet-Wall/walletwall-copilot` source commit the payload was generated from, and the size and SHA-512 digest of every other payload file. `node_modules/` holds unmodified copies of files from the server's three runtime dependencies as installed from npm: the MCP SDK modules the server loads, and the JavaScript files of `zod` and `zod-to-json-schema`. The one exception is the SDK's `dist/esm/validation/ajv-provider.js`, which is replaced by a stub that disables the SDK's JSON Schema validation. `.gitattributes` turns off line-ending conversion, so a clone keeps the recorded bytes even where Git is configured with `core.autocrlf=true`.
+
+This repository's CI checks:
+
+- **Consistency:** every manifested file is present with its recorded size and SHA-512 digest, every tracked payload file is manifested, and `PROVENANCE.json` names the commit pinned in `.github/source-pin.json`, lists at most 512 files and lists no non-media file over 256 KiB.
+- **Shape:** a fixed set of root entries and exactly the four skills, regular non-executable files, a metadata-only `.claude-plugin/plugin.json`, one local `walletwall` server in `.mcp.json` with no environment variables or remote URL, and the Ajv stub in place.
+- **Origin:** it regenerates the package from the pinned source commit, which must be reachable from the source repository's `main` branch, and requires the committed payload to equal that output file for file and byte for byte.
+- **Startup:** the committed server starts over stdio and lists exactly the six tools above.
+- **Drift:** a text scan of `server/`, `skills/` and `.mcp.json` rejects a short list of transaction signing, broadcast and transfer call names.
+
+The text scan is a tripwire, not a proof of the read-only boundary, and none of these checks evaluates evidence. WalletWall's evidence semantics and its offline, read-only runtime behavior are tested in the source repository.
 
 Changes to WalletWall evidence semantics, readiness rules, registries, or MCP behavior originate in [`Wallet-Wall/walletwall-copilot`](https://github.com/Wallet-Wall/walletwall-copilot) and are propagated here only after source validation.
 
