@@ -12,7 +12,7 @@ The plugin ships one committed file, `plugin/server/walletwall-mcp.mjs`, built f
 | `zod` | 4.6.7 | MIT |
 | `zod-to-json-schema` | 3.25.2 | ISC |
 
-The bundle imports only `node:crypto` and `node:process`. Nothing is installed or downloaded when the plugin runs: there is no `node_modules` in the plugin, no auto-update and no dynamic `import()` or `eval`.
+The bundle imports only `node:crypto` and `node:process`. Nothing is installed or downloaded when the plugin runs: there is no `node_modules` in the plugin, no auto-update and no dynamic `import()` or literal `eval`. The bundled Zod does build functions at runtime (`SECURITY.md`, "Dynamic code generation").
 
 ## Inventory
 
@@ -35,9 +35,10 @@ The bundle imports only `node:crypto` and `node:process`. Nothing is installed o
 | No unexpected registry | scan of `package-lock.json` (all `resolved` hosts are `registry.npmjs.org`) |
 | No unsafe install script in what users receive | the plugin has no install step; the only install script in the tree is `esbuild` (dev) |
 | No telemetry package | `privacy/static.test.ts` scans the production lockfile for telemetry, crash and fingerprint packages |
-| No dynamic download, no auto-update | the shipped bundle contains no network primitive, `require`, `eval`, `new Function` or `import()` (`PRIV-015`) |
+| No dynamic download, no auto-update | the shipped bundle text has no network primitive, `require`, `import()` or literal `eval`/`new Function` (`PRIV-015`, a bounded tripwire) |
 | No hidden HTTP transport | zero sockets at startup, read from the OS socket table (`PRIV-016`); no `streamableHttp`, `sse`, `client`, `auth`, `express`, `hono`, `cors` or `ajv` module in the bundle graph (`PRIV-015`) |
-| Removed Ajv dynamic-code path stays absent | the SDK's Ajv validator is replaced at build time by a stub that refuses to run; the bundle contains no `new Function` (`scripts/bundle-config.ts`, `PRIV-015`) |
+| Removed Ajv dynamic-code path stays absent | the SDK's Ajv validator is replaced at build time by a stub that refuses to run, so no Ajv module is in the bundle (`scripts/bundle-config.ts`, `PRIV-015`) |
+| Remaining dynamic code is inventoried | vendored Zod 4.6.7 builds functions through an aliased `Function` in exactly three modules; an inventory test fails if any other module in the bundle, or any other Zod file the Claude Directory package copies, reaches the `Function` constructor in one of its enumerated lexical forms (`privacy/dynamic-code.test.ts`, `PRIV-015`; details in `SECURITY.md`) |
 | Known vulnerabilities reviewed | `npm audit --omit=dev --audit-level=high` runs in CI (`npm run audit:prod`). On the audited commit `npm audit` reports 0 vulnerabilities for the production tree and for the full tree |
 | Registry signatures and provenance | `npm audit signatures` on the audited commit: all 188 installed packages have verified registry signatures, 47 have verified provenance attestations |
 
