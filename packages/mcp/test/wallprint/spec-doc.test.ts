@@ -4,7 +4,7 @@ import { describe, test } from "node:test";
 import { SUPPORT_STATES } from "../../src/schemas.ts";
 import { ASSESSOR_IMPORT_INVARIANTS, ASSESSOR_IMPORT_MAX_BYTES, ASSESSOR_IMPORT_MAX_INPUTS, ASSESSOR_IMPORT_REFUSALS, ASSESSOR_IMPORT_VERSION } from "../../src/wallprint/assessor-import.ts";
 import { REFERENCE_IDENTIFIES, REFERENCE_OUTCOMES, REFERENCE_TARGETS } from "../../src/wallprint/reference.ts";
-import { LIFECYCLE_STATES, WALLPRINT_INVARIANTS, WALLPRINT_PRINCIPLE, WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
+import { LIFECYCLE_STATES, RESERVED_IDENTITY_STEMS, RESERVED_POLICY_NAMESPACES, WALLPRINT_INVARIANTS, WALLPRINT_PRINCIPLE, WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
 import { ROOT } from "../support/harness.ts";
 
 /**
@@ -94,6 +94,22 @@ describe("WallPrint specification document", () => {
     for (const name of ["assessor-import.ts", "strict-json.ts", "assessor-import.test.ts", "assessor-import-mutation.test.ts", "externalAssessmentAdmissionFindings"]) assert.ok(doc.includes(name), name);
     const resolver = readFileSync(`${ROOT}docs/WALLPRINT_PUBLIC_RESOLVER.md`, "utf8").replace(/\s+/g, " ");
     assert.ok(/no public or remote assessor import/.test(resolver) && !/no search endpoint and no assessor import/.test(resolver));
+  });
+
+  test("states the versioned admission rules: both versions, the model, the three questions, what never changes, and the pinned tests that hold them", () => {
+    assert.ok(doc.includes("## Admission rules by version"));
+    assert.ok(flat.includes(`\`WALLPRINT_VERSION\` is \`${WALLPRINT_VERSION}\``) && flat.includes('`WALLPRINT_VERSIONS` is `["0.1", "0.2"]`'));
+    for (const s of ["ASCII `A-Z` to `a-z`", "A run of separators is one separator", "skeleton", "`ISSUER_AUTHORITY_MISMATCH`", "strictly stricter than 0.1", "never rewrites what the assessor supplied", "is not authenticated", "Spelling variants of one name (`reviewer-y`, `reviewer.y`) remain different assessors"]) {
+      assert.ok(flat.includes(s), s);
+    }
+    for (const stem of RESERVED_IDENTITY_STEMS) assert.ok(flat.includes(`\`${stem}\``), stem);
+    for (const ns of RESERVED_POLICY_NAMESPACES) assert.ok(flat.includes(`\`${ns}\``), ns);
+    for (const inv of ["assessor agreement != independent corroboration", "assessor count != authority", "assessor identity != issuer identity", "attribution != authentication"]) assert.ok(doc.includes(inv), inv);
+    for (const p of ["packages/mcp/src/wallprint/admission.ts", "packages/mcp/test/wallprint/admission-versions.test.ts", "packages/mcp/test/wallprint/admission-parity.test.ts", "packages/mcp/test/wallprint/admission-characterization.test.ts", "packages/mcp/test/wallprint/fixtures/wallprint-0.1-admission-gaps.json"]) {
+      assert.ok(existsSync(`${ROOT}${p}`), p);
+    }
+    for (const name of ["admission.ts", "admission-versions.test.ts", "admission-parity.test.ts", "admission-characterization.test.ts", "externalAssessmentFindings", "wallprint-0.1-admission-gaps.json"]) assert.ok(doc.includes(name), name);
+    assert.ok(/no signature|no signature system|signing/.test(flat) && /nothing signs a record/.test(flat), "signing and authentication stay out of scope");
   });
 
   test("the modules and tests it names exist", () => {

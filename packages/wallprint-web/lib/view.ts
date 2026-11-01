@@ -66,10 +66,11 @@ export type PublicView =
 
 export const PUBLIC_SOURCE = "public resolver";
 
-function links(recordId: string, wallprintVersion: string, publications: readonly { digest: string; publishedAt: string }[]): PublishedLink[] {
+/** One link per publication, each carrying the WallPrint version that publication was committed under: never the version a caller's reference happened to state. */
+function links(recordId: string, publications: readonly { digest: string; wallprintVersion: string; publishedAt: string }[]): PublishedLink[] {
   const out: PublishedLink[] = [];
   for (const p of publications) {
-    const ref = tryReference({ recordId, digest: p.digest, wallprintVersion });
+    const ref = tryReference({ recordId, digest: p.digest, wallprintVersion: p.wallprintVersion });
     if (ref !== null) out.push({ digest: p.digest, publishedAt: p.publishedAt, path: toResolverPath(ref) });
   }
   return out;
@@ -103,7 +104,7 @@ export function publicView(r: PublicResolution, resolverBase: unknown, vocabular
   const summary = (resolution: PublicReferenceSummary["resolution"]): PublicReferenceSummary => ({ outcome: r.outcome, problem: null, recordId: ref.recordId, digest: ref.digest, target: ref.target, wallprintVersion: ref.wallprintVersion, resolution });
   if (r.outcome === "UNAVAILABLE") return { status: "reference", source: PUBLIC_SOURCE, wallprints: [], vocabulary, reference: summary({ outcome: "UNAVAILABLE", recordId: ref.recordId }), publication: block({ recordId: ref.recordId, digest: ref.digest }) };
   if (r.outcome === "UNREACHABLE") return { status: "reference", source: PUBLIC_SOURCE, wallprints: [], vocabulary, reference: summary(null), publication: block({ recordId: ref.recordId, digest: ref.digest, reason: r.reason }) };
-  const published = links(ref.recordId, ref.wallprintVersion, r.standing.publications);
+  const published = links(ref.recordId, r.standing.publications);
   if (r.outcome === "NOT_COMPARED") {
     return {
       status: "reference",
@@ -147,7 +148,8 @@ export function publicView(r: PublicResolution, resolverBase: unknown, vocabular
     fixture: ref.recordId,
     disclosure: { title: a.title, focus: ref.recordId, scenario: a.construction, registry: a.registry, records: [entry] },
     vocabulary,
-    reference: summary({ outcome: "RESOLVED", recordId: ref.recordId, digest: ref.digest, target: ref.target }),
+    // What was resolved, not what was asked: the digest identifies the record and covers its WallPrint version, so the page prints the version of the record it proved.
+    reference: { ...summary({ outcome: "RESOLVED", recordId: ref.recordId, digest: ref.digest, target: ref.target }), wallprintVersion: a.wallprintVersion },
     focus: ref.recordId,
     target: ref.target,
     publication: block({ recordId: ref.recordId, digest: ref.digest, publishedAt, construction: a.construction, published, standing: r.standing }),
