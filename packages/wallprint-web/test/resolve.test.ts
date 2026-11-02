@@ -210,7 +210,7 @@ describe("MALFORMED_REFERENCE and UNSUPPORTED_VERSION: the store is never asked"
       [`${good}&target=body`, "MALFORMED_REFERENCE", "target"],
       [`${good}&digest=${first.record.digest}`, "MALFORMED_REFERENCE", "query"],
       [good.replace("reference=0.1", "reference=0.2"), "UNSUPPORTED_VERSION", "reference"],
-      [good.replace("wallprint=0.1", "wallprint=0.2"), "UNSUPPORTED_VERSION", "wallprint"],
+      [good.replace("wallprint=0.1", "wallprint=0.3"), "UNSUPPORTED_VERSION", "wallprint"],
       [`${good}${"&target=record".repeat(30)}`, "MALFORMED_REFERENCE", "length"],
     ];
     for (const [path, outcome, problem] of cases) {

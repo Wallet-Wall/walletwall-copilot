@@ -12,14 +12,19 @@ import { RESERVED_ASSURANCE_TERMS, RESERVED_IDENTITY_STEMS } from "./vocabulary.
  *
  * Polarity is not parsed: "not verified" is refused like "verified". WalletWall says it in codes.
  *
- * Identity: no external assessor may read as WalletWall or WallPrint (stem runs across `.`, `_`, `-` and `:`
- * separators, so `wallet-wall` and `wall.print` are reserved while `firewall-print-shop` is not), and no external
- * policy may sit in a WalletWall policy or rule namespace (`wwap/`, `wwdr.`, `wwvr.` in any case or separator).
+ * Identity (the WallPrint 0.1 admission rules, frozen: a record committed under 0.1 is judged by exactly these, for ever;
+ * 0.2's stricter rules are admission.ts, selected by the record's own `wallprintVersion`): no external assessor may read
+ * as WalletWall or WallPrint (stem runs across `.`, `_`, `-` and `:` separators, so `wallet-wall` and `wall.print` are
+ * reserved while `firewall-print-shop` is not), and no external policy may sit in a WalletWall policy or rule namespace
+ * (`wwap/`, `wwdr.`, `wwvr.` in any case or separator).
  *
  * Credential-shaped text is refused in every slot, attributed or not.
  */
 
 export { RESERVED_ASSURANCE_TERMS, RESERVED_IDENTITY_STEMS };
+
+/** The 0.1 identity stems, a literal of this rule: the frozen 0.1 contract does not read the vocabulary list, which a later edit could change. */
+const STEMS_V01: readonly string[] = Object.freeze(["walletwall", "wallprint"]);
 
 const TERM_MATCHERS: readonly { term: (typeof RESERVED_ASSURANCE_TERMS)[number]; re: RegExp }[] = RESERVED_ASSURANCE_TERMS.map((term) => ({
   term,
@@ -40,9 +45,9 @@ export function isReservedAssuranceCode(code: unknown): boolean {
 }
 
 /**
- * True when an identifier reads as WalletWall or WallPrint: some run of consecutive separator-delimited tokens,
- * joined, equals a reserved stem (`wallet-wall`, `the.walletwall.desk`, `WallPrint:audit`), while a stem buried inside
- * a longer token (`firewall-print-shop`, `stonewall`) does not count.
+ * WallPrint 0.1 identity rule (frozen). True when an identifier reads as WalletWall or WallPrint: some run of consecutive
+ * separator-delimited tokens, joined, equals a reserved stem (`wallet-wall`, `the.walletwall.desk`, `WallPrint:audit`),
+ * while a stem buried inside a longer token (`firewall-print-shop`, `stonewall`) does not count.
  */
 export function isReservedIdentity(id: unknown): boolean {
   if (typeof id !== "string") return false;
@@ -51,16 +56,17 @@ export function isReservedIdentity(id: unknown): boolean {
     let run = "";
     for (let j = i; j < tokens.length; j++) {
       run += tokens[j];
-      if ((RESERVED_IDENTITY_STEMS as readonly string[]).includes(run)) return true;
+      if (STEMS_V01.includes(run)) return true;
       if (run.length > 10) break;
     }
   }
   return false;
 }
 
+/** WallPrint 0.1 policy-namespace rule (frozen): the literal prefix `wwap`, `wwdr` or `wwvr` followed by a separator or the end, in any letter case. */
 const RESERVED_POLICY_RE = /^ww(?:ap|dr|vr)(?:[/._:-]|$)/i;
 
-/** True when a policy id sits in a WalletWall policy or rule namespace, in any case or separator spelling. */
+/** True when a policy id sits in a WalletWall policy or rule namespace under the 0.1 rule. */
 export function isReservedPolicyId(policy: unknown): boolean {
   return typeof policy === "string" && RESERVED_POLICY_RE.test(policy);
 }

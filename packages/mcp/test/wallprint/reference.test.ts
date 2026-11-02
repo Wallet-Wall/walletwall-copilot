@@ -26,7 +26,7 @@ import {
   tryReference,
   type FoundRecord,
 } from "../../src/wallprint/reference.ts";
-import { HEX64_RE, RECORD_ID_RE, WALLPRINT_VERSION } from "../../src/wallprint/vocabulary.ts";
+import { HEX64_RE, RECORD_ID_RE, WALLPRINT_VERSIONS } from "../../src/wallprint/vocabulary.ts";
 import { baseInput, COMMIT_AT, DISCLOSE_AT, issuerAssessment, LATER2_AT, LATER_AT, LATER_SNAPSHOT_AT } from "./support.ts";
 
 /**
@@ -35,7 +35,7 @@ import { baseInput, COMMIT_AT, DISCLOSE_AT, issuerAssessment, LATER2_AT, LATER_A
  * reference to a corrected, superseded or withdrawn record stays a valid reference to that record.
  */
 
-const record = buildWallPrintSnapshot(baseInput());
+const record = buildWallPrintSnapshot(baseInput({ wallprintVersion: "0.1" }));
 const facts = (r: WallPrintRecord): FoundRecord => ({ recordId: r.id, embeddedDigest: r.digest, computedDigest: verifyWallPrintDigest(r).computedDigest });
 const text = (over: Partial<Record<"id" | "reference" | "wallprint" | "digest" | "target", string>> = {}, withTarget = false): string =>
   `walletwall://wallprint/${over.id ?? record.id}?reference=${over.reference ?? "0.1"}&wallprint=${over.wallprint ?? "0.1"}&digest=${over.digest ?? record.digest}${withTarget || over.target !== undefined ? `&target=${over.target ?? "receipt"}` : ""}`;
@@ -43,10 +43,10 @@ const text = (over: Partial<Record<"id" | "reference" | "wallprint" | "digest" |
 describe("the portable reference: a locator, deterministic in both forms", () => {
   test("the record's reference carries exactly its id, digest and WallPrint version, a version of its own and no target; the shapes are the record's own", () => {
     const ref = referenceOf(record);
-    assert.deepEqual(ref, { version: "0.1", wallprintVersion: WALLPRINT_VERSION, recordId: record.id, digest: record.digest, target: null });
+    assert.deepEqual(ref, { version: "0.1", wallprintVersion: "0.1", recordId: record.id, digest: record.digest, target: null });
     assert.ok(Object.isFrozen(ref));
     assert.equal(REFERENCE_VERSION, "0.1");
-    assert.deepEqual([...SUPPORTED_WALLPRINT_VERSIONS], [WALLPRINT_VERSION]);
+    assert.deepEqual([...SUPPORTED_WALLPRINT_VERSIONS], [...WALLPRINT_VERSIONS], "a reference can name any version a record can carry");
     assert.equal(RECORD_ID_RE, RECORD_RECORD_ID_RE, "one definition of the record id shape");
     assert.equal(HEX64_RE, RECORD_HEX64_RE, "one definition of the digest shape");
     for (const k of Object.keys(ref)) assert.doesNotMatch(k, /true|truth|verified|valid|safe|certified|trust|status|signature|issuer|locator|url/i, k);
@@ -100,7 +100,7 @@ describe("the portable reference: a locator, deterministic in both forms", () =>
   test("tryReference returns null and referenceOf / encodeReference throw INVALID_REFERENCE for a part without its fixed shape; nothing is coerced", () => {
     assert.equal(tryReference({ recordId: "WP-UPPER", digest: record.digest, wallprintVersion: "0.1" }), null);
     assert.equal(tryReference({ recordId: record.id, digest: record.digest.toUpperCase(), wallprintVersion: "0.1" }), null);
-    assert.equal(tryReference({ recordId: record.id, digest: record.digest, wallprintVersion: "0.2" }), null);
+    assert.equal(tryReference({ recordId: record.id, digest: record.digest, wallprintVersion: "0.3" }), null);
     assert.equal(tryReference({ recordId: record.id, digest: record.digest, wallprintVersion: "0.1" }, "summary"), null);
     assert.equal(tryReference({ recordId: 7, digest: null, wallprintVersion: undefined }), null);
     assert.equal(tryReference({ recordId: `0x${"cd".repeat(20)}`, digest: record.digest, wallprintVersion: "0.1" }), null, "an address is an identity, never a record id");
@@ -167,7 +167,7 @@ describe("strict parsing: the four outcomes are distinct, fail closed, and never
     ["an unsupported reference version", text({ reference: "0.2" }), "UNSUPPORTED_VERSION", "reference"],
     ["an unsupported reference version with a different grammar after it", `walletwall://wallprint/${record.id}?reference=1.0&id=${record.id}`, "UNSUPPORTED_VERSION", "reference"],
     ["a WallPrint version that is not a version", text({ wallprint: "0.1.0" }), "MALFORMED_REFERENCE", "wallprint"],
-    ["an unsupported WallPrint version", text({ wallprint: "0.2" }), "UNSUPPORTED_VERSION", "wallprint"],
+    ["an unsupported WallPrint version", text({ wallprint: "0.3" }), "UNSUPPORTED_VERSION", "wallprint"],
     ["a credential-shaped id", text({ id: "sk_live_" + "abcdefghijklmnop" }), "MALFORMED_REFERENCE", "recordId"],
     ["an address-shaped id", text({ id: `0x${"ab".repeat(20)}` }), "MALFORMED_REFERENCE", "recordId"],
     ["an id carrying a reserved assurance term", text({ id: "wp-verified-record-v1" }), "MALFORMED_REFERENCE", "recordId"],

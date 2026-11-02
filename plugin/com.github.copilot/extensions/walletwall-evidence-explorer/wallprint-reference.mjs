@@ -40,9 +40,11 @@ var WallPrintError = class extends Error {
 var finding = (code, path) => ({ code, path });
 
 // packages/mcp/src/wallprint/vocabulary.ts
-var WALLPRINT_VERSION = "0.1";
+var WALLPRINT_VERSIONS = ["0.1", "0.2"];
 var RECORD_ID_RE = /^[a-z0-9][a-z0-9_.:-]{2,63}$/;
 var HEX64_RE = /^[0-9a-f]{64}$/;
+var RESERVED_IDENTITY_STEMS = Object.freeze(["walletwall", "wallprint"]);
+var RESERVED_POLICY_NAMESPACES = Object.freeze(["wwap", "wwdr", "wwvr"]);
 var RESERVED_ASSURANCE_TERMS = Object.freeze([
   "VERIFIED",
   "CERTIFIED",
@@ -73,6 +75,7 @@ var WALLPRINT_INVARIANTS = Object.freeze([
 ]);
 
 // packages/mcp/src/wallprint/language.ts
+var STEMS_V01 = Object.freeze(["walletwall", "wallprint"]);
 var TERM_MATCHERS = RESERVED_ASSURANCE_TERMS.map((term) => ({
   term,
   re: term === "INVESTMENT-GRADE" ? /\binvestment[-_ ]grade\b/i : new RegExp(`\\b${term.toLowerCase()}\\b`, "i")
@@ -102,7 +105,7 @@ var REFERENCE_VERSION = "0.1";
 var REFERENCE_PREFIX = "walletwall://wallprint/";
 var REFERENCE_ENVELOPE_TYPE = "walletwall.wallprint.reference";
 var REFERENCE_TARGETS = ["record", "receipt", "replay", "history", "assessments", "provenance"];
-var SUPPORTED_WALLPRINT_VERSIONS = Object.freeze([WALLPRINT_VERSION]);
+var SUPPORTED_WALLPRINT_VERSIONS = Object.freeze([...WALLPRINT_VERSIONS]);
 var REFERENCE_MAX_LENGTH = 320;
 var REFERENCE_OUTCOMES = ["RESOLVED", "UNAVAILABLE", "NOT_COMPARED", "DIGEST_MISMATCH", "MALFORMED_REFERENCE", "UNSUPPORTED_VERSION"];
 var REFERENCE_IDENTIFIES = "This reference identifies the WallPrint record and digest. Resolution depends on a compatible WalletWall disclosure store or resolver.";

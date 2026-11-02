@@ -126,7 +126,7 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-fixtures.mjs",
-      "sha512": "9d57c1147b594932f69c4b210a2a0e5ccfd779438ec1b42424b7e97c5141351e50163f6fc0107e971fc0853973d1fc02e2f9ba505186aeef8d5a808fe5e135a5",
+      "sha512": "cc113bf37d058844f3fe5bb55544717da37c0b68a6340c85b58d9714296679413cdd2f3722b33b9e0ab611983d755b16fd04263c103ddb531c073bd591e43f5b",
       "bytes": 301751
     },
     {
@@ -136,8 +136,8 @@
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-reference.mjs",
-      "sha512": "28bffe9bdb053d859cbf1de55f3086f599655f029e4118f8e7b83f07e55552c82000d0d689d87afefe4db7cc508a340be252dfa3a0836f18145e1b1ee710c5cb",
-      "bytes": 17227
+      "sha512": "d457d11d33700522cf77860b756ec404153e9f226c1518f3f96a21996b284339afb3d484e189f0bdd3f5bca0242f6f71ea21a2c46f065172dcf0539f11eabf36",
+      "bytes": 17449
     },
     {
       "path": "plugin/com.github.copilot/extensions/walletwall-evidence-explorer/wallprint-render.mjs",

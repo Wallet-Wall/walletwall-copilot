@@ -144,7 +144,7 @@ describe("every disclosed record prints its portable reference as exact text and
       ["no lifecycle events", (): void => void (r.lifecycle.events = [])],
       ["a COMMITTED event naming another record", (): void => void (r.lifecycle.events[0]!.recordId = "wp-someone-else")],
       ["a committed digest without its fixed shape", (): void => void (r.lifecycle.events[0]!.recordDigest = "0x" + "a".repeat(62))],
-      ["a WallPrint version this codec does not resolve", (): void => void ((r.record as { wallprintVersion: string }).wallprintVersion = "0.2")],
+      ["a WallPrint version this codec does not resolve", (): void => void ((r.record as { wallprintVersion: string }).wallprintVersion = "0.3")],
     ] as const) {
       const copy = structuredClone(WALLPRINT_FIXTURES[name]!);
       Object.assign(r, structuredClone(copy.records[0]!));
@@ -362,7 +362,7 @@ describe("opening a portable reference through the canvas: strict parse, local r
       [`{ "digest": "${v1.record.digest}", "recordId": "${v1.id}", "type": "walletwall.wallprint.reference", "version": "0.1", "wallprintVersion": "0.1" }`, "MALFORMED_REFERENCE", "characters"],
       ["w".repeat(10_000), "MALFORMED_REFERENCE", "length"],
       [`walletwall://wallprint/${v1.id}?reference=0.2&wallprint=0.1&digest=${v1.record.digest}`, "UNSUPPORTED_VERSION", "reference"],
-      [`walletwall://wallprint/${v1.id}?reference=0.1&wallprint=0.2&digest=${v1.record.digest}`, "UNSUPPORTED_VERSION", "wallprint"],
+      [`walletwall://wallprint/${v1.id}?reference=0.1&wallprint=0.3&digest=${v1.record.digest}`, "UNSUPPORTED_VERSION", "wallprint"],
       [`{"digest":"${v1.record.digest}","recordId":"${v1.id}","trusted":"true","type":"walletwall.wallprint.reference","version":"0.1","wallprintVersion":"0.1"}`, "MALFORMED_REFERENCE", "envelope"],
     ] as const) {
       const { id, url } = await open({ reference: input });

@@ -306,7 +306,7 @@ describe("validateWallPrintRecord accepts committed records and rejects tamperin
     const r = buildWallPrintSnapshot(baseInput());
     const extra = validateWallPrintRecord({ ...r, verdict: "VERIFIED" });
     assert.equal(extra.ok, false);
-    const wrong = validateWallPrintRecord({ ...r, wallprintVersion: "0.2" });
+    const wrong = validateWallPrintRecord({ ...r, wallprintVersion: "0.3" });
     assert.equal(wrong.ok, false);
     const digest = validateWallPrintRecord({ ...r, digest: "0".repeat(64) });
     assert.equal(digest.ok, false);

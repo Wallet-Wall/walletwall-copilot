@@ -221,7 +221,9 @@ interface Built {
 }
 
 function snapshot(input: SnapshotInput): WallPrintRecord {
-  return buildWallPrintSnapshot(input);
+  // The committed disclosure fixtures (the canvas fixtures and the published store) are WallPrint 0.1 records: they are
+  // the historical corpus, and they stay byte-identical. A record is rebuilt under the version it carries, never today's.
+  return buildWallPrintSnapshot({ ...input, wallprintVersion: "0.1" });
 }
 
 /** A record "committed elsewhere": the payload patched, then re-digested, so it validates but this engine did not produce it. */

@@ -1,6 +1,6 @@
 import { WallPrintError, finding, type Finding } from "./errors.ts";
 import { findReservedAssuranceTerms, findSecretLike } from "./language.ts";
-import { HEX64_RE, RECORD_ID_RE, WALLPRINT_VERSION } from "./vocabulary.ts";
+import { HEX64_RE, RECORD_ID_RE, WALLPRINT_VERSIONS } from "./vocabulary.ts";
 
 /**
  * WallPrint portable reference: a locator for one committed WallPrint record.
@@ -44,8 +44,8 @@ export const REFERENCE_ENVELOPE_TYPE = "walletwall.wallprint.reference";
 /** The sections a reference may open, in the order the document presents them. `record` is the record itself. */
 export const REFERENCE_TARGETS = ["record", "receipt", "replay", "history", "assessments", "provenance"] as const;
 export type ReferenceTarget = (typeof REFERENCE_TARGETS)[number];
-/** The WallPrint contract versions this codec resolves. A reference to any other version is UNSUPPORTED_VERSION. */
-export const SUPPORTED_WALLPRINT_VERSIONS: readonly string[] = Object.freeze([WALLPRINT_VERSION]);
+/** The WallPrint contract versions this codec resolves: every version a record can carry. A reference to any other version is UNSUPPORTED_VERSION. A reference names the version its record was committed under, and keeps it. */
+export const SUPPORTED_WALLPRINT_VERSIONS: readonly string[] = Object.freeze([...WALLPRINT_VERSIONS]);
 /** Longest text either form can take with the longest record id and target; longer input is refused before parsing. */
 export const REFERENCE_MAX_LENGTH = 320;
 

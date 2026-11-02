@@ -4,7 +4,7 @@ import { WwError } from "../errors.ts";
 import { evaluateBundle, indexBundle, pick, type AssertionEvaluation, type Evaluation } from "../evaluate.ts";
 import { checkInvariants } from "../invariants.ts";
 import { traceProvenance } from "../provenance.ts";
-import { ASSETS, EXCLUDED_ASSETS, POLICIES_VERSION, findAsset, policiesDigest, registryDigest } from "../registry.ts";
+import { POLICIES_VERSION, findAsset, policiesDigest, registryDigest } from "../registry.ts";
 import {
   CLAIM_TYPES,
   EvaluatedAtSchema,
@@ -26,9 +26,10 @@ import {
   type FlatRecordValue,
 } from "../schemas.ts";
 import { WallPrintError, finding, type Finding } from "./errors.ts";
+import { externalAssessmentFindings } from "./admission.ts";
 import { deepFreeze } from "./freeze.ts";
 import { subjectIdentityKeys } from "./identity.ts";
-import { findReservedAssuranceTerms, findSecretLike, isReservedIdentity, isReservedPolicyId } from "./language.ts";
+import { findReservedAssuranceTerms, findSecretLike } from "./language.ts";
 import {
   ASSESSOR_ROLES,
   EVIDENCE_ITEM_KINDS,
@@ -40,9 +41,11 @@ import {
   WALLPRINT_DIGEST_ALGORITHM,
   WALLPRINT_LIMITS,
   WALLPRINT_VERSION,
+  WALLPRINT_VERSIONS,
   type AssessorRole,
   type EvidenceItemKind,
   type SupersessionKind,
+  type WallPrintVersion,
 } from "./vocabulary.ts";
 
 /**
@@ -143,6 +146,7 @@ export const SnapshotInputSchema = z.strictObject({
   focalAssertionId: WwId,
   assessments: z.array(ExternalAssessmentInputSchema).max(WALLPRINT_LIMITS.externalAssessments).optional(),
   supersedes: SupersedesSchema.nullable().optional(),
+  wallprintVersion: z.enum(WALLPRINT_VERSIONS).optional(),
 });
 export interface SnapshotInput {
   id: string;
@@ -151,6 +155,12 @@ export interface SnapshotInput {
   focalAssertionId: string;
   assessments?: ExternalAssessmentInput[];
   supersedes?: Supersedes | null;
+  /**
+   * The WallPrint contract version to build under: it selects the admission rules and is written into the record. Omitted,
+   * a new record is built under the current version (WALLPRINT_VERSION). Replay passes the record's own version, so a
+   * historical record is rebuilt under the rules it was committed under; nothing else should need to name an older one.
+   */
+  wallprintVersion?: WallPrintVersion;
 }
 
 // ─── record schema ───────────────────────────────────────────────────────────
@@ -218,7 +228,7 @@ const ViolationSchema = z.strictObject({ invariant: z.string().regex(INVARIANT_R
 const versionMap = (key: z.ZodString) => z.record(key, SafeText64).refine((m) => Object.keys(m).length <= LIMITS.recordEntries, { message: "too many entries" });
 
 export const WallPrintRecordSchema = z.strictObject({
-  wallprintVersion: z.literal(WALLPRINT_VERSION),
+  wallprintVersion: z.enum(WALLPRINT_VERSIONS),
   id: RecordId,
   subject: z.strictObject({ focalAssertionId: WwId, claimType: z.enum(CLAIM_TYPES), temporality: z.enum(TEMPORALITIES), identity: FlatRecord }),
   snapshotAt: PresentedIso,
@@ -245,9 +255,6 @@ export type WallPrintPayload = Omit<z.infer<typeof WallPrintRecordSchema>, "dige
 const ordinal = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const uniqueSorted = <T extends string>(ids: readonly T[]): T[] => [...new Set(ids)].sort(ordinal);
 const sameCanonical = (a: unknown, b: unknown): boolean => canonicalize(a) === canonicalize(b);
-
-/** The registry's authority identities, case-folded: reserved for the ISSUER role. */
-const REGISTRY_AUTHORITY_IDS: ReadonlySet<string> = new Set([...ASSETS, ...EXCLUDED_ASSETS].map((a) => a.authorityId.toLowerCase()));
 
 /** Render a zod issue path from fixed schema segments; caller-supplied key names never appear (unknown keys report their parent). */
 function renderPath(path: readonly PropertyKey[]): string {
@@ -363,58 +370,25 @@ function focalRegistryAuthority(claimType: ClaimType, subject: FlatRecordValue):
   return findAsset(chainId, address)?.authorityId ?? null;
 }
 
-interface ExternalLike {
-  assessor: string;
-  assessorRole: AssessorRole;
-  policy: string;
-  evidenceRefs: readonly string[];
-  statement?: string | null | undefined;
-}
-
 /**
- * The attribution rules for external assessments, applied identically at build time and at validation time.
- * `knownIds` are the ids an evidence reference may name; `registryAuthority` is the focal deployment's authority id.
- */
-function externalAssessmentFindings(list: readonly ExternalLike[], knownIds: ReadonlySet<string>, registryAuthority: string | null, path: (i: number) => string): Finding[] {
-  const out: Finding[] = [];
-  const seen = new Set<string>();
-  list.forEach((a, i) => {
-    const p = path(i);
-    if (a.assessorRole === "WALLETWALL") out.push(finding("ASSESSOR_IDENTITY_RESERVED", `${p}.assessorRole`));
-    if (isReservedIdentity(a.assessor)) out.push(finding("ASSESSOR_IDENTITY_RESERVED", `${p}.assessor`));
-    const folded = a.assessor.toLowerCase();
-    if (a.assessorRole === "ISSUER") {
-      if (registryAuthority === null) out.push(finding("ISSUER_NOT_IN_REGISTRY", `${p}.assessor`));
-      else if (a.assessor !== registryAuthority) out.push(finding("ISSUER_AUTHORITY_MISMATCH", `${p}.assessor`));
-    } else if (REGISTRY_AUTHORITY_IDS.has(folded)) {
-      out.push(finding("ASSESSOR_IDENTITY_RESERVED", `${p}.assessor`));
-    }
-    if (isReservedPolicyId(a.policy)) out.push(finding("RESERVED_POLICY_NAMESPACE", `${p}.policy`));
-    if (a.evidenceRefs.some((id) => !knownIds.has(id))) out.push(finding("UNKNOWN_EVIDENCE_REFERENCE", `${p}.evidenceRefs`));
-    const key = `${folded}|${a.policy.toLowerCase()}`;
-    if (seen.has(key)) out.push(finding("DUPLICATE_ASSESSMENT", p));
-    seen.add(key);
-  });
-  return out;
-}
-
-/**
- * The attribution rules for a list of caller-supplied external assessments about one focal assertion of a bundle: the
- * ids an evidence reference may name and the focal deployment's registry authority are derived here, once, from the
- * bundle itself. `buildWallPrintSnapshot` and the import boundary (assessor-import.ts) both call this, so a rule cannot
- * drift between them. `path` names the list element in each finding.
+ * The attribution rules for a list of caller-supplied external assessments about one focal assertion of a bundle, under
+ * the admission rules of one explicit WallPrint version (admission.ts): the ids an evidence reference may name and the
+ * focal deployment's registry authority are derived here, once, from the bundle itself. `buildWallPrintSnapshot`,
+ * `validateWallPrintRecord` and the import boundary (assessor-import.ts) all reach the same rules, so a rule cannot drift
+ * between them. `path` names the list element in each finding.
  */
 export function externalAssessmentAdmissionFindings(
   list: readonly ExternalAssessmentInput[],
   bundle: Bundle,
   focalAssertionId: string,
+  wallprintVersion: WallPrintVersion,
   path: (i: number) => string = (i) => `assessments[${i}]`,
 ): Finding[] {
   const idx = indexBundle(bundle);
   const focal = idx.assertions.get(focalAssertionId);
   if (focal === undefined) return [finding("UNKNOWN_FOCAL_ASSERTION", "focalAssertionId")];
   const bundleIds = new Set<string>([...idx.sources.keys(), ...idx.observations.keys(), ...idx.assertions.keys(), ...idx.derivations.keys()]);
-  return externalAssessmentFindings(list, bundleIds, focalRegistryAuthority(focal.claimType, focal.subject), path);
+  return externalAssessmentFindings(wallprintVersion, list, bundleIds, focalRegistryAuthority(focal.claimType, focal.subject), path);
 }
 
 function claimRecord(e: AssertionEvaluation, subject: FlatRecordValue, value: FlatRecordValue | null): ClaimRecord {
@@ -634,7 +608,7 @@ export function validateWallPrintRecord(raw: unknown): RecordValidation {
   });
   const externals = r.assessments.map((a, i) => ({ a, i })).filter(({ a }) => a.assessorRole !== "WALLETWALL");
   const registryAuthority = focal === undefined ? null : focalRegistryAuthority(focal.claimType, focal.subject);
-  findings.push(...externalAssessmentFindings(externals.map(({ a }) => a), new Set([...claimIds, ...itemIds]), registryAuthority, (k) => `assessments[${externals[k]?.i ?? k}]`));
+  findings.push(...externalAssessmentFindings(r.wallprintVersion, externals.map(({ a }) => a), new Set([...claimIds, ...itemIds]), registryAuthority, (k) => `assessments[${externals[k]?.i ?? k}]`));
 
   const unionLimitations = uniqueSorted(r.claims.flatMap((c) => c.limitations));
   if (!sameCanonical(unionLimitations, r.limitations)) findings.push(finding("LIMITATIONS_MISMATCH", "limitations"));
@@ -666,6 +640,7 @@ function build(input: SnapshotInput): WallPrintRecord {
   const parsedInput = SnapshotInputSchema.safeParse(input);
   if (!parsedInput.success) throw new WallPrintError("INVALID_INPUT", issuesToFindings(parsedInput.error));
   const { id, evaluatedAt, focalAssertionId } = parsedInput.data;
+  const wallprintVersion = parsedInput.data.wallprintVersion ?? WALLPRINT_VERSION;
   const externals = parsedInput.data.assessments ?? [];
   const supersedes = parsedInput.data.supersedes ?? null;
 
@@ -688,7 +663,7 @@ function build(input: SnapshotInput): WallPrintRecord {
   const identity = pick(focalAssertion.subject, subjectIdentityKeys(focalAssertion.claimType));
   if (identity === null) findings.push(finding("INVALID_FOCAL_SUBJECT", "focalAssertionId"));
 
-  findings.push(...externalAssessmentAdmissionFindings(externals, bundle, focalAssertionId));
+  findings.push(...externalAssessmentAdmissionFindings(externals, bundle, focalAssertionId, wallprintVersion));
   externals.forEach((a, i) => findings.push(...secretFindings({ assessor: a.assessor, policy: a.policy, policyVersion: a.policyVersion, statement: a.statement ?? null }, `assessments[${i}]`)));
   findings.push(...secretFindings(id, "id"));
   findings.push(...supersedesFindings(supersedes, id));
@@ -712,7 +687,7 @@ function build(input: SnapshotInput): WallPrintRecord {
   const trace = traceProvenance(bundle, focalAssertionId);
 
   const payload: WallPrintPayload = {
-    wallprintVersion: WALLPRINT_VERSION,
+    wallprintVersion,
     id,
     subject: { focalAssertionId, claimType: focalAssertion.claimType, temporality: focalAssertion.temporality, identity },
     snapshotAt: evaluatedAt,

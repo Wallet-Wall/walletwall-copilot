@@ -46,6 +46,7 @@
     "test:sandbox": "node --test --test-reporter=spec \"packages/mcp/test/sandbox/*.test.ts\"",
     "test:privacy": "node --test --test-reporter=spec \"packages/mcp/test/privacy/*.test.ts\" \"packages/mcp/test/canvas/plugin-path.test.ts\"",
     "test:canvas": "node --test --test-reporter=spec \"packages/mcp/test/canvas/*.test.ts\"",
+    "test:wallprint-admission-mutation": "node packages/mcp/test/mutation/wallprint-admission-mutation.ts",
     "test": "node --test --test-reporter=spec \"packages/mcp/test/**/*.test.ts\" \"packages/wallprint-web/test/**/*.test.ts\"",
     "eval:agent": "node evals/run-agent-evals.ts",
     "conformance:report": "node scripts/conformance-report.ts",

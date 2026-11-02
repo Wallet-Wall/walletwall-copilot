@@ -4,20 +4,27 @@ import { finding, type Finding } from "./errors.ts";
 import { deepFreeze } from "./freeze.ts";
 import { ExternalAssessmentInputSchema, externalAssessmentAdmissionFindings, issuesToFindings, secretFindings, type ExternalAssessmentInput } from "./record.ts";
 import { parseStrictJson, type StrictJsonProblem } from "./strict-json.ts";
-import { WALLPRINT_LIMITS } from "./vocabulary.ts";
+import { WALLPRINT_LIMITS, WALLPRINT_VERSIONS, type WallPrintVersion } from "./vocabulary.ts";
 
 /**
  * External assessor import: untrusted serialized assessment → the existing WallPrint external assessment input.
  *
  *   WalletWall isn't always right. WallPrint keeps the record.
  *
- * WallPrint 0.1 already records attributed external assessments (record.ts: `buildWallPrintSnapshot({ assessments })`,
+ * WallPrint already records attributed external assessments (record.ts: `buildWallPrintSnapshot({ assessments })`,
  * `validateWallPrintRecord`). What it lacked is a boundary for assessments that arrive as TEXT from someone else: bytes
  * with no size bound, JSON that may name a key twice, an envelope nobody had defined. This module is that boundary and
  * nothing more. It defines no second assessment model and no second rule set: it reads one closed envelope, hands the
  * assessment to the SAME schema and the SAME attribution rules the builder applies (`ExternalAssessmentInputSchema`,
- * `externalAssessmentAdmissionFindings`), and returns the existing `ExternalAssessmentInput`, unchanged, for the caller
- * to pass to `buildWallPrintSnapshot`, which applies every rule again and whose output `validateWallPrintRecord` checks.
+ * `externalAssessmentAdmissionFindings`, which reach the versioned admission rules of admission.ts), and returns the
+ * existing `ExternalAssessmentInput`, unchanged, for the caller to pass to `buildWallPrintSnapshot`, which applies every
+ * rule again and whose output `validateWallPrintRecord` checks.
+ *
+ * TARGET VERSION. Admission rules belong to the WallPrint contract version, and an import is a check against one of them,
+ * so the caller names it: `context.wallprintVersion` is required, never defaulted to whatever the engine builds today.
+ * The same bytes, the same bundle context and the same target version give the same result, and a record built from the
+ * result under the same `wallprintVersion` is judged by the same rules the import used. The envelope version below is
+ * unrelated: it versions the serialization, which no admission rule can change.
  *
  *   import format (one assessment per envelope; its own version, not the WallPrint version)
  *     { "assessmentImportVersion": "0.1", "externalAssessment": { assessor, assessorRole, assessment, statement?, policy,
@@ -48,7 +55,7 @@ import { WALLPRINT_LIMITS } from "./vocabulary.ts";
  * Nothing here is imported by main.ts, server.ts or tools.ts, and it is not a tool, a resource, an endpoint or a UI.
  */
 
-/** The import envelope's own version. It versions this input format, not the WallPrint record (WALLPRINT_VERSION). */
+/** The import envelope's own version. It versions this input format, not the WallPrint record or its admission rules (WALLPRINT_VERSION, admission.ts). The serialization is the same for every WallPrint version. */
 export const ASSESSOR_IMPORT_VERSION = "0.1";
 
 /**
@@ -114,10 +121,12 @@ export type AssessorImportResult =
 /** One serialized envelope: UTF-8 bytes, or text (taken as its UTF-8 encoding). */
 export type AssessorImportInput = string | Uint8Array;
 
-/** What the assessments are about: the WWEP bundle and the focal assertion a record would be built for. Untrusted too; it is parsed with the engine's closed schema. */
+/** What the assessments are about: the WWEP bundle and the focal assertion a record would be built for, and the WallPrint contract version whose admission rules apply. The bundle is untrusted too; it is parsed with the engine's closed schema. */
 export interface AssessorImportContext {
   readonly bundle: unknown;
   readonly focalAssertionId: string;
+  /** The WallPrint version the assessments are admitted for: the version a record built from them will be built under. Required; there is no default. */
+  readonly wallprintVersion: WallPrintVersion;
 }
 
 const EnvelopeSchema = z.strictObject({
@@ -221,23 +230,26 @@ function importAll(inputs: readonly AssessorImportInput[], context: AssessorImpo
   if (first !== undefined) return { status: "REFUSED", reason: first.reason, findings: failed.flatMap((p) => p.findings).slice(0, MAX_FINDINGS) };
 
   const accepted = parsed.flatMap((p) => (p.ok ? [p.assessment] : []));
-  const attribution = externalAssessmentAdmissionFindings(accepted, resolved.bundle, resolved.focalAssertionId, (i) => `inputs[${i}].externalAssessment`);
+  const attribution = externalAssessmentAdmissionFindings(accepted, resolved.bundle, resolved.focalAssertionId, resolved.wallprintVersion, (i) => `inputs[${i}].externalAssessment`);
   if (attribution.length > 0) return { status: "REFUSED", reason: "ATTRIBUTION_REFUSED", findings: attribution.slice(0, MAX_FINDINGS) };
 
   return deepFreeze({ status: "IMPORTED" as const, assessments: accepted });
 }
 
-/** The parsed bundle and focal assertion the assessments are about, or the findings that say the context cannot be used (so no input is read). */
-function resolveContext(context: unknown): { bundle: Bundle; focalAssertionId: string } | Finding[] {
+/** The parsed bundle, focal assertion and target version the assessments are about, or the findings that say the context cannot be used (so no input is read). */
+function resolveContext(context: unknown): { bundle: Bundle; focalAssertionId: string; wallprintVersion: WallPrintVersion } | Finding[] {
   try {
     if (context === null || typeof context !== "object") return [finding("INVALID_CONTEXT", "context")];
-    const { bundle, focalAssertionId } = context as { bundle?: unknown; focalAssertionId?: unknown };
+    const { bundle, focalAssertionId, wallprintVersion } = context as { bundle?: unknown; focalAssertionId?: unknown; wallprintVersion?: unknown };
     if (typeof focalAssertionId !== "string") return [finding("INVALID_ID", "context.focalAssertionId")];
+    if (typeof wallprintVersion !== "string") return [finding("INVALID_TYPE", "context.wallprintVersion")];
+    if (!(WALLPRINT_VERSIONS as readonly string[]).includes(wallprintVersion)) return [finding("UNSUPPORTED_VERSION", "context.wallprintVersion")];
+    const version = wallprintVersion as WallPrintVersion;
     const parsed = parseBundleStrict(bundle);
     if (!parsed.success) return [finding("INVALID_BUNDLE", "context.bundle")];
     // With nothing to check, the admission rules still say whether the focal assertion exists in the bundle.
-    if (externalAssessmentAdmissionFindings([], parsed.data, focalAssertionId).length > 0) return [finding("UNKNOWN_FOCAL_ASSERTION", "context.focalAssertionId")];
-    return { bundle: parsed.data, focalAssertionId };
+    if (externalAssessmentAdmissionFindings([], parsed.data, focalAssertionId, version).length > 0) return [finding("UNKNOWN_FOCAL_ASSERTION", "context.focalAssertionId")];
+    return { bundle: parsed.data, focalAssertionId, wallprintVersion: version };
   } catch {
     return [finding("INVALID_CONTEXT", "context")];
   }
