@@ -125,7 +125,7 @@ describe("WallPrint attestations specification, section 24: the governance key c
       "The **cryptographic validity** of what the old lineage signed is unchanged",
       "**Rollback to an old trusted root** is refused by the epoch floor",
       "It records what participants attest; it does not prove the ceremony happened or that the machine was uncompromised.",
-      "no slot a 32-byte secret could occupy unchecked",
+      "none is long enough to carry a 32-byte secret",
       "A finding is a code and a position and never the matched text",
       "**The live ceremony has not been performed.**",
       "**accepts only a result `verifyGovernance` itself returned**",
@@ -259,7 +259,7 @@ describe("WallPrint governance key ceremony runbook", () => {
 
   test("states the backup floor, the participant model, the environment decisions and the limits of deletion", () => {
     for (const [name, n] of Object.entries(BACKUP_MINIMUMS)) assert.ok(n >= 2, name);
-    for (const s of ["at least **3 encrypted copies**", "at least **2 physically separate places**", "at least **2 passphrase envelopes**", "**no place and no person holds both a media copy and its passphrase;**", "| two-person (operator and witness) |", "**chosen**", "**Erasure is not a control.**", "never relies on deletion", "GitHub alone is not an independent trust root", "A GitHub repository, its releases and its documentation are **one origin**"]) assert.ok(runbookFlat.includes(s), s);
+    for (const s of ["at least **3 encrypted copies**", "at least **2 physically separate places**", "at least **2 passphrase envelopes**", "**no place and no person holds both a media copy and its passphrase;**", "| two-person (operator and witness) |", "**chosen**", "**Erasure is not a control.**", "never relies on deletion", "GitHub alone is not an independent trust root", "A GitHub repository, its releases, a bundle served from them and its documentation are **one origin**"]) assert.ok(runbookFlat.includes(s), s);
     for (const s of ["live, ephemeral operating system", "Network physically disabled", "No clipboard use, no shell history, no terminal logging", "Disk encryption", "operating system's CSPRNG", "brainwallet", "UUID"]) assert.ok(runbook.includes(s), s);
     for (const place of ["GitHub or any repository", "a cloud drive or sync folder", "a repository or CI secret", "a developer home directory"]) assert.ok(runbook.includes(place), place);
   });

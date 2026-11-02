@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { canonicalize, evidenceDigest } from "../../src/canonical.ts";
 import { bootstrapDigest, formatFingerprint, parseBootstrap } from "../../src/wallprint/governance.ts";
-import { assessBootstrapPin, verifyGovernance, verifyGovernedCheckpoint } from "../../src/wallprint/governance-verify.ts";
+import { assessBootstrapPin, deriveCheckpointTrustRoot, governedCheckpointAnchors, heldGovernanceState, verifyGovernance, verifyGovernedCheckpoint } from "../../src/wallprint/governance-verify.ts";
 import { GOVERNANCE_FORMAT_VERSION, GOVERNANCE_LIMITS, ROOT_PURPOSES } from "../../src/wallprint/governance-vocabulary.ts";
 import { GK, authorizationFor, bootstrapFor, chainOf, checkpointBy, publicKeyOf, governedContext, governed } from "../support/wallprint-governance.ts";
 
@@ -245,10 +245,33 @@ describe("bootstrap pinning: distribution is a policy, not a signature", () => {
     assert.ok(r.reasons.includes("CONFIRMATIONS_MALFORMED"));
   });
 
-  test("a governed checkpoint verification pins nothing by itself and reports the limitation", () => {
-    const r = governed(checkpointBy(GK.op1, 6), chainOf([{ key: GK.op1 }]), 6, { expectBootstrapPin: false });
+  test("a governed checkpoint verification pins nothing by itself, and an unpinned bootstrap is relied upon for nothing", () => {
+    const chain = chainOf([{ key: GK.op1 }]);
+    const r = governed(checkpointBy(GK.op1, 6), chain, 6, { expectBootstrapPin: false });
     assert.ok(r.governance.limitations.includes("BOOTSTRAP_UNPINNED"));
-    assert.equal(r.reliance.status, "RELIED_UPON", "an unpinned bootstrap is a limitation the reader sees, not a hidden failure");
+    assert.equal(r.governance.chain.status, "VALID", "the chain is still reported: the result says what the caller did not do");
+    assert.equal(r.reliance.status, "NOT_EVALUATED");
+    assert.deepEqual(r.reliance.reasons, ["BOOTSTRAP_NOT_PINNED"]);
+    assert.deepEqual(r.checkpoint.signer.reasons, ["TRUST_ROOT_NOT_SUPPLIED"], "no trust root is derived, so the section 23 verifier has none");
+    assert.equal(governedCheckpointAnchors(r), null);
+  });
+
+  test("an attacker's self-consistent bootstrap, chain, checkpoint and logs mint nothing without the caller's pin: no trust root, no held state, no anchors", () => {
+    const evil = bootstrapFor(GK.attacker);
+    const chain = chainOf([{ key: GK.op1 }], GK.attacker);
+    const unpinned = verifyGovernance({ bootstrap: evil, authorizations: chain, allowSynthetic: true });
+    assert.equal(unpinned.chain.status, "VALID");
+    assert.equal(deriveCheckpointTrustRoot(unpinned), null);
+    assert.equal(heldGovernanceState(unpinned), null);
+    const r = governed(checkpointBy(GK.op1, 6), chain, 6, { bootstrap: evil, expectBootstrapPin: false });
+    assert.equal(r.reliance.status, "NOT_EVALUATED");
+    assert.equal(governedCheckpointAnchors(r), null);
+    const pinnedToTheWrongRoot = governed(checkpointBy(GK.op1, 6), chain, 6, { bootstrap: evil });
+    assert.equal(pinnedToTheWrongRoot.governance.bootstrap.pin, "PINNED", "pinned to the attacker's own digest, the caller did what the attacker asked: pinning is the caller's decision");
+    const wrongPin = verifyGovernedCheckpoint(checkpointBy(GK.op1, 6), { ...governedContext(chain, 6, { bootstrap: evil }), expectedBootstrapDigest: bootstrapDigest(bootstrapFor()) });
+    assert.equal(wrongPin.governance.bootstrap.pin, "MISMATCHED");
+    assert.equal(wrongPin.reliance.status, "NOT_EVALUATED");
+    assert.equal(governedCheckpointAnchors(wrongPin), null);
   });
 });
 

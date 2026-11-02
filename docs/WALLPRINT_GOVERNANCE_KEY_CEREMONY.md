@@ -79,7 +79,7 @@ Before a live ceremony opens, all of the following exist and are reviewed, and n
 5. **At least two independent origins** committed to publishing the fingerprint (section 8), named before the ceremony.
 6. **The backup plan** (section 9): at least three media copies, two or more places, two or more passphrase envelopes in two or more other places, and the people who hold them.
 7. **A recovery drill plan** (section 10) and a calendar for periodic rehearsal.
-8. **For a rotation:** the last published checkpoint signed by the key being replaced, read from public data, so `retainedThrough` is its committed state, not a guess.
+8. **For a rotation:** the last published checkpoint signed by the key being replaced, read from public data, so `retainedAt` is its committed state, not a guess.
 9. **A decision on where the operational key will live** (section 11), made before it is generated.
 
 ## 5. Environment
@@ -143,9 +143,9 @@ The bootstrap is the only thing a verifier pins. It is closed public material (s
 ```
 
 - **The fingerprint** is `bootstrapDigest`, shown as eight groups of eight hex characters. It is what people compare.
-- **Distribution is a policy, not a signature.** A consumer pins the fingerprint only when at least two **distinct origins** report the same one: for example the verifier release bundle, WalletWall's own site, a registry publication, a printed card handed over in person. A GitHub repository, its releases and its documentation are **one origin**; GitHub alone is not an independent trust root. The consumer classifies the origins; no verifier can know whether they are independent in fact.
+- **Distribution is a policy, not a signature.** A consumer pins the fingerprint only when at least two **distinct origins** report the same one: for example a verifier release bundle distributed by a channel other than the repository's own releases, WalletWall's own site, a registry publication, a printed card handed over in person. A GitHub repository, its releases, a bundle served from them and its documentation are **one origin**; GitHub alone is not an independent trust root. The consumer classifies the origins; no verifier can know whether they are independent in fact.
 - **Publish at least two origins before announcing,** and publish nothing else with it (no private key, no seed, no transcript output beyond section 17).
-- **A verifier never learns its first root from a checkpoint,** an authorization or the registry. If a consumer cannot pin through two origins, it must say so (`BOOTSTRAP_UNPINNED`) and treat the result as non-production.
+- **A verifier never learns its first root from a checkpoint,** an authorization or the registry. If a consumer cannot pin through two origins, it must say so (`BOOTSTRAP_UNPINNED`): the verifier then relies on nothing (no trust root, no held state, no anchors) rather than passing quietly.
 - **No remote trust service is built.**
 
 ## 9. Backup
@@ -162,7 +162,7 @@ The root private key is backed up so that the loss of any one copy, place or per
 
 Minimums (`BACKUP_MINIMUMS`, checked by the transcript validator on a live ceremony):
 
-- at least **3 encrypted copies** on removable media, each made with a mature, reviewed encryption tool (an authenticated, passphrase-based format such as age or an encrypted PKCS#8 file), never a home-made format;
+- at least **3 encrypted copies** on removable media, each made with a mature, reviewed encryption tool (an authenticated, passphrase-based format with a memory-hard key derivation, such as age's scrypt mode; the first live-ceremony lane pins the exact format and its cost parameters), never a home-made format and never an unpinned PKCS#8 password setting;
 - in at least **2 physically separate places**;
 - at least **2 passphrase envelopes** (a long passphrase generated on the ceremony machine from the operating system CSPRNG, written by hand, sealed in tamper-evident envelopes) in at least **2 places that hold no media copy**;
 - **no place and no person holds both a media copy and its passphrase;**
@@ -178,7 +178,7 @@ Minimums (`BACKUP_MINIMUMS`, checked by the transcript validator on a live cerem
 1. the operator decrypts one backup copy on the ceremony machine, using the sealed passphrase, into the encrypted ephemeral volume;
 2. the operator derives the public key from the recovered key and writes the bootstrap it would produce;
 3. the witness compares that bootstrap's digest with the recorded one. **They must be equal.** Any difference stops the ceremony: the backup is wrong and is remade;
-4. each further copy is drilled in turn, or at least one copy per place, over the life of the ceremony and the periodic rehearsals.
+4. **every copy is drilled before the ceremony closes**: a copy that was never decrypted is not known to work. Periodic rehearsals drill at least one copy per place each time.
 
 **If one backup is lost or damaged:** the others recover the root; the lost copy's passphrase envelope is treated as exposed if the copy might have been taken, and a fresh backup is made in a ceremony of kind `OPERATIONAL_KEY_ACTION` or a dedicated backup ceremony. If a copy might have been stolen, the root's exposure is assessed as in section 16.
 
@@ -188,33 +188,33 @@ Minimums (`BACKUP_MINIMUMS`, checked by the transcript validator on a live cerem
 
 ## 11. Operational-key authorization
 
-1. The operational key pair is generated like the root (section 7) on the ceremony machine. It is **a different key**, never the root key and never the WalletWall publication key.
+1. The operational key pair is generated **on the device where it will be used** (section 11, item 5), never on the ceremony machine and never carried through it. The ceremony receives only the operational **public key**, which the witness compares with what the destination device displays. It is **a different key**, never the root key and never the WalletWall publication key.
 2. The root signs one **authorization statement** (specification section 24.6) naming the operational key, its grant (`REGISTRY_LEDGER_CHECKPOINT` only), the root epoch and the generation (1 for the first). The signed bytes are `UTF-8(domain tag) || 0x00 || UTF-8(RFC 8785(statement))`, with the authorization's own domain tag, produced by the pinned script and never by hand.
 3. The witness checks the statement on a second machine before and after signing: the root key, the epoch, the generation, the authorized public key, the grant and, for a later generation, the superseded digest, the standing and the retained state.
 4. The public authorization is written to the output medium; it is verified (section 19) before it is published.
 5. **Custody of the operational private key** is decided before the ceremony. It must satisfy: **not in CI, not on the deployment host, not the WalletWall publication key, not in a repository, protected at rest on a dedicated device, used only to sign checkpoints, and replaceable by the root at any time.** The constraints bind the next operational lane; this lane does not choose a device.
-6. The operational key is the only key that ever leaves the room, and only after the root's authorization is written. The root never leaves it except as encrypted backups.
+6. No private key leaves the room and none enters it: the output medium holds only public artifacts (`ONLY_PUBLIC_ARTIFACTS_EXPORTED`), the operational private key never touches the ceremony machine, and the root's only persistent copies are the encrypted backups.
 
 ## 12. Rotation
 
 **Operational key (routine, expected).** A ceremony of kind `OPERATIONAL_KEY_ACTION`:
 
 1. the root is **restored** from a backup onto the ephemeral volume (event `ROOT_KEY_RESTORED`), and its public key is checked against the **pinned** bootstrap;
-2. a new operational key is generated;
-3. generation *n* + 1 is signed: it authorizes the new key, names the digest of generation *n*, marks the old key `RETIRED`, and sets `retainedThrough` to the committed state of the **last checkpoint the old key signed** (read from public data, not memory);
+2. a new operational key pair is generated on its destination device, and only its public key is brought to the ceremony;
+3. generation *n* + 1 is signed: it authorizes the new key, names the digest of generation *n*, marks the old key `RETIRED`, and sets `retainedAt` to the committed state of the **last checkpoint the old key signed** (read from public data, not memory);
 4. the authorization is verified, published, and the transcript is closed.
 
-The old key stays historically identifiable; its checkpoints inside the retained state stay relied upon; **new checkpoints require the new key**.
+The old key stays historically identifiable; a checkpoint at exactly the retained state stays relied upon, and no other does; **new checkpoints require the new key**.
 
 **Root (rare, exceptional).** Root rotation is a **reset** (section 16): a new root at a higher epoch with a different key, pinned by consumers through two distinct origins. No previous-root signature is used as a trust basis: an old root signing a new one proves nothing if the old root is compromised, a new root signing the old one proves only the new holder's access, and cross-signing is evidence of continuity, never a basis. A voluntary rotation may publish both ceremonies' transcripts and an announcement as continuity evidence; no verifier reads it.
 
 ## 13. Retirement
 
-A key is retired by the **next authorization**, never on its own: generation *n* + 1 names it with standing `RETIRED` and its `retainedThrough`. There is no retirement without a replacement: the same ceremony authorizes the successor, so a state in which nothing is relied upon never arises from routine work. A retired key's private material is destroyed by the custodian once the replacement is relied upon and the retired key's last checkpoint is published; destruction is a custody act recorded outside this repository, and it is not a control (section 5): the key is retired by the root's signature, not by what happens to the device.
+A key is retired by the **next authorization**, never on its own: generation *n* + 1 names it with standing `RETIRED` and its `retainedAt`. There is no retirement without a replacement: the same ceremony authorizes the successor, so a state in which nothing is relied upon never arises from routine work. A retired key's private material is destroyed by the custodian once the replacement is relied upon and the retired key's last checkpoint is published; destruction is a custody act recorded outside this repository, and it is not a control (section 5): the key is retired by the root's signature, not by what happens to the device.
 
 ## 14. Revocation
 
-Revocation is **publication, not an online check**. A key believed exposed is marked `COMPROMISED` by the next authorization, with `retainedThrough` null (nothing retained) or the last state the participants independently reviewed. The authorization is published through the same origins as the bootstrap's announcements. A verifier that holds the newer state refuses the old key's later checkpoints; a verifier that has not seen it still relies on the old key. That latency is real, is reported (`GOVERNANCE_STATE_UNHELD`) and cannot be removed offline. There is no OCSP-like service and none is built. Historical signatures stay cryptographically valid; **reliance changes**, and the result reports the two separately.
+Revocation is **publication, not an online check**. A key believed exposed is marked `COMPROMISED` by the next authorization, with `retainedAt` null (nothing retained) or the last state the participants independently reviewed. The authorization is published through the same origins as the bootstrap's announcements. A verifier that holds the newer state refuses the old key's later checkpoints; a verifier that has not seen it still relies on the old key. That latency is real, is reported (`GOVERNANCE_STATE_UNHELD`) and cannot be removed offline. There is no OCSP-like service and none is built. Historical signatures stay cryptographically valid; **reliance changes**, and the result reports the two separately.
 
 After a compromise, the replacement key signs a fresh checkpoint over the logs as the participants reviewed them: a checkpoint commits both logs by head, so it re-establishes the history the compromised key's checkpoints no longer vouch for.
 
@@ -345,11 +345,11 @@ A ceremony is complete only when every event below is present, in order, atteste
 | 2 | synthetic root generation | a synthetic root, working copy present |
 | 3 | public root artifact | a bootstrap and its fingerprint, `PINNED` |
 | 4 | backup creation | three sealed synthetic copies |
-| 5 | operational key generation | a distinct synthetic key |
+| 5 | operational key generation, on its own (modelled) device | a distinct synthetic key; only its public key reaches the ceremony |
 | 6 | root authorization of the operational key | generation 1, chain `VALID` |
 | 7 | the operational key signs a synthetic checkpoint | two checkpoints over the synthetic registry and ledger |
 | 8 | verification using only the public bootstrap | signature `VALID`, signer `AUTHORIZED`, reliance `RELIED_UPON`, anchors authenticated |
-| 9 | operational-key rotation | generation 2; the retired key keeps its retained state, loses later checkpoints; the new key is relied upon |
+| 9 | operational-key rotation | generation 2; the retired key is relied upon at exactly its retained state and nowhere else (a checkpoint below it and one beyond it are both refused); the new key is relied upon |
 | 10 | old-key retirement | a late checkpoint by the retired key has a `VALID` signature and is `NOT_RELIED_UPON` |
 | 11 | root recovery from backup | working copy removed; recovery gives the same public key and fingerprint; a wrong passphrase, a damaged copy, another key's backup and no backup all fail |
 | 12 | replacement operational authorization | generation 3, `COMPROMISED`, signed by the recovered root |

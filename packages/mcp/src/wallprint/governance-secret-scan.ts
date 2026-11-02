@@ -40,6 +40,7 @@ const TEXT_RULES: readonly TextRule[] = [
 
 /** The words that make a JSON field a place a secret could sit. Compared after lower-casing and removing separators. */
 const SECRET_FIELD_NAMES: ReadonlySet<string> = new Set([
+  "d",
   "privatekey",
   "privateseed",
   "privatescalar",
@@ -63,6 +64,9 @@ const SECRET_FIELD_NAMES: ReadonlySet<string> = new Set([
 
 const normaliseField = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+/** Nesting deeper than this is not scanned, so it is reported: a value too deep to look at is not a value known to be clean. */
+const MAX_WALK_DEPTH = 16;
+
 /** A string of 12, 15, 18, 21 or 24 short lower-case words is the shape of a seed phrase. */
 const looksLikeSeedPhrase = (value: string): boolean => {
   const words = value.split(" ");
@@ -78,8 +82,14 @@ export function scanCeremonyText(text: string): SecretFinding[] {
   return findings;
 }
 
+/** A field name is echoed in a path only when it is a short identifier; anything else (a long string, a hex run, other characters) is reported by position, so a secret used as a key name is not repeated. */
+const pathKey = (key: string, index: number): string => (/^[A-Za-z][A-Za-z0-9_]{0,15}$/.test(key) ? key : `[key ${index}]`);
+
 function walk(value: unknown, path: string, out: SecretFinding[], depth: number): void {
-  if (depth > 16) return;
+  if (depth > MAX_WALK_DEPTH) {
+    out.push({ code: "SCAN_DEPTH_EXCEEDED", at: path });
+    return;
+  }
   if (typeof value === "string") {
     if (looksLikeSeedPhrase(value)) out.push({ code: "SEED_PHRASE_SHAPE", at: path });
     for (const rule of TEXT_RULES) if (rule.code !== "SEED_HEX_NEAR_SECRET_WORD" && rule.code !== "SECRET_VALUE_ASSIGNMENT" && rule.re.test(value)) out.push({ code: rule.code, at: path });
@@ -90,11 +100,12 @@ function walk(value: unknown, path: string, out: SecretFinding[], depth: number)
     return;
   }
   if (value !== null && typeof value === "object") {
-    for (const [key, item] of Object.entries(value)) {
-      const at = path === "" ? key : `${path}.${key}`;
+    Object.entries(value).forEach(([key, item], index) => {
+      const shown = pathKey(key, index);
+      const at = path === "" ? shown : `${path}.${shown}`;
       if (SECRET_FIELD_NAMES.has(normaliseField(key))) out.push({ code: "SECRET_FIELD_NAME", at });
       walk(item, at, out, depth + 1);
-    }
+    });
   }
 }
 

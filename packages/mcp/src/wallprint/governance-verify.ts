@@ -73,7 +73,7 @@ export interface GovernanceKeyEntry {
   purposes: string[];
   standing: KeyStanding;
   /** The last checkpoint state the root stands behind for a superseded key (null: none, or the key is current). */
-  retainedThrough: CommittedState | null;
+  retainedAt: CommittedState | null;
   authorizationDigest: string;
 }
 
@@ -243,7 +243,7 @@ function keysOf(envelopes: readonly AuthorizationEnvelope[]): GovernanceKeyEntry
       publicKey: key.publicKey,
       purposes: [...key.purposes],
       standing,
-      retainedThrough: next === undefined ? null : (supersedes?.retainedThrough ?? null),
+      retainedAt: next === undefined ? null : (supersedes?.retainedAt ?? null),
       authorizationDigest: authorizationDigest(envelope),
     };
   });
@@ -270,6 +270,9 @@ const heldUsable = (held: GovernanceVerification["held"]): boolean => held.statu
 function usable(result: GovernanceVerification): boolean {
   return result.bootstrap.parse === "PARSED" && result.bootstrap.reasons.length === 0 && result.chain.status === "VALID" && heldUsable(result.held);
 }
+
+/** Usable AND pinned: the only state anything is minted from. A chain that is merely self-consistent under an unpinned bootstrap is reported, never relied upon. */
+const established = (result: GovernanceVerification): boolean => usable(result) && result.bootstrap.pin === "PINNED";
 
 const issued = new WeakSet<object>();
 const issue = (result: GovernanceVerification): GovernanceVerification => {
@@ -335,7 +338,7 @@ export interface HeldGovernance {
 
 export function heldGovernanceState(verification: GovernanceVerification): HeldGovernance | null {
   const v = verification;
-  if (typeof v !== "object" || v === null || !issued.has(v) || !usable(v)) return null;
+  if (typeof v !== "object" || v === null || !issued.has(v) || !established(v)) return null;
   const head = v.keys[v.keys.length - 1];
   if (head === undefined || v.bootstrap.rootEpoch === null || v.bootstrap.digest === null) return null;
   const currentness = v.held.status;
@@ -358,7 +361,7 @@ function rootOf(entries: readonly GovernanceKeyEntry[]): GovernanceTrustRoot {
  */
 export function deriveCheckpointTrustRoot(verification: GovernanceVerification): GovernanceTrustRoot | null {
   const v = verification;
-  if (typeof v !== "object" || v === null || !issued.has(v) || !usable(v)) return null;
+  if (typeof v !== "object" || v === null || !issued.has(v) || !established(v)) return null;
   const current = v.keys.find((k) => k.standing === "CURRENT");
   return current === undefined ? null : rootOf([current]);
 }
@@ -378,10 +381,18 @@ const noReliance = (status: Reliance["status"], keyStanding: Reliance["keyStandi
 const beyondRetained = (committed: CommittedState, kept: CommittedState): boolean =>
   Number(committed.registry.headVersion) > Number(kept.registry.headVersion) || Number(committed.acceptanceLedger.entryCount) > Number(kept.acceptanceLedger.entryCount);
 
-/** At exactly the retained count the head must be exactly the retained head: a retired key cannot sign another history at the last state the root reviewed. */
+/** At a retained count the head must be exactly the retained head: a retired key cannot sign another history at the last state the root reviewed. */
 const headDiffersAtRetained = (committed: CommittedState, kept: CommittedState): boolean =>
   (committed.registry.headVersion === kept.registry.headVersion && committed.registry.headDigest !== kept.registry.headDigest) ||
   (committed.acceptanceLedger.entryCount === kept.acceptanceLedger.entryCount && committed.acceptanceLedger.headDigest !== kept.acceptanceLedger.headDigest);
+
+/**
+ * Below the retained counts nothing ties a checkpoint's history to the one the root reviewed: a stolen retired key could sign a different,
+ * internally valid history there, and its heads are not the retained heads to compare. So a superseded key is relied upon only at exactly the
+ * retained state; a reader who needs an earlier prefix gets it from a checkpoint at the retained state, which covers it.
+ */
+const beforeRetained = (committed: CommittedState, kept: CommittedState): boolean =>
+  committed.registry.headVersion !== kept.registry.headVersion || committed.acceptanceLedger.entryCount !== kept.acceptanceLedger.entryCount;
 
 /** `parseCheckpoint` never echoes input, but input that cannot even be read (a throwing getter) must not escape as an exception from here. */
 function readCheckpoint(raw: unknown): CheckpointParseResult {
@@ -394,18 +405,20 @@ function readCheckpoint(raw: unknown): CheckpointParseResult {
 
 function assessReliance(governance: GovernanceVerification, parsed: CheckpointParseResult): Reliance {
   if (!usable(governance)) return noReliance("NOT_EVALUATED", "NOT_EVALUATED", null, ["GOVERNANCE_STATE_NOT_USABLE"]);
+  if (governance.bootstrap.pin !== "PINNED") return noReliance("NOT_EVALUATED", "NOT_EVALUATED", null, ["BOOTSTRAP_NOT_PINNED"]);
   if (!parsed.ok) return noReliance("NOT_EVALUATED", "NOT_EVALUATED", null, ["CHECKPOINT_NOT_PARSED"]);
   const { statement } = parsed.envelope;
   const entry = governance.keys.find((k) => k.keyId === statement.signer.keyId);
   if (entry === undefined) return noReliance("NOT_RELIED_UPON", "UNKNOWN", null, ["SIGNER_NOT_AUTHORIZED_BY_ROOT"]);
   if (entry.algorithm !== statement.signer.algorithm || entry.publicKey !== statement.signer.publicKey) return noReliance("NOT_RELIED_UPON", "UNKNOWN", null, ["SIGNER_KEY_MATERIAL_MISMATCH"]);
   if (entry.standing === "CURRENT") return noReliance("RELIED_UPON", "CURRENT", entry.generation, []);
-  const kept = entry.retainedThrough;
+  const kept = entry.retainedAt;
   if (kept === null) return noReliance("NOT_RELIED_UPON", entry.standing, entry.generation, ["KEY_SUPERSEDED_NOT_RETAINED"]);
   const committed: CommittedState = { registry: statement.registry, acceptanceLedger: statement.acceptanceLedger };
   if (beyondRetained(committed, kept)) return noReliance("NOT_RELIED_UPON", entry.standing, entry.generation, ["CHECKPOINT_BEYOND_RETAINED_STATE"]);
   if (headDiffersAtRetained(committed, kept)) return noReliance("NOT_RELIED_UPON", entry.standing, entry.generation, ["CHECKPOINT_HEAD_DIFFERS_AT_RETAINED_STATE"]);
-  return noReliance("RELIED_UPON", entry.standing, entry.generation, [], ["SUPERSEDED_KEY_RETAINED_PREFIX_ONLY"]);
+  if (beforeRetained(committed, kept)) return noReliance("NOT_RELIED_UPON", entry.standing, entry.generation, ["CHECKPOINT_BEFORE_RETAINED_STATE"]);
+  return noReliance("RELIED_UPON", entry.standing, entry.generation, [], ["SUPERSEDED_KEY_RETAINED_STATE_ONLY"]);
 }
 
 export interface GovernedCheckpointContext extends GovernanceContext {
@@ -433,13 +446,28 @@ const issuedGoverned = new WeakSet<object>();
  * rely on is left out of the derived root, so `verifyCheckpoint` reports its signer as not authorized and mints no anchors.
  */
 export function verifyGovernedCheckpoint(checkpoint: unknown, rawContext?: unknown): GovernedCheckpointVerification {
+  try {
+    return evaluateGoverned(checkpoint, rawContext);
+  } catch {
+    // Input that cannot even be read (a throwing getter, a revoked proxy, a value that changes between reads) is refused, never evaluated and never an exception.
+    return issueGoverned({ governance: verifyGovernance(undefined), reliance: deepFreeze(noReliance("NOT_EVALUATED", "NOT_EVALUATED", null, ["GOVERNANCE_STATE_NOT_USABLE"])), checkpoint: verifyCheckpoint(undefined) });
+  }
+}
+
+const issueGoverned = (result: GovernedCheckpointVerification): GovernedCheckpointVerification => {
+  issuedGoverned.add(result);
+  return Object.freeze(result);
+};
+
+function evaluateGoverned(checkpoint: unknown, rawContext: unknown): GovernedCheckpointVerification {
   const context = contextOf(rawContext) as GovernedCheckpointContext;
+  const { keyRegistry, acceptanceLedger, allowExtension, anchor, expectedDigest } = context;
   const governance = verifyGovernance(context);
   const parsed = readCheckpoint(checkpoint);
   const reliance = assessReliance(governance, parsed);
 
   let trustRoot: GovernanceTrustRoot | undefined;
-  if (usable(governance)) {
+  if (established(governance)) {
     const current = governance.keys.find((k) => k.standing === "CURRENT");
     const signer = reliance.status === "RELIED_UPON" && parsed.ok ? governance.keys.find((k) => k.keyId === parsed.envelope.statement.signer.keyId) : undefined;
     const entries = [current, signer].filter((k): k is GovernanceKeyEntry => k !== undefined);
@@ -448,25 +476,26 @@ export function verifyGovernedCheckpoint(checkpoint: unknown, rawContext?: unkno
 
   const forwarded: CheckpointContext = {};
   if (trustRoot !== undefined) forwarded.trustRoot = trustRoot;
-  if (context.keyRegistry !== undefined) forwarded.keyRegistry = context.keyRegistry;
-  if (context.acceptanceLedger !== undefined) forwarded.acceptanceLedger = context.acceptanceLedger;
-  if (context.allowExtension !== undefined) forwarded.allowExtension = context.allowExtension;
-  if (context.anchor !== undefined) forwarded.anchor = context.anchor;
-  if (context.expectedDigest !== undefined) forwarded.expectedDigest = context.expectedDigest;
+  if (keyRegistry !== undefined) forwarded.keyRegistry = keyRegistry;
+  if (acceptanceLedger !== undefined) forwarded.acceptanceLedger = acceptanceLedger;
+  if (allowExtension !== undefined) forwarded.allowExtension = allowExtension;
+  if (anchor !== undefined) forwarded.anchor = anchor;
+  if (expectedDigest !== undefined) forwarded.expectedDigest = expectedDigest;
 
-  const result: GovernedCheckpointVerification = { governance, reliance: deepFreeze(reliance), checkpoint: verifyCheckpoint(checkpoint, forwarded) };
-  issuedGoverned.add(result);
-  return Object.freeze(result);
+  // `verifyCheckpoint` is given the value parsed once, so what reliance was judged on is exactly what is verified; a value that parsed differently the second time is refused.
+  const verified = verifyCheckpoint(parsed.ok ? parsed.envelope : checkpoint, forwarded);
+  if (!parsed.ok && verified.parse === "PARSED") throw new Error("the checkpoint changed between reads");
+  return issueGoverned({ governance, reliance: deepFreeze(reliance), checkpoint: verified });
 }
 
 /**
- * The anchors of section 23, given only when governance also relies on the signer: a usable governance state, a signer that is the current key
+ * The anchors of section 23, given only when governance also relies on the signer: a usable governance state under a pinned bootstrap, a signer that is the current key
  * or a superseded one inside the state the root named, and every dimension of `checkpointAnchors`. Only a result `verifyGovernedCheckpoint`
  * itself returned is accepted.
  */
 export function governedCheckpointAnchors(result: GovernedCheckpointVerification): CheckpointAnchors | null {
   if (typeof result !== "object" || result === null || !issuedGoverned.has(result)) return null;
-  if (result.reliance.status !== "RELIED_UPON" || !usable(result.governance)) return null;
+  if (result.reliance.status !== "RELIED_UPON" || !established(result.governance)) return null;
   return checkpointAnchors(result.checkpoint);
 }
 
@@ -573,6 +602,7 @@ export function assessRootReset(pinned: unknown, candidate: unknown, confirmatio
     if (parsed.ok) {
       if (Number(parsed.artifact.rootEpoch) <= Number(current.data.rootEpoch)) reasons.push("EPOCH_NOT_GREATER");
       if (parsed.artifact.root.publicKey === current.data.rootPublicKey) reasons.push("ROOT_KEY_UNCHANGED");
+      else if (current.data.retiredRootPublicKeys?.includes(parsed.artifact.root.publicKey) === true) reasons.push("ROOT_KEY_PREVIOUSLY_RETIRED");
     }
     if (reasons.length > 0 || !parsed.ok) return deepFreeze(refuse(reasons, parsed.ok ? parsed.artifact.rootEpoch : null, pin.digest));
     return deepFreeze({ status: "RESET_ACCEPTED", newRootEpoch: parsed.artifact.rootEpoch, newBootstrapDigest: pin.digest, consumerAction: "REPLACE_PINNED_BOOTSTRAP_AND_RAISE_MINIMUM_EPOCH", reasons: [], establishes: RESET_ESTABLISHES, doesNotEstablish: RESET_DOES_NOT_ESTABLISH });

@@ -51,12 +51,12 @@ describe("rehearsal: the fifteen steps", () => {
     }
   });
 
-  test("9 and 10: rotation retires the old key, which keeps what the root retained and loses everything after; the new key is relied upon", () => {
+  test("9 and 10: rotation retires the old key, which keeps only the exact state the root retained and loses everything else; the new key is relied upon", () => {
     const rotation = step("operational key rotation (generation 1 to 2)");
     assert.equal(rotation["chain"], "VALID");
     assert.equal(rotation["held"], "ADVANCES_HELD");
     assert.deepEqual(rotation["keys"], ["1:synthetic-checkpoint-signer-001:RETIRED", "2:synthetic-checkpoint-signer-002:CURRENT"]);
-    assert.equal(get(rotation, "oldCheckpointWithinRetained", "reliance", "status"), "RELIED_UPON");
+    assert.deepEqual(get(rotation, "oldCheckpointBeforeRetained", "reliance", "reasons"), ["CHECKPOINT_BEFORE_RETAINED_STATE"]);
     assert.equal(get(rotation, "oldCheckpointAtRetained", "reliance", "status"), "RELIED_UPON");
     assert.equal(get(rotation, "newCheckpointByNewKey", "reliance", "keyStanding"), "CURRENT");
     const retirement = step("old-key retirement");

@@ -63,7 +63,7 @@ export const formatFingerprint = (digest: string): string => digest.match(/.{1,8
 export const SupersedesSchema = z.strictObject({
   authorizationDigest: Hex64,
   standing: z.enum(SUPERSEDED_STANDINGS),
-  retainedThrough: CommittedStateSchema.nullable(),
+  retainedAt: CommittedStateSchema.nullable(),
 });
 export type Supersedes = z.infer<typeof SupersedesSchema>;
 
@@ -107,7 +107,8 @@ export const ConfirmationSchema = z.strictObject({ origin: z.enum(CONFIRMATION_O
 export type Confirmation = z.infer<typeof ConfirmationSchema>;
 
 /** The root a consumer already relies on, as a reset is judged against it: its epoch, its root key and its fingerprint. */
-export const PinnedRootSchema = z.strictObject({ rootEpoch: Epoch, rootPublicKey: PublicKeyHexSchema, bootstrapDigest: Hex64 });
+/** The root a caller relies on, and optionally the root public keys it has already retired: a reset may not go back to one of them. */
+export const PinnedRootSchema = z.strictObject({ rootEpoch: Epoch, rootPublicKey: PublicKeyHexSchema, bootstrapDigest: Hex64, retiredRootPublicKeys: z.array(PublicKeyHexSchema).max(16).optional() });
 export type PinnedRoot = z.infer<typeof PinnedRootSchema>;
 
 // ─── parsing ─────────────────────────────────────────────────────────────────

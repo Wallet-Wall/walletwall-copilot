@@ -66,7 +66,7 @@ describe("authorization: the exact signed bytes and the domain tag", () => {
   });
 
   test("every field of the statement is inside the signed bytes: changing any one changes them", () => {
-    const withSupersedes = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: null }])[1]!.statement;
+    const withSupersedes = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: null }])[1]!.statement;
     const base = authorizationPreimage(withSupersedes);
     const edits: ((s: typeof withSupersedes) => void)[] = [
       (s) => void (s.authorizationVersion = "9.9" as never),
@@ -82,7 +82,7 @@ describe("authorization: the exact signed bytes and the domain tag", () => {
       (s) => void (s.supersedes = null),
       (s) => void (s.supersedes && (s.supersedes.standing = "COMPROMISED")),
       (s) => void (s.supersedes && (s.supersedes.authorizationDigest = rootDigest)),
-      (s) => void (s.supersedes && (s.supersedes.retainedThrough = { registry: { headVersion: "1", headDigest: rootDigest }, acceptanceLedger: { entryCount: "0", headDigest: null } })),
+      (s) => void (s.supersedes && (s.supersedes.retainedAt = { registry: { headVersion: "1", headDigest: rootDigest }, acceptanceLedger: { entryCount: "0", headDigest: null } })),
     ];
     for (const [i, edit] of edits.entries()) {
       const copy = structuredClone(withSupersedes);
@@ -136,12 +136,12 @@ describe("authorization: what the root signs, and what fails", () => {
       ["purpose", (s) => void (s.authorizedKey.purposes = ["REGISTRY_LEDGER_CHECKPOINT", "STANDING_HEAD"]), "SIGNATURE_MISMATCH"],
       ["generation", (s) => void (s.generation = "2"), "SIGNATURE_MISMATCH"],
       ["authorized algorithm", (s) => void (s.authorizedKey.algorithm = "ED448"), "SIGNATURE_MISMATCH"],
-      ["supersedes", (s) => void (s.supersedes = { authorizationDigest: rootDigest, standing: "RETIRED", retainedThrough: null }), "SIGNATURE_MISMATCH"],
+      ["supersedes", (s) => void (s.supersedes = { authorizationDigest: rootDigest, standing: "RETIRED", retainedAt: null }), "SIGNATURE_MISMATCH"],
       ["root epoch", (s) => void (s.rootEpoch = "2"), "ROOT_EPOCH_MISMATCH"],
     ];
     for (const [what, edit, reason] of edits) assert.deepEqual(reasons([altered(a1, edit)]), [reason], what);
 
-    const chain = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: null }]);
+    const chain = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: null }]);
     const flipStanding = altered(chain[1] as never, (s) => void (s.supersedes && (s.supersedes.standing = "COMPROMISED")));
     assert.deepEqual(reasons([chain[0], flipStanding]), ["SIGNATURE_MISMATCH"], "the root's decision about the old key cannot be rewritten after signing");
   });
@@ -194,9 +194,9 @@ describe("authorization: keys, grants and privilege separation", () => {
     assert.deepEqual(reasons([authorizationFor({ generation: "1", key: { ...GK.op1, keyId: GK.root1.keyId } })]), ["AUTHORIZED_KEY_IS_ROOT_KEY"]);
     assert.deepEqual(reasons([authorizationFor({ generation: "1", key: { ...GK.op1, n: GK.root1.n } })]), ["AUTHORIZED_KEY_IS_ROOT_KEY"], "the same material under a new name is the same key");
     const reused = [...chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED" }])];
-    const back = authorizationFor({ generation: "3", key: GK.op1, supersedes: { authorizationDigest: authorizationDigest(reused[1] as never), standing: "RETIRED", retainedThrough: null } });
+    const back = authorizationFor({ generation: "3", key: GK.op1, supersedes: { authorizationDigest: authorizationDigest(reused[1] as never), standing: "RETIRED", retainedAt: null } });
     assert.deepEqual(reasons([...reused, back]), ["AUTHORIZED_KEY_REUSED"]);
-    const renamed = authorizationFor({ generation: "3", key: { ...GK.op3, n: GK.op1.n }, supersedes: { authorizationDigest: authorizationDigest(reused[1] as never), standing: "RETIRED", retainedThrough: null } });
+    const renamed = authorizationFor({ generation: "3", key: { ...GK.op3, n: GK.op1.n }, supersedes: { authorizationDigest: authorizationDigest(reused[1] as never), standing: "RETIRED", retainedAt: null } });
     assert.deepEqual(reasons([...reused, renamed]), ["AUTHORIZED_KEY_REUSED"], "reuse is by key material, not by name");
   });
 
@@ -224,9 +224,9 @@ describe("authorization: keys, grants and privilege separation", () => {
 
   test("an operational key cannot authorize a new root, a new operational key, or itself: it holds no authorization power", () => {
     const chain = chainOf([{ key: GK.op1 }]);
-    const byOperational = authorizationFor({ generation: "2", key: GK.op2, supersedes: { authorizationDigest: authorizationDigest(chain[0] as never), standing: "RETIRED", retainedThrough: null } }, GK.op1.n);
+    const byOperational = authorizationFor({ generation: "2", key: GK.op2, supersedes: { authorizationDigest: authorizationDigest(chain[0] as never), standing: "RETIRED", retainedAt: null } }, GK.op1.n);
     assert.deepEqual(reasons([...chain, byOperational]), ["SIGNATURE_MISMATCH"]);
-    const asRoot = authorizationFor({ root: GK.op1, generation: "2", key: GK.op2, supersedes: { authorizationDigest: authorizationDigest(chain[0] as never), standing: "RETIRED", retainedThrough: null } });
+    const asRoot = authorizationFor({ root: GK.op1, generation: "2", key: GK.op2, supersedes: { authorizationDigest: authorizationDigest(chain[0] as never), standing: "RETIRED", retainedAt: null } });
     assert.deepEqual(reasons([...chain, asRoot]), ["ROOT_MISMATCH"]);
     const grantsRootPurpose = authorizationFor({ generation: "1", key: GK.op1, purposes: ["CHECKPOINT_KEY_AUTHORIZATION"] });
     assert.deepEqual(reasons([grantsRootPurpose]), ["PURPOSE_NOT_PERMITTED"]);

@@ -97,7 +97,7 @@ describe("recovery: removing the working copy, recovering it, and using it exact
     assert.equal(authorizationDigest(byRecovered), authorizationDigest(byOriginal));
     const first = chainOf([{ key: GK.op1 }])[0];
     assert.deepEqual(first, byOriginal);
-    const next = statementFor({ generation: "2", key: GK.op2, supersedes: { authorizationDigest: authorizationDigest(byOriginal), standing: "RETIRED", retainedThrough: null } });
+    const next = statementFor({ generation: "2", key: GK.op2, supersedes: { authorizationDigest: authorizationDigest(byOriginal), standing: "RETIRED", retainedAt: null } });
     const second = envelopeOf(next, recovered.signPreimageWith(authorizationPreimage(next)));
     const r = verifyGovernance({ bootstrap: root, authorizations: [byOriginal, second], allowSynthetic: true, expectedBootstrapDigest: rootDigest });
     assert.equal(r.chain.status, "VALID", "a generation signed after recovery extends a chain begun before it");
@@ -118,12 +118,12 @@ describe("recovery: when it cannot happen", () => {
   test("with every backup lost, recovery is refused, nothing can sign generation N+1, and no other key can stand in for the root", () => {
     assert.equal(refusal(() => recoverFromBackup([][0])), "NO_BACKUP");
     const chain = chainOf([{ key: GK.op1 }, { key: GK.op2 }]);
-    const stand = authorizationFor({ generation: "3", key: GK.op3, supersedes: { authorizationDigest: authorizationDigest(chain[1] as never), standing: "RETIRED", retainedThrough: null } }, GK.op2.n);
+    const stand = authorizationFor({ generation: "3", key: GK.op3, supersedes: { authorizationDigest: authorizationDigest(chain[1] as never), standing: "RETIRED", retainedAt: null } }, GK.op2.n);
     assert.deepEqual(verifyGovernance({ bootstrap: root, authorizations: [...chain, stand], allowSynthetic: true }).chain.reasons, ["SIGNATURE_MISMATCH"]);
   });
 
   test("with the root lost, what was signed stays cryptographically valid and relied upon under the pinned root; only new authorization is impossible", () => {
-    const chain = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: null }]);
+    const chain = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: null }]);
     const r = governed(checkpointBy(GK.op2, 9), chain, 9);
     assert.equal(r.checkpoint.signature.status, "VALID");
     assert.equal(r.reliance.status, "RELIED_UPON");

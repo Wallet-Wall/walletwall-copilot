@@ -47,7 +47,7 @@ const SCAN = "governance-secret-scan.ts";
 const ONE_PURPOSE_LINE = '  if (!key.purposes.every((p) => (OPERATIONAL_KEY_PURPOSES as readonly string[]).includes(p))) reasons.push("PURPOSE_NOT_PERMITTED");';
 const SIGNATURE_LINE = "  const signature = verifyEd25519(root.publicKey, authorizationPreimage(statement), envelope.signature);";
 const ROOT_MISMATCH_LINE = '  if (statement.root.keyId !== root.keyId || statement.root.algorithm !== root.algorithm || statement.root.publicKey !== root.publicKey) return { envelope, check: { reasons: ["ROOT_MISMATCH"] } };';
-const HELD_CAPABILITY = 'if (typeof v !== "object" || v === null || !issued.has(v) || !usable(v)) return null;';
+const HELD_CAPABILITY = 'if (typeof v !== "object" || v === null || !issued.has(v) || !established(v)) return null;';
 
 const MUTANTS: readonly Mutant[] = [
   // ── the fifteen the lane required ──
@@ -102,17 +102,26 @@ const MUTANTS: readonly Mutant[] = [
   M(52, "the unpinned limitation is not reported", P(VERIFY, '  if (bootstrap.pin !== "PINNED") limitations.push("BOOTSTRAP_UNPINNED");', "")),
   M(53, "the unheld-state limitation is not reported", P(VERIFY, '  if (held.status === "NO_HELD_STATE") limitations.push("GOVERNANCE_STATE_UNHELD");', "")),
   M(54, "a compromised key is read as retired: the root's standing decision is ignored", P(VERIFY, '    const standing: KeyStanding = next === undefined ? "CURRENT" : (supersedes?.standing ?? "COMPROMISED");', '    const standing: KeyStanding = next === undefined ? "CURRENT" : "RETIRED";')),
-  M(55, "the retained state the root named is ignored", P(VERIFY, "      retainedThrough: next === undefined ? null : (supersedes?.retainedThrough ?? null),", "      retainedThrough: null,")),
+  M(55, "the retained state the root named is ignored", P(VERIFY, "      retainedAt: next === undefined ? null : (supersedes?.retainedAt ?? null),", "      retainedAt: null,")),
   M(56, "any authorized key is relied upon, current or not", P(VERIFY, '  if (entry.standing === "CURRENT") return noReliance("RELIED_UPON", "CURRENT", entry.generation, []);', '  if (true) return noReliance("RELIED_UPON", entry.standing, entry.generation, []);')),
   M(57, "a superseded key with nothing retained is relied upon", P(VERIFY, '  if (kept === null) return noReliance("NOT_RELIED_UPON", entry.standing, entry.generation, ["KEY_SUPERSEDED_NOT_RETAINED"]);', '  if (kept === null) return noReliance("RELIED_UPON", entry.standing, entry.generation, []);')),
   M(58, "a checkpoint beyond the retained state is relied upon", P(VERIFY, "  if (beyondRetained(committed, kept)) return noReliance(", "  if (false) return noReliance(")),
   M(59, "another history at the retained state is relied upon", P(VERIFY, "  if (headDiffersAtRetained(committed, kept)) return noReliance(", "  if (false) return noReliance(")),
-  M(61, "a retained superseded key is not labelled as retained-prefix-only", P(VERIFY, 'return noReliance("RELIED_UPON", entry.standing, entry.generation, [], ["SUPERSEDED_KEY_RETAINED_PREFIX_ONLY"]);', 'return noReliance("RELIED_UPON", entry.standing, entry.generation, [], []);')),
+  M(60, "a checkpoint below the retained state is relied upon: a stolen retired key can sign another history there", P(VERIFY, "  if (beforeRetained(committed, kept)) return noReliance(", "  if (false) return noReliance(")),
+  M(61, "a retained superseded key is not labelled as retained-state-only", P(VERIFY, 'return noReliance("RELIED_UPON", entry.standing, entry.generation, [], ["SUPERSEDED_KEY_RETAINED_STATE_ONLY"]);', 'return noReliance("RELIED_UPON", entry.standing, entry.generation, [], []);')),
   M(62, "the trust root derived from the state holds every authorized key, not only the current one", P(VERIFY, "  return current === undefined ? null : rootOf([current]);", "  return current === undefined ? null : rootOf(v.keys);")),
   M(63, "a signer the caller may not rely on is still put in the derived root", P(VERIFY, 'const signer = reliance.status === "RELIED_UPON" && parsed.ok ? governance.keys.find(', "const signer = parsed.ok ? governance.keys.find(")),
-  M(64, "the state to hold next is minted for a fabricated result", P(VERIFY, `${HELD_CAPABILITY}\n  const head = v.keys[v.keys.length - 1];`, 'if (typeof v !== "object" || v === null || !usable(v)) return null;\n  const head = v.keys[v.keys.length - 1];')),
-  M(65, "a trust root is derived from a fabricated result", P(VERIFY, `${HELD_CAPABILITY}\n  const current = v.keys.find((k) => k.standing === "CURRENT");`, 'if (typeof v !== "object" || v === null || !usable(v)) return null;\n  const current = v.keys.find((k) => k.standing === "CURRENT");')),
+  M(64, "the state to hold next is minted for a fabricated result", P(VERIFY, `${HELD_CAPABILITY}\n  const head = v.keys[v.keys.length - 1];`, 'if (typeof v !== "object" || v === null || !established(v)) return null;\n  const head = v.keys[v.keys.length - 1];')),
+  M(65, "a trust root is derived from a fabricated result", P(VERIFY, `${HELD_CAPABILITY}\n  const current = v.keys.find((k) => k.standing === "CURRENT");`, 'if (typeof v !== "object" || v === null || !established(v)) return null;\n  const current = v.keys.find((k) => k.standing === "CURRENT");')),
   M(66, "anchors are minted for a fabricated governed result", P(VERIFY, 'if (typeof result !== "object" || result === null || !issuedGoverned.has(result)) return null;', 'if (typeof result !== "object" || result === null) return null;')),
+  M(68, "an unpinned bootstrap is relied upon", P(VERIFY, '  if (governance.bootstrap.pin !== "PINNED") return noReliance(', "  if (false) return noReliance(")),
+  M(69, "a trust root is derived from an unpinned state", P(VERIFY, `!issued.has(v) || !established(v)) return null;\n  const current`, `!issued.has(v) || !usable(v)) return null;\n  const current`)),
+  M(72, "a held state is minted from an unpinned state", P(VERIFY, `!issued.has(v) || !established(v)) return null;\n  const head`, `!issued.has(v) || !usable(v)) return null;\n  const head`)),
+  M(73, "the derived trust root is handed to the section 23 verifier although the bootstrap is unpinned", P(VERIFY, `  if (established(governance)) {\n    const current`, `  if (usable(governance)) {\n    const current`)),
+  M(74, "governed verification throws on input it cannot read", P(VERIFY, `  } catch {\n    // Input that cannot even be read (a throwing getter, a revoked proxy, a value that changes between reads) is refused, never evaluated and never an exception.`, `  } catch (e) {\n    if (e !== undefined) throw e;\n    // refused`)),
+  M(75, "reliance is judged on one read of the checkpoint and the section 23 verifier is given another", P(VERIFY, "verifyCheckpoint(parsed.ok ? parsed.envelope : checkpoint, forwarded)", "verifyCheckpoint(checkpoint, forwarded)")),
+  M(76, "a checkpoint that parsed differently the second time is verified anyway", P(VERIFY, '  if (!parsed.ok && verified.parse === "PARSED") throw new Error("the checkpoint changed between reads");', "")),
+  M(77, "a reset may go back to a root key the caller retired", P(VERIFY, '      else if (current.data.retiredRootPublicKeys?.includes(parsed.artifact.root.publicKey) === true) reasons.push("ROOT_KEY_PREVIOUSLY_RETIRED");', "")),
   M(67, "a verifier that cannot read its input throws instead of refusing it", P(VERIFY, '    return issue(deepFreeze(emptyResult(emptyBootstrap("MALFORMED", ["BOOTSTRAP_MALFORMED"]))));', '    throw new Error("unreadable");')),
 
   // ── pinning and reset ──
@@ -131,6 +140,14 @@ const MUTANTS: readonly Mutant[] = [
   M(88, "a rehearsal may name a production key", P(TRANSCRIPT, '    if (t.mode === "SYNTHETIC_REHEARSAL" && synthetic !== keyIds.length) reasons.push("SYNTHETIC_MODE_WITH_NON_SYNTHETIC_KEY");', "")),
   M(89, "one person may be both operator and witness", P(TRANSCRIPT, '  if (operators !== 1 || witnesses < 1 || new Set(t.participants.map((p) => p.participantId)).size !== t.participants.length) out.push("PARTICIPANTS_INVALID");', "")),
   M(90, "the ceremony id need not agree with the mode", P(TRANSCRIPT, '  if ((t.mode === "SYNTHETIC_REHEARSAL") !== t.ceremonyId.startsWith(SYNTHETIC_CEREMONY_ID_PREFIX)) out.push("CEREMONY_ID_MODE_MISMATCH");', "")),
+  M(92, "impossible backup counts are accepted", P(TRANSCRIPT, 'if (Number(r.mediaLocations) > Number(r.mediaCopies) || Number(r.passphraseLocations) > Number(r.passphraseEnvelopes)) out.push("BACKUP_COUNTS_IMPOSSIBLE");', "")),
+  M(93, "authorizations signed by another root are accepted against a bootstrap", P(TRANSCRIPT, 'if (rootArtifact !== null && (envelope.statement.root.keyId !== rootArtifact.root.keyId || envelope.statement.root.publicKey !== rootArtifact.root.publicKey || envelope.statement.rootEpoch !== rootArtifact.rootEpoch)) reasons.push("AUTHORIZATION_ROOT_MISMATCH");', "")),
+  M(94, "the root epoch of an authorization is not compared with the bootstrap's", P(TRANSCRIPT, "|| envelope.statement.rootEpoch !== rootArtifact.rootEpoch))", "))")),
+  M(95, "the root key material of an authorization is not compared with the bootstrap's", P(TRANSCRIPT, "envelope.statement.root.publicKey !== rootArtifact.root.publicKey ||", "")),
+  M(96, "the root key id of an authorization is not compared with the bootstrap's", P(TRANSCRIPT, "envelope.statement.root.keyId !== rootArtifact.root.keyId ||", "")),
+  M(97, "a LIVE transcript need not be cross-checked", P(TRANSCRIPT, 'const liveGap = t.mode === "LIVE" && limitations.length > 0 ? ["LIVE_NOT_CROSS_CHECKED"] : [];', "const liveGap: string[] = [];")),
+  M(98, "an identifier may be a long hex run", P(TRANSCRIPT, "\n  .refine((s) => !/[0-9a-f]{32}/.test(s))", "")),
+  M(99, "an identifier may be long enough to carry a 32-byte secret", P(TRANSCRIPT, "/^[a-z0-9][a-z0-9._-]{2,39}$/", "/^[a-z0-9][a-z0-9._-]{2,63}$/")),
   M(91, "the tooling list is not compared with the published one", P(TRANSCRIPT, 'return sameSet(t.tooling.map(key), expected.data.map(key)) ? { status: "MATCHED", reasons: [] } :', 'return true ? { status: "MATCHED", reasons: [] } :')),
 
   // ── the scanner ──
@@ -140,6 +157,10 @@ const MUTANTS: readonly Mutant[] = [
   M(103, "no field name in JSON is checked", P(SCAN, '      if (SECRET_FIELD_NAMES.has(normaliseField(key))) out.push({ code: "SECRET_FIELD_NAME", at });', "")),
   M(104, "the scanner reports the line it matched", P(SCAN, "if (rule.re.test(line)) findings.push({ code: rule.code, at: `line ${i + 1}` });", "if (rule.re.test(line)) findings.push({ code: rule.code, at: line });")),
   M(105, "a 64-hex value beside a secret word is not found", P(SCAN, 'code: "SEED_HEX_NEAR_SECRET_WORD", re: /\\b(?:seed|priv|', 'code: "SEED_HEX_NEAR_SECRET_WORD", re: /(?!)\\b(?:seed|priv|')),
+
+  M(106, "a value nested too deep to scan is passed as clean", P(SCAN, '    out.push({ code: "SCAN_DEPTH_EXCEEDED", at: path });\n', "")),
+  M(107, "a JWK private scalar field is not found", P(SCAN, '  "d",\n  "privatekey",', '  "privatekey",')),
+  M(108, "a secret used as a field name is echoed back in the finding", P(SCAN, "(/^[A-Za-z][A-Za-z0-9_]{0,15}$/.test(key) ? key : `[key ${index}]`)", "key")),
 
   // ── isolation ──
   M(110, "a governance module draws randomness (key generation creeps in)", P(VOCAB, 'export const GOVERNANCE_FORMAT_VERSION = "0.1";', 'export const GOVERNANCE_FORMAT_VERSION = "0.1";\nexport const SEED_SOURCE = "random' + 'Bytes(32)";')),
@@ -209,9 +230,16 @@ const restore = (): void => {
   for (const [file, text] of original) writeFileSync(join(root, file), text);
   writeFileSync(lock, "FREE");
 };
-process.on("SIGINT", () => {
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    restore();
+    process.exit(130);
+  });
+}
+process.on("uncaughtException", (error) => {
   restore();
-  process.exit(130);
+  console.error(error);
+  process.exit(1);
 });
 
 const running = holder();

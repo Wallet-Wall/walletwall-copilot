@@ -16,8 +16,8 @@ const root2 = bootstrapFor(GK.root2, { rootEpoch: "2" });
 const root2Digest = bootstrapDigest(root2);
 const retained6 = committedAt(6);
 const c1 = chainOf([{ key: GK.op1 }]);
-const c12 = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: retained6 }]);
-const c123 = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: retained6 }, { key: GK.op3, previousStanding: "COMPROMISED", previousRetainedThrough: null }]);
+const c12 = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: retained6 }]);
+const c123 = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: retained6 }, { key: GK.op3, previousStanding: "COMPROMISED", previousRetainedAt: null }]);
 const chain2 = chainOf([{ key: GK.op5 }], GK.root2, "2");
 const at = <T,>(list: readonly T[], i: number): T => list[i] as T;
 const origins = (digest: string, list: readonly string[]): { origin: string; digest: string }[] => list.map((origin) => ({ origin, digest }));
@@ -40,15 +40,16 @@ describe("operational-key compromise: the root replaces the key", () => {
 
   test("the replacement key's checkpoints are relied upon; the earlier retired key keeps what it retained; nothing else changes", () => {
     assert.equal(governed(checkpointBy(GK.op3, 9), c123, 9).reliance.status, "RELIED_UPON");
-    assert.equal(governed(checkpointBy(GK.op1, 4), c123, 4).reliance.status, "RELIED_UPON", "the retired key's retained prefix survives a later compromise of another key");
+    assert.equal(governed(checkpointBy(GK.op1, 6), c123, 6).reliance.status, "RELIED_UPON", "the retired key's retained state survives a later compromise of another key");
+    assert.deepEqual(governed(checkpointBy(GK.op1, 4), c123, 4).reliance.reasons, ["CHECKPOINT_BEFORE_RETAINED_STATE"]);
     assert.equal(governed(checkpointBy(GK.op1, 9), c123, 9).reliance.status, "NOT_RELIED_UPON");
   });
 
   test("a compromised key cannot authorize its own replacement, a successor or a new root", () => {
     const stolen = GK.op2;
-    const asSuccessor = authorizationFor({ generation: "3", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(at(c12, 1)), standing: "RETIRED", retainedThrough: committedAt(9) } }, stolen.n);
+    const asSuccessor = authorizationFor({ generation: "3", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(at(c12, 1)), standing: "RETIRED", retainedAt: committedAt(9) } }, stolen.n);
     assert.deepEqual(verifyGovernance({ bootstrap: root1, authorizations: [...c12, asSuccessor], allowSynthetic: true }).chain.reasons, ["SIGNATURE_MISMATCH"]);
-    const asRoot = authorizationFor({ root: stolen, generation: "3", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(at(c12, 1)), standing: "RETIRED", retainedThrough: committedAt(9) } });
+    const asRoot = authorizationFor({ root: stolen, generation: "3", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(at(c12, 1)), standing: "RETIRED", retainedAt: committedAt(9) } });
     assert.deepEqual(verifyGovernance({ bootstrap: root1, authorizations: [...c12, asRoot], allowSynthetic: true }).chain.reasons, ["ROOT_MISMATCH"]);
     const newRoot = verifyGovernance({ bootstrap: bootstrapFor(stolen, { rootEpoch: "2" }), allowSynthetic: true, expectedBootstrapDigest: root1Digest });
     assert.equal(newRoot.bootstrap.pin, "MISMATCHED");
@@ -64,7 +65,7 @@ describe("operational-key compromise: the root replaces the key", () => {
     assert.equal(stale.reliance.status, "RELIED_UPON");
     assert.ok(stale.governance.limitations.includes("GOVERNANCE_STATE_UNHELD"), "nothing says this is not an older governance state");
     assert.ok(GOVERNANCE_DOES_NOT_ESTABLISH.some((s) => /latest governance state/.test(s)));
-    const holding = heldGovernanceState(verifyGovernance({ bootstrap: root1, authorizations: c123, allowSynthetic: true }));
+    const holding = heldGovernanceState(verifyGovernance({ bootstrap: root1, authorizations: c123, allowSynthetic: true, expectedBootstrapDigest: root1Digest }));
     const fresh = governed(checkpointBy(GK.op2, 9), c12, 9, { held: holding?.held });
     assert.equal(fresh.reliance.status, "NOT_EVALUATED", "a verifier holding generation 3 refuses the generation-2 state instead of trusting it");
   });
@@ -79,8 +80,8 @@ describe("operational-key compromise: the root replaces the key", () => {
 });
 
 describe("root compromise: nothing signed by the root repairs it", () => {
-  const attackerGen4 = authorizationFor({ generation: "4", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(at(c123, 2)), standing: "RETIRED", retainedThrough: committedAt(9) } });
-  const defenderGen4 = authorizationFor({ generation: "4", key: GK.op4, supersedes: { authorizationDigest: authorizationDigest(at(c123, 2)), standing: "COMPROMISED", retainedThrough: null } });
+  const attackerGen4 = authorizationFor({ generation: "4", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(at(c123, 2)), standing: "RETIRED", retainedAt: committedAt(9) } });
+  const defenderGen4 = authorizationFor({ generation: "4", key: GK.op4, supersedes: { authorizationDigest: authorizationDigest(at(c123, 2)), standing: "COMPROMISED", retainedAt: null } });
   const attacker = [...c123, attackerGen4];
   const defender = [...c123, defenderGen4];
   const run = (chain: unknown, over: Record<string, unknown> = {}) => verifyGovernance({ bootstrap: root1, authorizations: chain, allowSynthetic: true, expectedBootstrapDigest: root1Digest, ...over });
@@ -100,6 +101,17 @@ describe("root compromise: nothing signed by the root repairs it", () => {
     assert.equal(run(defender, { held: heldGen3 }).held.status, "ADVANCES_HELD");
     assert.equal(run(attacker, { held: heldDefender }).held.status, "FORKED_FROM_HELD", "equivocation is visible only to a verifier that already held one side");
     assert.equal(run(defender, { held: heldDefender }).held.status, "AT_HELD");
+  });
+
+  test("a reset may not go back to a root key the caller has retired, even at a higher epoch and with two origins", () => {
+    const back = bootstrapFor(GK.root1, { rootEpoch: "3" });
+    const confirmed = origins(bootstrapDigest(back), ["GITHUB", "WALLETWALL_WEBSITE"]);
+    const pinnedRoot2 = { rootEpoch: "2", rootPublicKey: publicKeyOf(GK.root2), bootstrapDigest: root2Digest };
+    assert.equal(assessRootReset(pinnedRoot2, back, confirmed, { allowSynthetic: true }).status, "RESET_ACCEPTED", "without the list the library cannot know the key was retired");
+    const withRetired = assessRootReset({ ...pinnedRoot2, retiredRootPublicKeys: [publicKeyOf(GK.root1)] }, back, confirmed, { allowSynthetic: true });
+    assert.equal(withRetired.status, "RESET_REFUSED");
+    assert.deepEqual(withRetired.reasons, ["ROOT_KEY_PREVIOUSLY_RETIRED"]);
+    assert.equal(assessRootReset({ ...pinnedRoot2, retiredRootPublicKeys: ["nope"] }, back, confirmed, { allowSynthetic: true }).reasons[0], "PINNED_STATE_MALFORMED");
   });
 
   test("a root-signed 'new root' is not a reset: a new epoch under the same key, or an authorization naming another root, or any signature offered as a confirmation, is refused", () => {
@@ -176,7 +188,7 @@ describe("root loss: no magic recovery path", () => {
 
   test("there is no recovery path that preserves trust without an existing authorized key: a generation signed by anything else is refused", () => {
     for (const signer of [GK.op1, GK.op2, GK.op3, GK.root2, GK.attacker]) {
-      const forged = authorizationFor({ generation: "4", key: GK.op4, supersedes: { authorizationDigest: authorizationDigest(at(c123, 2)), standing: "COMPROMISED", retainedThrough: null } }, signer.n);
+      const forged = authorizationFor({ generation: "4", key: GK.op4, supersedes: { authorizationDigest: authorizationDigest(at(c123, 2)), standing: "COMPROMISED", retainedAt: null } }, signer.n);
       assert.deepEqual(verifyGovernance({ bootstrap: root1, authorizations: [...c123, forged], allowSynthetic: true }).chain.reasons, ["SIGNATURE_MISMATCH"], signer.keyId);
     }
   });

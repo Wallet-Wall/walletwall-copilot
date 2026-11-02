@@ -9,7 +9,7 @@ import { GK, SYNTHETIC_TOOLING, bootstrapFor, chainOf, transcriptFor, verifyTran
  * It is evidence for review, not proof, and it has no slot a secret could sit in.
  */
 const root = bootstrapFor();
-const chain = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: null }]);
+const chain = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: null }]);
 const first = [chain[0] as never];
 const second = [chain[1] as never];
 const bootstrapT = () => transcriptFor({ ceremonyId: "synthetic-rehearsal-root-bootstrap-001", kind: "ROOT_BOOTSTRAP", bootstrap: root, authorizations: first });
@@ -111,10 +111,18 @@ describe("transcript: incomplete, out of order, one-sided or below the floor", (
     assert.deepEqual(BACKUP_MINIMUMS, { mediaCopies: 3, mediaLocations: 2, passphraseEnvelopes: 2, passphraseLocations: 2 });
     for (const field of ["mediaCopies", "mediaLocations", "passphraseEnvelopes", "passphraseLocations"] as const) {
       const t = mutate(bootstrapT, (x) => void ((event(x, "BACKUP_CREATED")["ref"] as Record<string, string>)[field] = "1"));
-      assert.deepEqual(check(t).structure.reasons, ["BACKUP_BELOW_MINIMUM"], field);
+      const impossible = field === "mediaCopies" || field === "passphraseEnvelopes" ? ["BACKUP_BELOW_MINIMUM", "BACKUP_COUNTS_IMPOSSIBLE"] : ["BACKUP_BELOW_MINIMUM"];
+      assert.deepEqual(check(t).structure.reasons, impossible, field);
     }
     const generous = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_CREATED")["ref"] as object, { mediaCopies: "5", mediaLocations: "3" }));
     assert.deepEqual(check(generous).reasons, []);
+  });
+
+  test("impossible counts are refused: more places than copies cannot be true of one backup", () => {
+    const places = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_CREATED")["ref"] as object, { mediaCopies: "3", mediaLocations: "9" }));
+    assert.deepEqual(check(places).structure.reasons, ["BACKUP_COUNTS_IMPOSSIBLE"]);
+    const envelopes = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_CREATED")["ref"] as object, { passphraseEnvelopes: "2", passphraseLocations: "5" }));
+    assert.deepEqual(check(envelopes).structure.reasons, ["BACKUP_COUNTS_IMPOSSIBLE"]);
   });
 
   test("two people: exactly one operator, at least one witness, distinct participants", () => {
@@ -132,7 +140,7 @@ describe("transcript: incomplete, out of order, one-sided or below the floor", (
 describe("transcript: consistency with the public artifacts", () => {
   test("every digest the transcript records must equal the digest of the artifact it names: the root, and each authorization", () => {
     const wrongRoot = check(bootstrapT(), first, bootstrapFor(GK.root2));
-    assert.deepEqual(wrongRoot.artifacts.reasons, ["ARTIFACT_DIGEST_MISMATCH"]);
+    assert.deepEqual(wrongRoot.artifacts.reasons, ["ARTIFACT_DIGEST_MISMATCH", "AUTHORIZATION_ROOT_MISMATCH"]);
     const wrongAuthorization = mutate(bootstrapT, (t) => void ((event(t, "OPERATIONAL_KEY_AUTHORIZED")["ref"] as Record<string, string>)["authorizationDigest"] = "0".repeat(64)));
     assert.deepEqual(check(wrongAuthorization).artifacts.reasons, ["ARTIFACT_DIGEST_MISMATCH"]);
     for (const name of ["ROOT_PUBLIC_KEY_RECORDED", "BACKUP_RECOVERY_TESTED"]) {
@@ -141,6 +149,43 @@ describe("transcript: consistency with the public artifacts", () => {
     }
     const restored = mutate(rotationT, (x) => void ((event(x, "ROOT_KEY_RESTORED")["ref"] as Record<string, string>)["bootstrapDigest"] = "2".repeat(64)));
     assert.deepEqual(check(restored, second).artifacts.reasons, ["ARTIFACT_DIGEST_MISMATCH"]);
+  });
+
+  test("the authorizations must be signed under the root the transcript names: a transcript whose digests all agree still cannot pair a bootstrap with another root's authorizations", () => {
+    const other = bootstrapFor(GK.root2);
+    const paired = transcriptFor({ ceremonyId: "synthetic-rehearsal-root-bootstrap-004", kind: "ROOT_BOOTSTRAP", bootstrap: other, authorizations: first });
+    assert.deepEqual(check(paired, first, other).artifacts.reasons, ["AUTHORIZATION_ROOT_MISMATCH"]);
+    const epoch2 = bootstrapFor(GK.root1, { rootEpoch: "2" });
+    const lateEpoch = transcriptFor({ ceremonyId: "synthetic-rehearsal-root-bootstrap-005", kind: "ROOT_BOOTSTRAP", bootstrap: epoch2, authorizations: first });
+    assert.deepEqual(check(lateEpoch, first, epoch2).artifacts.reasons, ["AUTHORIZATION_ROOT_MISMATCH"], "the epoch alone");
+    const otherKey = { ...root, root: { ...root.root, publicKey: bootstrapFor(GK.root2).root.publicKey } };
+    const keyOnly = transcriptFor({ ceremonyId: "synthetic-rehearsal-root-bootstrap-006", kind: "ROOT_BOOTSTRAP", bootstrap: otherKey, authorizations: first });
+    assert.deepEqual(check(keyOnly, first, otherKey).artifacts.reasons, ["AUTHORIZATION_ROOT_MISMATCH"], "the key material alone");
+    const otherId = { ...root, root: { ...root.root, keyId: "synthetic-governance-root-009" } };
+    const idOnly = transcriptFor({ ceremonyId: "synthetic-rehearsal-root-bootstrap-007", kind: "ROOT_BOOTSTRAP", bootstrap: otherId, authorizations: first });
+    assert.deepEqual(check(idOnly, first, otherId).artifacts.reasons, ["AUTHORIZATION_ROOT_MISMATCH"], "the key id alone");
+  });
+
+  test("a LIVE transcript is refused unless it is cross-checked against both the artifacts and the published tooling; a rehearsal may stand alone", () => {
+    const live = mutate(bootstrapT, (t) => void Object.assign(t, { mode: "LIVE", ceremonyId: "walletwall-governance-root-live" }));
+    assert.ok(verifyCeremonyTranscript(live).reasons.includes("LIVE_NOT_CROSS_CHECKED"));
+    assert.ok(verifyCeremonyTranscript(live, { bootstrap: root, authorizations: first }).reasons.includes("LIVE_NOT_CROSS_CHECKED"), "artifacts alone are not enough");
+    assert.ok(verifyCeremonyTranscript(live, { expectedTooling: SYNTHETIC_TOOLING }).reasons.includes("LIVE_NOT_CROSS_CHECKED"), "tooling alone is not enough");
+    assert.ok(!check(live).reasons.includes("LIVE_NOT_CROSS_CHECKED"));
+    assert.deepEqual(verifyCeremonyTranscript(bootstrapT()).reasons, [], "a synthetic rehearsal may stand alone, and reports what it did not check");
+  });
+
+  test("an identifier cannot carry key material: too long, or a long hex run, is refused as malformed in every identifier slot", () => {
+    const hex = "ab".repeat(16);
+    for (const edit of [
+      (t: T) => void (t.ceremonyId = `synthetic-${hex}`),
+      (t: T) => void (t.participants[0]!.participantId = `synthetic-operator-${"x".repeat(30)}`),
+      (t: T) => void (t.participants[1]!.participantId = `syn-${hex}`),
+      (t: T) => void (t.tooling[0]!.name = `syn-${hex}`),
+    ]) assert.equal(check(mutate(bootstrapT, edit)).parse, "MALFORMED");
+    assert.equal(check(mutate(bootstrapT, (t) => void (t.participants[1]!.participantId = `syn-${"ab".repeat(15)}`))).parse, "PARSED", "a 30-character hex run is an ordinary word");
+    assert.equal(check(mutate(bootstrapT, (t) => void (t.participants[1]!.participantId = "synthetic-witness-with-a-short-hex-0123456789ab"))).parse, "MALFORMED", "over 40 characters");
+    assert.equal(check(mutate(bootstrapT, (t) => void (t.participants[1]!.participantId = "synthetic-witness-c0ffee"))).parse, "PARSED", "short hex-looking words are ordinary");
   });
 
   test("a digest slot cannot hold a secret unnoticed: a 32-byte value that is not the artifact's digest is a mismatch", () => {

@@ -48,12 +48,32 @@ describe("secret scan: what it catches", () => {
   });
 
   test("a JSON file: every field name that could hold a secret, at every depth, and every string value", () => {
-    for (const field of ["privateKey", "private_key", "PrivateSeed", "secretKey", "seed", "seedPhrase", "mnemonic", "passphrase", "password", "entropy", "signing-key", "backupBlob", "encryptedKey", "recoveryPhrase"]) {
-      assert.deepEqual(scanCeremonyJson({ a: { b: [{ [field]: "x" }] } }), [{ code: "SECRET_FIELD_NAME", at: `a.b[0].${field}` }], field);
+    for (const field of ["privateKey", "private_key", "PrivateSeed", "secretKey", "seed", "seedPhrase", "mnemonic", "passphrase", "password", "entropy", "signing-key", "backupBlob", "encryptedKey", "recoveryPhrase", "d"]) {
+      const shown = /^[A-Za-z][A-Za-z0-9_]{0,15}$/.test(field) ? field : "[key 0]";
+      assert.deepEqual(scanCeremonyJson({ a: { b: [{ [field]: "x" }] } }), [{ code: "SECRET_FIELD_NAME", at: `a.b[0].${shown}` }], field);
     }
     assert.deepEqual(scanCeremonyJson({ note: PEM }), [{ code: "PEM_PRIVATE_KEY_BLOCK", at: "note" }]);
     assert.deepEqual(scanCeremonyJson({ list: ["abandon ability able about above absent absorb abstract absurd abuse access accident"] }), [{ code: "SEED_PHRASE_SHAPE", at: "list[0]" }]);
     assert.deepEqual(scanCeremonyFile("x.json", JSON.stringify({ privateKey: "x" })).map((f) => f.code), ["SECRET_VALUE_ASSIGNMENT", "SECRET_FIELD_NAME"].filter((c) => c === "SECRET_FIELD_NAME" || scanCeremonyText(JSON.stringify({ privateKey: "x" })).length > 0));
+  });
+
+  test("a value too deep to scan is reported, not passed: nesting beyond the walker's depth fails closed, in an object and in a file", () => {
+    let nested: unknown = { seed: "x" };
+    for (let i = 0; i < 20; i++) nested = { level: nested };
+    assert.deepEqual(codes(scanCeremonyJson(nested)), ["SCAN_DEPTH_EXCEEDED"]);
+    assert.deepEqual(codes(scanCeremonyFile("x.json", JSON.stringify(nested))), ["SCAN_DEPTH_EXCEEDED"]);
+    let shallow: unknown = { seed: "x" };
+    for (let i = 0; i < 10; i++) shallow = { level: shallow };
+    assert.deepEqual(codes(scanCeremonyJson(shallow)), ["SECRET_FIELD_NAME"], "within the depth the field is still found");
+  });
+
+  test("a secret used as a field name is not echoed back in the finding's path: only short identifiers are shown, anything else is a position", () => {
+    const asKey = "f".repeat(64);
+    const findings = scanCeremonyJson({ [asKey]: { seed: "x" }, ok: { "weird key with spaces": { password: "y" } } });
+    const text = JSON.stringify(findings);
+    assert.ok(!text.includes(asKey));
+    assert.ok(!text.includes("weird key"));
+    assert.deepEqual(findings.map((f) => f.at), ["[key 0].seed", "ok.[key 0].password"]);
   });
 
   test("a hostile JSON file cannot hide behind a parse failure: a repeated key falls back to the text rules", () => {
@@ -66,6 +86,7 @@ describe("secret scan: what it catches", () => {
     const seen = new Set([
       ...scanCeremonyText([PEM, PKCS8_HEX, AGE, `seed ${SEED_HEX}`, "export WALLETWALL_ROOT_KEY=abc", "${{ secrets.X }}", "privateKey: abcdefgh12345678", "mnemonic: abandon ability able about above absent absorb abstract absurd abuse access accident"].join("\n")).map((f) => f.code),
       ...scanCeremonyJson({ seed: "x" }).map((f) => f.code),
+      ...scanCeremonyJson({ a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: { a: 1 } } } } } } } } } } } } } } } } } }).map((f) => f.code),
     ]);
     assert.deepEqual([...seen].sort(), [...SECRET_SCAN_CODES].sort());
   });

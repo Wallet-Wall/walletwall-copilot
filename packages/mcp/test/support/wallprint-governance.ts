@@ -139,7 +139,7 @@ export interface ChainStep {
   key: GovKey;
   /** What the root says about the PREVIOUS key (ignored for the first step). */
   previousStanding?: SupersededStanding;
-  previousRetainedThrough?: CommittedState | null;
+  previousRetainedAt?: CommittedState | null;
 }
 
 /** An honest chain: generations 1..N, each naming the digest of the one before it. */
@@ -147,7 +147,7 @@ export function chainOf(steps: readonly ChainStep[], root: GovKey = GK.root1, ro
   const out: AuthorizationEnvelope[] = [];
   steps.forEach((step, i) => {
     const previous = out[i - 1];
-    const supersedes: Supersedes | null = previous === undefined ? null : { authorizationDigest: authorizationDigest(previous), standing: step.previousStanding ?? "RETIRED", retainedThrough: step.previousRetainedThrough ?? null };
+    const supersedes: Supersedes | null = previous === undefined ? null : { authorizationDigest: authorizationDigest(previous), standing: step.previousStanding ?? "RETIRED", retainedAt: step.previousRetainedAt ?? null };
     out.push(authorizationFor({ root, rootEpoch, generation: String(i + 1), key: step.key, supersedes }));
   });
   return out;
@@ -414,15 +414,15 @@ export function rehearse(): Rehearsal {
 
   // 9. routine operational-key rotation: the root names the last state op1 signed and retires it
   const retained = committedAt(6);
-  const chain12 = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedThrough: retained }]);
+  const chain12 = chainOf([{ key: GK.op1 }, { key: GK.op2, previousStanding: "RETIRED", previousRetainedAt: retained }]);
   const g2 = verifyChain(bootstrap1, chain12, { held: heldGovernanceState(v1b.governance)?.held });
   const c2 = checkpointBy(GK.op2, 9);
   record("operational key rotation (generation 1 to 2)", {
     chain: g2.chain.status,
     held: g2.held.status,
     keys: g2.keys.map((k) => `${k.generation}:${k.keyId}:${k.standing}`),
-    retainedThrough: retained,
-    oldCheckpointWithinRetained: governedSummary(governed(c1a, chain12, 4)),
+    retainedAt: retained,
+    oldCheckpointBeforeRetained: governedSummary(governed(c1a, chain12, 4)),
     oldCheckpointAtRetained: governedSummary(governed(c1b, chain12, 6)),
     newCheckpointByNewKey: governedSummary(governed(c2, chain12, 9)),
   });
@@ -470,7 +470,7 @@ export function rehearse(): Rehearsal {
   });
 
   // 12. replacement operational authorization after op2 is believed compromised, signed with the RECOVERED root
-  const gen3 = statementFor({ generation: "3", key: GK.op3, supersedes: { authorizationDigest: authorizationDigest(chain12[1] as AuthorizationEnvelope), standing: "COMPROMISED", retainedThrough: null } });
+  const gen3 = statementFor({ generation: "3", key: GK.op3, supersedes: { authorizationDigest: authorizationDigest(chain12[1] as AuthorizationEnvelope), standing: "COMPROMISED", retainedAt: null } });
   const a3 = envelopeOf(gen3, recoveredCopy.signPreimageWith(authorizationPreimage(gen3)));
   const chain123 = [...chain12, a3];
   const g3 = verifyChain(bootstrap1, chain123, { held: heldGovernanceState(g2)?.held });
@@ -513,8 +513,8 @@ export function rehearse(): Rehearsal {
   });
 
   // 14. root compromise: whoever holds the root key signs a valid generation 4 for a key of their choosing
-  const a4Attacker = authorizationFor({ generation: "4", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(a3), standing: "RETIRED", retainedThrough: committedAt(9) } });
-  const a4Defender = authorizationFor({ generation: "4", key: GK.op4, supersedes: { authorizationDigest: authorizationDigest(a3), standing: "COMPROMISED", retainedThrough: null } });
+  const a4Attacker = authorizationFor({ generation: "4", key: GK.attacker, supersedes: { authorizationDigest: authorizationDigest(a3), standing: "RETIRED", retainedAt: committedAt(9) } });
+  const a4Defender = authorizationFor({ generation: "4", key: GK.op4, supersedes: { authorizationDigest: authorizationDigest(a3), standing: "COMPROMISED", retainedAt: null } });
   const attackerChain = [...chain123, a4Attacker];
   const defenderChain = [...chain123, a4Defender];
   const cAttacker = checkpointBy(GK.attacker, 9);

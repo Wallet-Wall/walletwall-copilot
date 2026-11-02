@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { hasForbiddenStructure } from "../schemas.ts";
-import { SignerIdSchema } from "./attestation.ts";
 import { deepFreeze } from "./freeze.ts";
-import { authorizationDigest, bootstrapDigest, parseAuthorization, parseBootstrap, type AuthorizationEnvelope } from "./governance.ts";
+import { authorizationDigest, bootstrapDigest, parseAuthorization, parseBootstrap, type AuthorizationEnvelope, type GovernanceBootstrap } from "./governance.ts";
 import { scanCeremonyFile, scanCeremonyJson, type SecretFinding } from "./governance-secret-scan.ts";
 import {
   BACKUP_MINIMUMS,
@@ -30,8 +29,9 @@ import { parseStrictJson } from "./strict-json.ts";
 /**
  * The ceremony transcript: a structured, closed record of what the participants of a governance key ceremony attest happened, safe to commit
  * publicly when it holds only public data. It is not raw terminal output and cannot carry any: every field is a fixed enumeration, a token, a
- * date, a count, a commit id or a digest, and every digest a transcript records must equal the digest of a public artifact the verifier is
- * also handed, so there is no slot in which a 32-byte secret could sit unchecked.
+ * date, a count, a commit id or a digest. Identifiers are at most 40 characters of a lower-case alphabet and may not hold a 32-character hex run, so no
+ * identifier is long enough to carry a 32-byte secret; every digest a transcript records is checked against the digest of a public artifact the
+ * verifier is handed (when it is handed one: a LIVE transcript without them is refused), and the whole text is scanned for secret-looking material.
  *
  * It is evidence for human review, not proof. It records what two participants attest; a compromised machine or a lying participant produces
  * an identical transcript. What makes a key authorized is the root's signature, verified elsewhere; what makes a transcript useful is that it
@@ -40,7 +40,11 @@ import { parseStrictJson } from "./strict-json.ts";
  * Pure: no clock, no I/O, no randomness. Never throws; no fixed-code reason echoes caller text.
  */
 
-const Token = SignerIdSchema;
+/** An identifier: short and lower-case, and never a run of hex long enough to be key material. Too short to hold a 32-byte secret in this alphabet. */
+const Token = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9._-]{2,39}$/)
+  .refine((s) => !/[0-9a-f]{32}/.test(s));
 const Decimal = z.string().regex(/^(?:0|[1-9][0-9]{0,3})$/);
 const Hex64 = z.string().regex(HEX64_RE);
 const Hex40 = z.string().regex(/^[0-9a-f]{40}$/);
@@ -159,6 +163,7 @@ function structureReasons(t: CeremonyTranscript): string[] {
     if (!sameSet(e.attests, EVENT_CHECKLIST[e.event])) out.push("CHECKLIST_INCOMPLETE");
     if (e.event === "BACKUP_CREATED") {
       const r = e.ref;
+      if (Number(r.mediaLocations) > Number(r.mediaCopies) || Number(r.passphraseLocations) > Number(r.passphraseEnvelopes)) out.push("BACKUP_COUNTS_IMPOSSIBLE");
       if (
         Number(r.mediaCopies) < BACKUP_MINIMUMS.mediaCopies ||
         Number(r.mediaLocations) < BACKUP_MINIMUMS.mediaLocations ||
@@ -175,6 +180,7 @@ function artifactReasons(t: CeremonyTranscript, context: TranscriptContext): { s
   const limitations: string[] = [];
   const keyIds: string[] = [];
   let compared = false;
+  let rootArtifact: GovernanceBootstrap | null = null;
 
   if (context.bootstrap === undefined || context.bootstrap === null) limitations.push("ARTIFACTS_NOT_CROSS_CHECKED");
   else {
@@ -182,6 +188,7 @@ function artifactReasons(t: CeremonyTranscript, context: TranscriptContext): { s
     const bootstrap = parseBootstrap(context.bootstrap);
     if (!bootstrap.ok) reasons.push("ARTIFACT_DIGEST_MISMATCH");
     else {
+      rootArtifact = bootstrap.artifact;
       keyIds.push(bootstrap.artifact.root.keyId);
       const digest = bootstrapDigest(bootstrap.artifact);
       for (const e of t.events) if ((e.event === "ROOT_PUBLIC_KEY_RECORDED" || e.event === "BACKUP_RECOVERY_TESTED" || e.event === "ROOT_KEY_RESTORED") && e.ref.bootstrapDigest !== digest) reasons.push("ARTIFACT_DIGEST_MISMATCH");
@@ -204,6 +211,7 @@ function artifactReasons(t: CeremonyTranscript, context: TranscriptContext): { s
         keyIds.push(envelope.statement.authorizedKey.keyId);
         const event = authorizing[i];
         if (event === undefined) return;
+        if (rootArtifact !== null && (envelope.statement.root.keyId !== rootArtifact.root.keyId || envelope.statement.root.publicKey !== rootArtifact.root.publicKey || envelope.statement.rootEpoch !== rootArtifact.rootEpoch)) reasons.push("AUTHORIZATION_ROOT_MISMATCH");
         if (event.ref.generation !== envelope.statement.generation) reasons.push("OPERATIONAL_KEY_EVENTS_MISMATCH");
         if (event.ref.authorizationDigest !== authorizationDigest(envelope)) reasons.push("ARTIFACT_DIGEST_MISMATCH");
       });
@@ -264,6 +272,8 @@ export function verifyCeremonyTranscript(input: unknown, rawContext?: unknown): 
     const artifacts = artifactReasons(t, context);
     const tooling = toolingReasons(t, context.expectedTooling);
     const limitations = [...artifacts.limitations, ...(tooling.status === "NOT_COMPARED" ? ["TOOLING_NOT_CROSS_CHECKED"] : [])];
+    // A rehearsal may stand alone; a LIVE transcript is evidence only against the artifacts and the published tooling it names.
+    const liveGap = t.mode === "LIVE" && limitations.length > 0 ? ["LIVE_NOT_CROSS_CHECKED"] : [];
     const secrets: TranscriptVerification["secrets"] = { status: findings.length === 0 ? "CLEAN" : "SUSPECTED", findings };
 
     return deepFreeze({
@@ -274,7 +284,7 @@ export function verifyCeremonyTranscript(input: unknown, rawContext?: unknown): 
       artifacts: { status: artifacts.status, reasons: artifacts.reasons },
       tooling,
       secrets,
-      reasons: uniqueSorted([...structure, ...artifacts.reasons, ...tooling.reasons, ...(findings.length === 0 ? [] : ["SECRET_MATERIAL_SUSPECTED"])]),
+      reasons: uniqueSorted([...structure, ...artifacts.reasons, ...tooling.reasons, ...liveGap, ...(findings.length === 0 ? [] : ["SECRET_MATERIAL_SUSPECTED"])]),
       limitations: uniqueSorted(limitations),
       establishes: TRANSCRIPT_ESTABLISHES,
       doesNotEstablish: TRANSCRIPT_DOES_NOT_ESTABLISH,

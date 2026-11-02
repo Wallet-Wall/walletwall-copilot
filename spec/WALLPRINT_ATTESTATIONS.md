@@ -689,7 +689,7 @@ it); the signer's remedy is a new attestation by a registered key, since an iden
 | T42 | One malicious participant | two roles on every event; the witness verifies fingerprints independently; neither role ever holds both a media copy and its passphrase | two colluding participants, or one who is both (the schema refuses the same id twice, not the same person) |
 | T43 | A forged ceremony record | the transcript is cross-checked against the public artifacts, so a fake transcript cannot make a key authorized: only the root's signature can | a fabricated transcript of a real-looking ceremony: it is evidence for review and proves nothing about the machine or the people |
 | T44 | An unauthorized operational key | authorization is only by a signature of the pinned root, over the exact statement, in its own domain, for one purpose; self-signed, wrong-root, altered and replayed authorizations are refused (vectors `gv-10` to `gv-19`) | a key the genuine root signs by mistake |
-| T45 | An old operational key continuing after rotation | the next authorization names the old key's standing and the last state the root stands behind; a checkpoint past it is not relied upon (24.9) | a verifier that has not seen the newer generation relies on the old key: revocation latency, reported as `GOVERNANCE_STATE_UNHELD` |
+| T45 | An old operational key continuing after rotation | the next authorization names the old key's standing and the one state the root stands behind; a checkpoint at any other state is not relied upon (24.9) | a verifier that has not seen the newer generation relies on the old key: revocation latency, reported as `GOVERNANCE_STATE_UNHELD` |
 | T46 | A compromised operational key | the root authorizes a replacement and marks the key `COMPROMISED` with nothing retained; its checkpoints keep a valid signature and lose reliance; it cannot authorize anything | a window before the replacement is seen; checkpoints a verifier already relied upon |
 | T47 | A compromised root | nothing the root signs can repair it; recovery is an out-of-band reset to a new root at a higher epoch with a different key, confirmed by two distinct origins (24.10); the epoch floor refuses the old root afterwards | until the reset reaches a consumer, the attacker's authorizations verify under the old root, exactly as the defender's do |
 | T48 | Rollback to an old trusted root or to old governance state | `minRootEpoch` refuses an older root; a held generation and digest refuse a stale or forked chain (`BEHIND_HELD`, `FORKED_FROM_HELD`) | a verifier that holds neither |
@@ -816,7 +816,7 @@ Recommended implementation order: (1) publisher gate and the static store layout
 | D33 | The bootstrap is closed public material with an epoch and no status; its fingerprint is the engine's existing digest | Mutable trust state in the pinned artifact; a new digest construction (D14, D26) |
 | D34 | Authorizations are detached statements in their own domain through the shared construction; each names the digest of the one it supersedes, and generation, epoch and the root's decision about the old key are inside the signed bytes | A timestamp (D4); a sequence outside the signature; a predecessor's standing in unsigned data; a second encoding convention |
 | D35 | Exactly one operational key is current per generation; there is no empty generation | A revocation with no replacement (the ceremony generates the replacement in the same session, and an empty state would leave nothing relied upon until a reset) |
-| D36 | A superseded key is relied upon only through the last committed state the root names (`retainedThrough`), judged by counts and, at the retained counts, by heads | Reliance for every earlier checkpoint (a stolen retired key could sign a newer history); reliance for none (routine rotation would withdraw all history); a clock |
+| D36 | A superseded key is relied upon only at exactly the one committed state the root names (`retainedAt`): both counts and both heads equal | Reliance at or below the retained counts (nothing ties a lower checkpoint's history to the one the root reviewed, so a stolen retired key could sign another there); reliance for every earlier checkpoint; reliance for none (routine rotation would withdraw all history, and the checkpoint at the retained state covers every earlier prefix); a clock |
 | D37 | Root rotation and root compromise are one event: an out-of-band reset to a higher epoch with a different key, confirmed by at least two distinct origins; the reset assessment has no input for a previous-root signature | Old root signs new root (a compromised root signs any successor); new root signs old root (shows only the new key holder's consent); cross-signing (evidence of continuity, never a trust basis, and a second root-signed object); a succession object the verifier accepts |
 | D38 | GitHub is one origin; a pin needs two distinct origins the caller names | Treating a repository, a release and a documentation page on one host as independent |
 | D39 | A ceremony transcript is a closed record of attestations, cross-checked against public artifacts: evidence for review, not proof | Free text or raw terminal output (a secret channel); a signed transcript (a second key and ceremony for a record that proves nothing about the machine) |
@@ -1200,7 +1200,7 @@ statement = { "authorizationVersion": "0.1", "purpose": "CHECKPOINT_KEY_AUTHORIZ
               "root": { "keyId", "algorithm", "publicKey" }, "rootEpoch": "<decimal>", "generation": "<decimal>",
               "authorizedKey": { "keyId", "algorithm", "publicKey", "purposes": [ "REGISTRY_LEDGER_CHECKPOINT" ] },
               "supersedes": null | { "authorizationDigest": "<hex64>", "standing": "RETIRED" | "COMPROMISED",
-                                     "retainedThrough": null | { "registry": { "headVersion", "headDigest" }, "acceptanceLedger": { "entryCount", "headDigest" } } } }
+                                     "retainedAt": null | { "registry": { "headVersion", "headDigest" }, "acceptanceLedger": { "entryCount", "headDigest" } } } }
 ```
 
 Every value is a string, a null or an array of strings (no JSON numbers). Unknown fields are refused, never dropped.
@@ -1217,7 +1217,7 @@ Every value is a string, a null or an array of strings (no JSON numbers). Unknow
 | `authorizedKey.purposes` | signed: the explicit grant, strictly ordered, inside the policy (`PURPOSE_NOT_PERMITTED`, `PURPOSES_NOT_ORDERED`) |
 | `supersedes.authorizationDigest` | signed: the digest of the previous authorization, so a generation extends exactly one history (`SUPERSEDES_DIGEST_MISMATCH`, `SUPERSEDES_MISSING`, `SUPERSEDES_UNEXPECTED`) |
 | `supersedes.standing` | signed: the root's decision about the key being replaced, `RETIRED` (routine) or `COMPROMISED` (believed exposed); the one place revocation is published |
-| `supersedes.retainedThrough` | signed: the last checkpoint state the root still stands behind for the replaced key, or null for none; a state is the pair of heads section 23 commits |
+| `supersedes.retainedAt` | signed: the last checkpoint state the root still stands behind for the replaced key, or null for none; a state is the pair of heads section 23 commits |
 | `signature` | the signature itself, the only unsigned field |
 
 **The exact signed bytes**, through the one shared construction (`domainSeparatedPreimage`), not a second convention:
@@ -1234,11 +1234,11 @@ file (`signedBytes.preimage`). The authorization's identity is `authorizationDig
 ### 24.7 Bootstrap distribution is a policy, not a signature
 
 A consumer learns the initial root through a **policy**: it reads the fingerprint through channels it relies upon and pins it. The verifier cannot know which channels those are, so the policy is a rule over what the caller
-reports, enforced by `assessBootstrapPin` and `assessRootReset`, and the verifier reports `BOOTSTRAP_UNPINNED` when no fingerprint was pinned.
+reports, enforced by `assessBootstrapPin` and `assessRootReset`, and a bootstrap no fingerprint was pinned for is reported (`BOOTSTRAP_UNPINNED`) and relied upon for nothing: no held state, no trust root, no anchors, and reliance `NOT_EVALUATED` with `BOOTSTRAP_NOT_PINNED`.
 
 | Channel | What it gives | What it does not |
 | --- | --- | --- |
-| bundled and pinned with a released verifier (`VERIFIER_RELEASE_BUNDLE`) | the consumer gets the root with the software it already relies on | it is only as independent as the release channel |
+| bundled and pinned with a released verifier (`VERIFIER_RELEASE_BUNDLE`) | the consumer gets the root with the software it already relies on | it is only as independent as the release channel: a bundle served from the repository's own releases is the `GITHUB` origin, and the caller classifies it |
 | a WalletWall release artifact or a signed GitHub release (`GITHUB`) | a reviewable, immutable, public artifact | GitHub alone is **not** an independent trust root: the repository, its releases and its documentation share one origin, one account and one set of administrators |
 | a documentation fingerprint on WalletWall's own site (`WALLETWALL_WEBSITE`) | a second origin that a repository compromise does not control | an attacker who controls both the site and the repository |
 | a registry publication (`PACKAGE_REGISTRY`), an independent publication (`THIRD_PARTY_PUBLICATION`) | origins outside WalletWall | availability, and the caller's honesty in naming them |
@@ -1257,8 +1257,8 @@ it cannot know whether they are independent in fact. There is no remote trust se
 | `bootstrap` | `parse`: `PARSED`, `MALFORMED`, `UNSUPPORTED_VERSION`, `NOT_SUPPLIED`; `pin`: `PINNED`, `UNPINNED`, `MISMATCHED`, `NOT_EVALUATED`; `epoch`: `ACCEPTED`, `BELOW_MINIMUM`, `NOT_EVALUATED`; the digest and fingerprint; reasons | the bootstrap, optionally the pinned digest and the minimum epoch |
 | `chain` | `VALID`, `INVALID`, `NOT_CHECKED`, `NOT_SUPPLIED`, `NOT_EVALUATED`; the count, the head generation, the failing position and reasons | the root's authorizations, generations 1 to N in order |
 | `held` | `NO_HELD_STATE`, `AT_HELD`, `ADVANCES_HELD`, `BEHIND_HELD`, `FORKED_FROM_HELD`, `HELD_INVALID`, `NOT_EVALUATED` | a held governance state: a generation and the digest of that authorization |
-| `keys` | every authorized key in generation order with its `standing` (`CURRENT`, `RETIRED`, `COMPROMISED`) and `retainedThrough`; empty unless the whole state is usable | a usable state |
-| `limitations`, `establishes`, `doesNotEstablish` | `BOOTSTRAP_UNPINNED`, `GOVERNANCE_STATE_UNHELD`, `SUPERSEDED_KEY_RETAINED_PREFIX_ONLY`; fixed sentences | |
+| `keys` | every authorized key in generation order with its `standing` (`CURRENT`, `RETIRED`, `COMPROMISED`) and `retainedAt`; empty unless the whole state is usable | a usable state |
+| `limitations`, `establishes`, `doesNotEstablish` | `BOOTSTRAP_UNPINNED`, `GOVERNANCE_STATE_UNHELD`, `SUPERSEDED_KEY_RETAINED_STATE_ONLY`; fixed sentences | |
 
 Fixed reason codes, no caller text echoed. Bootstrap: `BOOTSTRAP_ALGORITHM_UNSUPPORTED`, `BOOTSTRAP_DIGEST_MISMATCH`, `BOOTSTRAP_DIGEST_PIN_MALFORMED`, `BOOTSTRAP_EPOCH_BELOW_MINIMUM`, `BOOTSTRAP_KEY_INADMISSIBLE`,
 `BOOTSTRAP_MALFORMED`, `BOOTSTRAP_NOT_SUPPLIED`, `BOOTSTRAP_PURPOSE_NOT_PERMITTED`, `BOOTSTRAP_VERSION_UNSUPPORTED`, `MINIMUM_EPOCH_MALFORMED`, `SYNTHETIC_KEY_REFUSED`. Chain: `AUTHORIZATIONS_EMPTY`, `AUTHORIZATIONS_NOT_SUPPLIED`,
@@ -1272,23 +1272,28 @@ reasons of section 12. Held: `GOVERNANCE_FORKS_FROM_HELD_STATE`, `GOVERNANCE_ROL
 a caller that has reset raises `minRootEpoch` and refuses every older root (`BOOTSTRAP_EPOCH_BELOW_MINIMUM`). `heldGovernanceState(result)` is the only authenticated way to obtain the state to hold next, and, like `checkpointAnchors`,
 **accepts only a result `verifyGovernance` itself returned** (D41): a copy, a hand-built object or JSON that crossed a boundary yields `null`.
 
-**The derived trust root.** `deriveCheckpointTrustRoot(result)` returns, for a usable result the verifier itself returned, exactly the trust root of section 23.4 holding the one `CURRENT` key and the purposes the root granted it, and `null`
+**The derived trust root.** `deriveCheckpointTrustRoot(result)` returns, for a usable result under a pinned bootstrap that the verifier itself returned, exactly the trust root of section 23.4 holding the one `CURRENT` key and the purposes the root granted it, and `null`
 otherwise. `verifyGovernedCheckpoint(checkpoint, context)` runs the unchanged `verifyCheckpoint` under it and adds one dimension:
 
 | Dimension | Values | Meaning |
 | --- | --- | --- |
 | `reliance` | `status`: `RELIED_UPON`, `NOT_RELIED_UPON`, `NOT_EVALUATED`; `keyStanding`: `CURRENT`, `RETIRED`, `COMPROMISED`, `UNKNOWN`, `NOT_EVALUATED`; `authorizedAtGeneration`; reasons; limitations | whether the checkpoint's signer is a key the pinned root authorized and the caller may still rely on, for this checkpoint's committed state |
 
-Reliance reasons: `CHECKPOINT_BEYOND_RETAINED_STATE`, `CHECKPOINT_HEAD_DIFFERS_AT_RETAINED_STATE`, `CHECKPOINT_NOT_PARSED`, `GOVERNANCE_STATE_NOT_USABLE`, `KEY_SUPERSEDED_NOT_RETAINED`,
-`SIGNER_KEY_MATERIAL_MISMATCH`, `SIGNER_NOT_AUTHORIZED_BY_ROOT`. A signer is relied upon when it is the current key, or a superseded key and the checkpoint's committed state is **inside** `retainedThrough`: neither
-registry count nor ledger count past the retained one and, at exactly a retained count, exactly the retained head. Otherwise it is left out of the derived root, so `verifyCheckpoint` reports it as not authorized and mints no
-anchors, while its `signature` stays `VALID`. `governedCheckpointAnchors` gives the section 23 anchors only for a relied-upon signer.
+Reliance reasons: `BOOTSTRAP_NOT_PINNED`, `CHECKPOINT_BEFORE_RETAINED_STATE`, `CHECKPOINT_BEYOND_RETAINED_STATE`, `CHECKPOINT_HEAD_DIFFERS_AT_RETAINED_STATE`, `CHECKPOINT_NOT_PARSED`, `GOVERNANCE_STATE_NOT_USABLE`,
+`KEY_SUPERSEDED_NOT_RETAINED`, `SIGNER_KEY_MATERIAL_MISMATCH`, `SIGNER_NOT_AUTHORIZED_BY_ROOT`. A signer is relied upon when the bootstrap is pinned and it is the current key, or a superseded key and the checkpoint's committed
+state is **exactly** `retainedAt`: both counts equal and both heads equal. A checkpoint below it is not relied upon, because nothing ties its history to the one the root reviewed and a stolen retired key could sign another there
+(vector `gv-31c`); one beyond it is not, because the key may since have been stolen; one at its counts with other heads is not. A reader who needs an earlier prefix gets it from the checkpoint at the retained state, which covers it.
+Otherwise the signer is left out of the derived root, so `verifyCheckpoint` reports it as not authorized and mints no anchors, while its `signature` stays `VALID`. `governedCheckpointAnchors` gives the section 23 anchors only
+for a relied-upon signer. A bootstrap that was not pinned is relied upon for nothing: the result still reports the chain and `BOOTSTRAP_UNPINNED`, but `reliance` is `NOT_EVALUATED` (`BOOTSTRAP_NOT_PINNED`), no trust root or held state is
+derived, and no anchors are given (vector `gv-38b`). `verifyGovernedCheckpoint` never throws: input that cannot be read, or a checkpoint that reads differently the second time, is refused with fixed codes, and the value
+verified is the one parsed once.
 
 ### 24.9 Operational-key lifecycle
 
 - **Introduction.** Generation 1 authorizes the first key. Generation *n* + 1 names the digest of generation *n*, authorizes exactly one new key and records the root's decision about the old one.
-- **Rotation (routine).** The root marks the old key `RETIRED` and names `retainedThrough`: the last checkpoint state the old key signed, which the operator reads from the public checkpoint. The old key stays **historically identifiable**
-  (its id, material, grant, generation and digest remain listed) and its checkpoints inside that state stay relied upon; later ones, signed by a key that may since have been stolen, are not. **New checkpoints require the new key.**
+- **Rotation (routine).** The root marks the old key `RETIRED` and names `retainedAt`: the last checkpoint state the old key signed, which the operator reads from the public checkpoint. The old key stays **historically identifiable**
+  (its id, material, grant, generation and digest remain listed) and a checkpoint at exactly that state stays relied upon; no other is, whether later (signed by a key that may since have been stolen) or below it (nothing ties its
+  history to the reviewed one). **New checkpoints require the new key.**
 - **Retirement without replacement does not exist** (D35): the ceremony that retires a key authorizes its successor in the same session.
 - **Compromise.** The root marks the key `COMPROMISED` and names no retained state (or the last state it independently reviewed). Its checkpoints keep a valid signature and lose reliance; a new checkpoint by the replacement key over the
   logs as the root's participants reviewed them re-establishes the history, because a checkpoint commits the whole of both logs by head. The compromised key cannot authorize its own replacement: it holds no authority at all
@@ -1300,7 +1305,7 @@ anchors, while its `signature` stays `VALID`. `governedCheckpointAnchors` gives 
 ### 24.10 Root lifecycle: rotation, loss and compromise
 
 **Root rotation and root compromise are one event: a reset.** A consumer moves from the root it relies on to a new one only by an act of its own: a bootstrap at a **higher epoch** with a **different key**, whose fingerprint at least two distinct
-origins confirm (`assessRootReset`: `EPOCH_NOT_GREATER`, `ROOT_KEY_UNCHANGED`, `INSUFFICIENT_INDEPENDENT_ORIGINS`, `CONFIRMATION_DIGEST_MISMATCH`, `PINNED_STATE_MALFORMED`, `CANDIDATE_MALFORMED`, `CONFIRMATIONS_MALFORMED`; consumer action
+origins confirm (`assessRootReset`: `EPOCH_NOT_GREATER`, `ROOT_KEY_UNCHANGED`, `ROOT_KEY_PREVIOUSLY_RETIRED` (against the optional `retiredRootPublicKeys` of the pinned state), `INSUFFICIENT_INDEPENDENT_ORIGINS`, `CONFIRMATION_DIGEST_MISMATCH`, `PINNED_STATE_MALFORMED`, `CANDIDATE_MALFORMED`, `CONFIRMATIONS_MALFORMED`; consumer action
 `REPLACE_PINNED_BOOTSTRAP_AND_RAISE_MINIMUM_EPOCH`). The four continuity options, and what each proves:
 
 | Option | What it proves | Why it is not the trust basis |
@@ -1342,17 +1347,18 @@ The procedure is in `docs/WALLPRINT_GOVERNANCE_KEY_CEREMONY.md`; the contract it
 
 `walletwall.wallprint.governance-ceremony-transcript` is a closed, structured record: a ceremony id, a mode (`SYNTHETIC_REHEARSAL`, `LIVE`), a kind (`ROOT_BOOTSTRAP`, `OPERATIONAL_KEY_ACTION`), a date, a source commit, a tooling list
 (name, version, digest), two participants (`OPERATOR`, `WITNESS`) and ordered events. Every event is attested by both roles, carries the exact checklist of its kind and, where it names an artifact, a digest that must equal the digest of the
-public artifact the verifier is also handed. There is no free text, no raw output and no slot a 32-byte secret could occupy unchecked: a digest slot holding anything but the artifact's digest is `ARTIFACT_DIGEST_MISMATCH`.
+public artifact the verifier is also handed. There is no free text and no raw output. Identifiers are at most 40 characters of a lower-case alphabet and may not hold a 32-character hex run, so none is long enough to carry a 32-byte secret; a digest slot holding anything but the
+artifact's digest is `ARTIFACT_DIGEST_MISMATCH`, when the artifact is supplied; and a `LIVE` transcript handed no artifacts or no published tooling is refused (`LIVE_NOT_CROSS_CHECKED`) rather than accepted unchecked.
 `verifyCeremonyTranscript` returns `structure`, `artifacts`, `tooling` and `secrets` dimensions with fixed reasons
-(`TRANSCRIPT_MALFORMED`, `TRANSCRIPT_VERSION_UNSUPPORTED`, `EVENT_REQUIRED_MISSING`, `EVENT_ORDER_INVALID`, `ONE_ATTESTER_ONLY`, `CHECKLIST_INCOMPLETE`, `PARTICIPANTS_INVALID`, `BACKUP_BELOW_MINIMUM`, `CEREMONY_ID_MODE_MISMATCH`,
-`SYNTHETIC_MODE_WITH_NON_SYNTHETIC_KEY`, `LIVE_MODE_WITH_SYNTHETIC_KEY`, `ARTIFACT_DIGEST_MISMATCH`, `OPERATIONAL_KEY_EVENTS_MISMATCH`, `TOOLING_MISMATCH`, `SECRET_MATERIAL_SUSPECTED`) and limitations
+(`TRANSCRIPT_MALFORMED`, `TRANSCRIPT_VERSION_UNSUPPORTED`, `EVENT_REQUIRED_MISSING`, `EVENT_ORDER_INVALID`, `ONE_ATTESTER_ONLY`, `CHECKLIST_INCOMPLETE`, `PARTICIPANTS_INVALID`, `BACKUP_BELOW_MINIMUM`, `BACKUP_COUNTS_IMPOSSIBLE`, `CEREMONY_ID_MODE_MISMATCH`,
+`SYNTHETIC_MODE_WITH_NON_SYNTHETIC_KEY`, `LIVE_MODE_WITH_SYNTHETIC_KEY`, `LIVE_NOT_CROSS_CHECKED`, `ARTIFACT_DIGEST_MISMATCH`, `AUTHORIZATION_ROOT_MISMATCH`, `OPERATIONAL_KEY_EVENTS_MISMATCH`, `TOOLING_MISMATCH`, `SECRET_MATERIAL_SUSPECTED`) and limitations
 (`ARTIFACTS_NOT_CROSS_CHECKED`, `TOOLING_NOT_CROSS_CHECKED`). **It records what participants attest; it does not prove the ceremony happened or that the machine was uncompromised.** What makes a key authorized is the root's signature.
 
 ### 24.13 Secret isolation
 
 The public objects are closed schemas of public material. `governance-secret-scan.ts` is a tripwire for secret-looking material in ceremony outputs and documents: a PEM private-key header, the Ed25519 PKCS#8 header, an age secret key, a 64-hex value
-beside a secret word, an upper-case environment-secret name, a CI secret reference, a secret-bearing JSON field name, a seed-phrase shape (`SECRET_SCAN_CODES`: `PEM_PRIVATE_KEY_BLOCK`, `PKCS8_ED25519_HEADER`, `AGE_SECRET_IDENTITY`, `SEED_HEX_NEAR_SECRET_WORD`, `ENV_SECRET_NAME`, `CI_SECRET_REFERENCE`, `SECRET_VALUE_ASSIGNMENT`, `SECRET_FIELD_NAME`, `SEED_PHRASE_SHAPE`). A finding is a code and a position and never the matched text. It is not a proof that nothing
-is hidden. The repository ignores key and backup file types, tests pin that no signing, key-generation, environment read or secret exists in the lane's modules, scripts and CI workflow, and that no npm script creates a root.
+beside a secret word, an upper-case environment-secret name, a CI secret reference, a secret-bearing JSON field name, a seed-phrase shape (`SECRET_SCAN_CODES`: `PEM_PRIVATE_KEY_BLOCK`, `PKCS8_ED25519_HEADER`, `AGE_SECRET_IDENTITY`, `SCAN_DEPTH_EXCEEDED`, `SEED_HEX_NEAR_SECRET_WORD`, `ENV_SECRET_NAME`, `CI_SECRET_REFERENCE`, `SECRET_VALUE_ASSIGNMENT`, `SECRET_FIELD_NAME`, `SEED_PHRASE_SHAPE`). A finding is a code and a position and never the matched text: a JSON field name is shown only when it is a short identifier, and any other is reported by its index; a value nested deeper than the scanner reads is reported
+(`SCAN_DEPTH_EXCEEDED`), not passed. It is not a proof that nothing is hidden: text split across lines, spaced or encoded, or written with look-alike characters, is not matched. The repository ignores key and backup file types, tests pin that no signing, key-generation, environment read or secret exists in the lane's modules, scripts and CI workflow, and that no npm script creates a root.
 
 ### 24.14 What this lane does not do (stop conditions, evaluated)
 
@@ -1383,18 +1389,18 @@ the rehearsal.
 | valid, unknown-field, malformed, unsupported-algorithm, wrong-purpose, mismatched, below-floor and synthetic bootstraps | `gv-01` to `gv-09c` |
 | root authorizes a checkpoint key; wrong root; altered key, purpose, generation; replay under another domain; self-signed key; root key as operational key; ungrantable purposes | `gv-10` to `gv-19c` |
 | rotation, replacement, gap, duplicate, supersession, key reuse, rollback, fork, advance | `gv-20` to `gv-27d` |
-| reliance: current, retired inside and beyond the retained state, another history, compromised, unknown, mismatched, unusable, reset | `gv-30` to `gv-39c` |
-| pinning and reset | `gv-40` to `gv-41e` |
-| transcripts | `gv-50` to `gv-50j` |
+| reliance: current, retired before, at and beyond the retained state, another history (at and below it), compromised, unknown, mismatched, unusable, unpinned, reset | `gv-30` to `gv-39c` |
+| pinning and reset (including a reset back to a retired root key) | `gv-40` to `gv-41f` |
+| transcripts (including impossible backup counts and an uncross-checked live transcript) | `gv-50` to `gv-50l` |
 
-Mutation: `npm run test:wallprint-governance-mutation` applies each realistic broken implementation to the real source by exact patches (a trusted key without a root signature, a wrong purpose, ignored key material, an ignored or stale generation, a
+Mutation: `npm run test:wallprint-governance-mutation` applies each realistic broken implementation to the real source by exact patches (a trusted key without a root signature, an unpinned bootstrap relied upon, a retired key relied upon below its retained state, a verifier that throws on hostile input, a wrong purpose, ignored key material, an ignored or stale generation, a
 self-signed root, a compromised operational key authorizing a replacement, an operational key authorizing a root, an altered bootstrap accepted, a wrong or missing domain tag, an ignored transcript secret, a private key in a public artifact, root
 compromise treated as solved by a root-signed replacement, a CI signing path, governance read as truth, and the scanner, transcript, pinning and isolation checks) and requires a suite to fail for each. A survivor fails the run.
 
 ### 24.16 Limitations
 
 A governance authorization is authority over a key, not a claim about anything the key signs. A bootstrap is relied upon only as far as the channels a consumer pinned it through. A transcript is evidence for review, not proof. Revocation has latency: a verifier
-is as current as the chain it holds. A root that signs two histories is visible only to a verifier that held one. The unpinned bootstrap is a limitation, not a refusal, so a production consumer must pin the fingerprint and treat `BOOTSTRAP_UNPINNED` as a failure.
+is as current as the chain it holds. A root that signs two histories is visible only to a verifier that held one. An unpinned bootstrap is reported and relied upon for nothing, so a consumer that never pins gets no trust root, no held state and no anchors rather than a quiet pass.
 
 ### 24.17 Unresolved risks and follow-ups
 
@@ -1405,3 +1411,6 @@ is as current as the chain it holds. A root that signs two histories is visible 
 5. **Small-team custody.** The backup floor needs at least two people and several places; a smaller team must record what it cannot meet, and the transcript validator will refuse a live ceremony that records less.
 6. **Participant identity.** A participant is a pseudonymous token; binding a token to a person, and signing a transcript with a personal key, are follow-ups and would add a second signature to a record that proves nothing about the machine.
 7. **Post-quantum.** Ed25519 only (section 14); a post-quantum governance root follows the criteria of section 14 and a new format version.
+8. **Origin independence is a caller assertion.** `assessBootstrapPin` counts distinct enumerated origins the caller reports; it cannot see whether they are independent in fact (a bundle served from the repository's own releases is the `GITHUB` origin, and a caller can label it otherwise). `PIN_ACCEPTED` is the caller's own decision recorded, never provenance this library verified, and untrusted network JSON must not be fed to it directly. A live consumer needs a human or interface evidence-capture boundary, or cryptographically verifiable publication evidence.
+9. **The scanner is a tripwire.** Text split across lines, spaced, encoded, or written with look-alike characters is not matched. A clean scan is never evidence of absence.
+10. **The transcript proves nothing physical.** It records two pseudonymous attestations; it cannot show that two ids are two people, that the tooling ran, or that a place is a different place. Backup collusion (a media custodian and an envelope custodian together recover the root) is a custody property no verifier can see.
