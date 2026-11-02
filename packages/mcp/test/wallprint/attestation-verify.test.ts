@@ -135,12 +135,14 @@ describe("attestation vectors: historical key state is never reinterpreted under
   });
 
   test("compromise and revocation are policy over a valid signature: the signature stays valid and the standing is withdrawn only outside the retained window", () => {
-    for (const id of ["10b-compromised-outside-retained-window", "10c-compromised-issuer-key-at-the-boundary", "10e-withdrawn-key-no-acceptance-record"]) {
+    for (const id of ["10b-compromised-outside-retained-window", "10c-compromised-issuer-key-at-the-boundary", "10e-withdrawn-key-no-acceptance-record", "10f-withdrawn-key-entry-after-the-held-anchor"]) {
       const r = run(id);
       assert.equal(r.signature.status, "VALID", id);
       assert.equal(r.current.standing, "WITHDRAWN", id);
       assert.equal(r.origin, "KEY_ONLY", id);
     }
+    assert.ok(run("10f-withdrawn-key-entry-after-the-held-anchor").current.reasons.includes("WITHDRAWN_ACCEPTANCE_UNANCHORED"));
+    assert.equal(run("10f-withdrawn-key-entry-after-the-held-anchor").acceptance.status, "PINNED", "the entry is read; it is simply not trusted for a withdrawn key");
     assert.ok(run("10b-compromised-outside-retained-window").current.reasons.includes("WITHDRAWN_AFTER_ACCEPTANCE"));
     assert.ok(run("10e-withdrawn-key-no-acceptance-record").current.reasons.includes("WITHDRAWN_ACCEPTANCE_UNKNOWN"));
     assert.equal(run("10a-compromised-inside-retained-window").current.standing, "HELD");
@@ -187,6 +189,31 @@ describe("attestation vectors: the acceptance pin is bound to one attestation an
     assert.equal(r.origin, "KEY_ONLY");
     assert.equal(r.current.standing, "WITHDRAWN");
     assert.equal(verifyAttestation(genuine, { record: goldenRecord(), keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger, anchor: ledgerAnchor(ledger) } }).acceptance.status, "PINNED");
+  });
+
+  test("a post-compromise statement appended to the ledger after the verifier's anchor, naming an old registry version, earns no retained standing; neither does a ledger with no anchor", () => {
+    // The review's attack: a new record, a new assessment, signed with the now-compromised key, appended to the store with a
+    // monotone but old version. The ledger and the registry are separate unsigned logs, so the entry's order against the
+    // compromise cannot be proved; for a withdrawn key only entries inside an anchored prefix are trusted.
+    const record = goldenRecord();
+    const attack = attest("ASSESSMENT_ORIGIN", WHO.reviewerW1, assessmentTargetOf(record, "reviewer-w"));
+    const prior = ledgerOf([{ digest: "ab".repeat(32), pin: pinOf(chain, 1) }]);
+    const appended = ledgerOf([{ digest: "ab".repeat(32), pin: pinOf(chain, 1) }, { digest: digestOfEnvelope(attack), pin: pinOf(chain, 1) }]);
+    const held = ledgerAnchor(prior);
+    const after = verifyAttestation(attack, { record, keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger: appended, anchor: held } });
+    assert.equal(after.acceptance.status, "PINNED");
+    assert.equal(after.current.standing, "WITHDRAWN");
+    assert.ok(after.current.reasons.includes("WITHDRAWN_ACCEPTANCE_UNANCHORED"));
+    assert.equal(after.origin, "KEY_ONLY");
+    const covered = verifyAttestation(attack, { record, keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger: appended, anchor: ledgerAnchor(appended) } });
+    assert.equal(covered.origin, "BOUND_ASSESSOR", "inside an anchored prefix the retained window applies, as designed");
+    const unanchored = verifyAttestation(attack, { record, keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger: appended, anchor: null } });
+    assert.equal(unanchored.origin, "KEY_ONLY");
+    assert.ok(unanchored.limitations.includes("ACCEPTANCE_UNANCHORED"));
+    // An active key needs no prefix: nothing about its standing depends on when it was accepted.
+    const active = attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, assessmentTargetOf(record, "reviewer-y"));
+    const activeLedger = ledgerOf([{ digest: "ab".repeat(32), pin: pinOf(chain, 3) }, { digest: digestOfEnvelope(active), pin: pinOf(chain, 3) }]);
+    assert.equal(verifyAttestation(active, { record, keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger: activeLedger, anchor: ledgerAnchor(activeLedger.slice(0, 1)) } }).origin, "BOUND_ASSESSOR");
   });
 
   test("a ledger entry back-dated behind an earlier one, an edited entry, a dropped entry, a twice-accepted attestation and an invalid ledger are all refused: no pin is taken", () => {
@@ -378,7 +405,7 @@ describe("attestation vectors: the committed file", () => {
     for (const spec of vectorSpecs()) {
       const ledger = vectorLedger(spec, registryChain());
       if (spec.acceptedUnder === null) assert.equal(ledger, null, spec.id);
-      else assert.equal(ledger?.[0]?.attestationDigest, digestOfEnvelope(spec.envelope), spec.id);
+      else assert.equal(ledger?.[ledger.length - 1]?.attestationDigest, digestOfEnvelope(spec.envelope), spec.id);
     }
   });
 });

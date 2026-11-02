@@ -187,12 +187,16 @@ export const digestOfEnvelope = (envelope: unknown): string => {
   const parsed = parseAttestation(envelope);
   return parsed.ok ? attestationDigest(parsed.envelope) : "0".repeat(64);
 };
-/** The one-entry ledger a vector carries, or null when the vector has no acceptance record. */
-export function vectorLedger(spec: { envelope: unknown; acceptedUnder: number | null; pinDigestOf?: number }, chain: readonly KeyRegistrySnapshot[]): AcceptanceEntry[] | null {
+/** The one-entry ledger a vector carries (or two, with a filler first when the entry lies after the caller's anchor), or null when the vector has no acceptance record. */
+export function vectorLedger(spec: { envelope: unknown; acceptedUnder: number | null; pinDigestOf?: number; afterAnchor?: boolean }, chain: readonly KeyRegistrySnapshot[]): AcceptanceEntry[] | null {
   if (spec.acceptedUnder === null) return null;
   const pin = { ...pinOf(chain, spec.acceptedUnder), ...(spec.pinDigestOf === undefined ? {} : { keyRegistryDigest: pinOf(chain, spec.pinDigestOf).keyRegistryDigest }) };
-  return ledgerOf([{ digest: digestOfEnvelope(spec.envelope), pin }]);
+  const filler = spec.afterAnchor === true ? [{ digest: "ab".repeat(32), pin: pinOf(chain, 1) }] : [];
+  return ledgerOf([...filler, { digest: digestOfEnvelope(spec.envelope), pin }]);
 }
+/** The anchor a vector's verifier holds: the ledger's last entry, or the filler before the vector's own entry. */
+export const vectorLedgerAnchor = (spec: { afterAnchor?: boolean }, ledger: readonly AcceptanceEntry[]): { seq: string; digest: string } =>
+  spec.afterAnchor === true ? { seq: "1", digest: ledger[0]?.entryDigest ?? "" } : ledgerAnchor(ledger);
 export const anchorOf = (chain: readonly KeyRegistrySnapshot[]): { version: string; digest: string } => {
   const head = chain[chain.length - 1];
   return { version: head?.keyRegistryVersion ?? "", digest: head?.digest ?? "" };
@@ -241,6 +245,8 @@ export interface VectorSpec {
   acceptedUnder: number | null;
   /** The pin names `acceptedUnder` but carries the digest of this other version: a substituted registry. */
   pinDigestOf?: number;
+  /** The entry lies after the ledger prefix the verifier holds an anchor for. */
+  afterAnchor?: boolean;
   anchored: boolean;
   expect: Partial<Pick<AttestationVerification, "origin" | "originBasis" | "parse">> & { signature?: AttestationVerification["signature"]["status"]; target?: AttestationVerification["target"]["status"] };
 }
@@ -258,8 +264,8 @@ export function vectorSpecs(): VectorSpec[] {
   const reviewerT = target("reviewer-y");
   const circleT = target("issuer:circle");
   const out: VectorSpec[] = [];
-  const add = (id: string, description: string, envelope: unknown, record: VectorSpec["record"], acceptedUnder: number | null, expect: VectorSpec["expect"], anchored = true, pinDigestOf?: number): void => {
-    out.push({ id, description, envelope, record, acceptedUnder, anchored, expect, ...(pinDigestOf === undefined ? {} : { pinDigestOf }) });
+  const add = (id: string, description: string, envelope: unknown, record: VectorSpec["record"], acceptedUnder: number | null, expect: VectorSpec["expect"], anchored = true, pinDigestOf?: number, afterAnchor = false): void => {
+    out.push({ id, description, envelope, record, acceptedUnder, anchored, expect, ...(pinDigestOf === undefined ? {} : { pinDigestOf }), ...(afterAnchor ? { afterAnchor } : {}) });
   };
 
   add("01-walletwall-publication-valid", "valid signer, valid signature, purpose authorized: a WalletWall publication key signed this exact record digest, accepted under registry version 2", publication, "golden", 2, { signature: "VALID", target: "MATCHED", origin: "BOUND_WALLETWALL_PUBLISHER", originBasis: "ACCEPTANCE" });
@@ -282,6 +288,7 @@ export function vectorSpecs(): VectorSpec[] {
   add("10c-compromised-issuer-key-at-the-boundary", "an issuer key compromised in version 4 with nothing retained from version 3 on, accepted under version 3", attest("ISSUER_ASSESSMENT_ORIGIN", WHO.circle1, circleT), "golden", 3, { signature: "VALID", target: "MATCHED", origin: "KEY_ONLY", originBasis: "NONE" });
   add("10d-compromised-issuer-key-retained", "the same issuer key accepted under version 1, before the retained boundary", attest("ISSUER_ASSESSMENT_ORIGIN", WHO.circle1, circleT), "golden", 1, { signature: "VALID", target: "MATCHED", origin: "BOUND_ISSUER_AUTHORITY", originBasis: "ACCEPTANCE" });
   add("10e-withdrawn-key-no-acceptance-record", "a key now compromised, presented with no acceptance record: nothing shows it predates the compromise", attest("ASSESSMENT_ORIGIN", WHO.reviewerW1, target("reviewer-w")), "golden", null, { signature: "VALID", target: "MATCHED", origin: "KEY_ONLY", originBasis: "NONE" });
+  add("10f-withdrawn-key-entry-after-the-held-anchor", "a key now compromised, with a ledger entry naming an old registry version but lying after the ledger prefix the verifier holds an anchor for: the entry could have been written after the compromise, so it earns no retained standing", attest("ASSESSMENT_ORIGIN", WHO.reviewerW1, target("reviewer-w")), "golden", 1, { signature: "VALID", target: "MATCHED", origin: "KEY_ONLY", originBasis: "NONE" }, true, undefined, true);
   const swapped = envelopeOf({ ...publication.statement, purpose: "ASSESSMENT_ORIGIN" }, publication.signature);
   add("11a-record-attestation-replayed-as-assessment-attestation", "a record-publication signature carried under the assessment-origin purpose", swapped, "golden", 2, { signature: "INVALID", target: "MISMATCHED", origin: "NONE", originBasis: "NONE" });
   const asAssessment = attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, reviewerT);
@@ -313,7 +320,7 @@ export function vectorContext(spec: VectorSpec, chain = registryChain()): Verifi
     ...(spec.record === null ? {} : { record: records[spec.record] }),
     keyRegistry: chain,
     ...(spec.anchored ? { trustAnchor: anchorOf(chain) } : {}),
-    ...(ledger === null ? {} : { acceptance: { ledger, anchor: ledgerAnchor(ledger) } }),
+    ...(ledger === null ? {} : { acceptance: { ledger, anchor: vectorLedgerAnchor(spec, ledger) } }),
   };
 }
 
@@ -401,7 +408,7 @@ export function buildVectorFile(): unknown {
         record: spec.record,
         acceptance: ((): unknown => {
           const ledger = vectorLedger(spec, chain);
-          return ledger === null ? null : { ledger, anchor: ledgerAnchor(ledger) };
+          return ledger === null ? null : { ledger, anchor: vectorLedgerAnchor(spec, ledger) };
         })(),
         trustAnchor: spec.anchored ? anchorOf(chain) : null,
         envelope: spec.envelope,

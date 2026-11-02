@@ -153,7 +153,7 @@ function compareTarget(statement: AttestationStatement, record: WallPrintRecord 
   return reasons.length === 0 ? { status: "MATCHED", reasons: [] } : { status: "MISMATCHED", reasons: uniqueSorted(reasons) };
 }
 
-function assessKey(snapshot: KeyRegistrySnapshot, statement: AttestationStatement, issuerEvaluable: boolean, mode: "ACCEPTANCE" | "CURRENT", acceptedVersion: string | null): KeyAssessment {
+function assessKey(snapshot: KeyRegistrySnapshot, statement: AttestationStatement, issuerEvaluable: boolean, mode: "ACCEPTANCE" | "CURRENT", acceptance: { version: string | null; covered: boolean }): KeyAssessment {
   const base = { evaluation: "EVALUATED" as const, keyRegistryVersion: snapshot.keyRegistryVersion, keyRegistryDigest: snapshot.digest };
   const found = findRegisteredKey(snapshot, statement.signer.keyId);
   if (found === null) return { ...base, key: "UNKNOWN", keyStatus: null, signerKind: null, bindingMethod: null, binding: "UNBOUND", authorization: "NOT_AUTHORIZED", standing: "NOT_EVALUATED", reasons: ["KEY_UNKNOWN"] };
@@ -196,10 +196,15 @@ function assessKey(snapshot: KeyRegistrySnapshot, statement: AttestationStatemen
   let standing: StandingStatus;
   if (mode === "ACCEPTANCE") standing = authorization === "AUTHORIZED" ? "HELD" : "NOT_EVALUATED";
   else if (key.status === "ACTIVE" || key.status === "RETIRED" || key.status === "SUPERSEDED") standing = "HELD";
-  else if (acceptedVersion === null) {
+  else if (acceptance.version === null) {
     standing = "WITHDRAWN";
     reasons.push("WITHDRAWN_ACCEPTANCE_UNKNOWN");
-  } else if (key.retainedBefore !== null && Number(acceptedVersion) >= Number(key.addedIn) && Number(acceptedVersion) < Number(key.retainedBefore)) standing = "HELD";
+  } else if (!acceptance.covered) {
+    // The ledger and the registry are separate unsigned logs with no cross-ordering, so an entry appended after the prefix the
+    // caller holds an anchor for could have been written after the status change with an older version. Not trusted for a withdrawn key.
+    standing = "WITHDRAWN";
+    reasons.push("WITHDRAWN_ACCEPTANCE_UNANCHORED");
+  } else if (key.retainedBefore !== null && Number(acceptance.version) >= Number(key.addedIn) && Number(acceptance.version) < Number(key.retainedBefore)) standing = "HELD";
   else {
     standing = "WITHDRAWN";
     reasons.push("WITHDRAWN_AFTER_ACCEPTANCE");
@@ -271,6 +276,7 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared): Attest
   if (target.status === "NOT_COMPARED") limitations.push("TARGET_NOT_COMPARED");
 
   let pin: AcceptancePin | null = null;
+  let pinCovered = false;
   if (prepared.ledger !== null) {
     const ledger = prepared.ledger;
     const anchor = prepared.ledgerAnchor;
@@ -278,7 +284,9 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared): Attest
     else if (anchor !== null && !ledger.entries.some((e) => e.seq === anchor.seq && e.entryDigest === anchor.digest)) limitations.push("ACCEPTANCE_ANCHOR_MISMATCH");
     else {
       if (anchor === null) limitations.push("ACCEPTANCE_UNANCHORED");
-      pin = acceptanceFor(ledger.entries, digest)?.acceptedUnder ?? null;
+      const entry = acceptanceFor(ledger.entries, digest);
+      pin = entry?.acceptedUnder ?? null;
+      pinCovered = entry !== null && anchor !== null && Number(entry.seq) <= Number(anchor.seq);
     }
   }
   const acceptance = pin === null ? ({ status: "NOT_PINNED", keyRegistryVersion: null } as const) : ({ status: "PINNED", keyRegistryVersion: pin.keyRegistryVersion } as const);
@@ -301,12 +309,12 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared): Attest
         if (anchor === null) limitations.push("KEY_REGISTRY_UNANCHORED");
         const issuerEvaluable = target.status === "MATCHED" && statement.target.kind === "WALLPRINT_ASSESSMENT" && record !== null;
         const head = chain.chain[chain.chain.length - 1];
-        if (head !== undefined) current = assessKey(head, statement, issuerEvaluable, "CURRENT", pin?.keyRegistryVersion ?? null);
+        if (head !== undefined) current = assessKey(head, statement, issuerEvaluable, "CURRENT", { version: pin?.keyRegistryVersion ?? null, covered: pinCovered });
         if (pin !== null) {
           const snapshot = chain.chain.find((s) => s.keyRegistryVersion === pin.keyRegistryVersion);
           if (snapshot === undefined) atAcceptance = unavailable(["KEY_REGISTRY_VERSION_MISSING"]);
           else if (snapshot.digest !== pin.keyRegistryDigest) atAcceptance = unavailable(["KEY_REGISTRY_DIGEST_MISMATCH"]);
-          else atAcceptance = assessKey(snapshot, statement, issuerEvaluable, "ACCEPTANCE", pin.keyRegistryVersion);
+          else atAcceptance = assessKey(snapshot, statement, issuerEvaluable, "ACCEPTANCE", { version: pin.keyRegistryVersion, covered: pinCovered });
         }
       }
     }
