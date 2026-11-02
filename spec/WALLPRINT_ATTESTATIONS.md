@@ -385,11 +385,11 @@ Designed before implementation, and independent of any online key infrastructure
 
 | Status | Means | A new attestation under it | An earlier accepted attestation |
 | --- | --- | --- | --- |
-| `ACTIVE` | in use | may be accepted | standing held |
-| `RETIRED` | no longer used, no replacement | refused at the gate; `KEY_RETIRED` | standing held |
-| `SUPERSEDED` | replaced by a named successor | refused at the gate; `KEY_SUPERSEDED` | standing held |
-| `REVOKED` | governance withdrew the binding (mis-issued, entity change, misuse) | refused | held only for acceptances before `retainedBefore`; otherwise withdrawn |
-| `COMPROMISED` | the private key is believed or known exposed | refused | held only for acceptances before `retainedBefore`; `null` retains nothing |
+| `ACTIVE` | in use | may be accepted | standing held (nothing about it depends on when it was accepted) |
+| `RETIRED` | no longer used, no replacement | refused at the gate; `KEY_RETIRED` | held only inside an anchored ledger prefix; otherwise withdrawn |
+| `SUPERSEDED` | replaced by a named successor | refused at the gate; `KEY_SUPERSEDED` | held only inside an anchored ledger prefix; otherwise withdrawn |
+| `REVOKED` | governance withdrew the binding (mis-issued, entity change, misuse) | refused | held only inside an anchored ledger prefix and for acceptances before `retainedBefore`; otherwise withdrawn |
+| `COMPROMISED` | the private key is believed or known exposed | refused | held only inside an anchored ledger prefix and for acceptances before `retainedBefore`; `null` retains nothing |
 
 **The critical distinction:** a valid historical signature from a later-compromised key remains **cryptographically valid**.
 Whether it remains **relied upon** is a policy question the registry answers explicitly and the result reports separately:
@@ -398,15 +398,18 @@ The policy is data, not code: `retainedBefore` is the first registry version who
 (`addedIn < retainedBefore <= statusFrom`, or `null` for "nothing"). An acceptance under version `a` is retained when
 `addedIn <= a < retainedBefore`. Compromise can only narrow what revocation retained.
 
-**An attestation with no acceptance record and a `REVOKED` or `COMPROMISED` key is `WITHDRAWN`** (`WITHDRAWN_ACCEPTANCE_UNKNOWN`):
+**An attestation under a key that is no longer `ACTIVE` and has no acceptance record is `WITHDRAWN`** (`WITHDRAWN_ACCEPTANCE_UNKNOWN`):
 nothing shows it predates the status change, so none is assumed. **So is one whose ledger entry lies after the ledger prefix the verifier
 holds an anchor for** (`WITHDRAWN_ACCEPTANCE_UNANCHORED`, and a ledger with no anchor covers nothing): the key registry and the ledger
 are separate, unsigned logs with no cross-ordering, so an entry appended after the verifier's anchor, naming an old registry version, could
-have been written after the compromise. For a withdrawn key, retained standing is therefore granted only inside an anchored prefix; a
-verifier advances its anchor deliberately. This is what limits a compromised key's ability to backdate. (Found by review, with an
-attack that appended a post-compromise statement to a ledger behind an old anchor; pinned by a test.) The designed hardening that would
-lift the restriction, a registry snapshot committing the ledger head at its publication so later entries must name at least that version,
-is a follow-up (section 21).
+have been written after the status change. A retired or superseded key is no safer than a compromised one in this respect: it can be
+stolen later, and a forged statement under it would carry an old version just the same. For a key that is not `ACTIVE`, retained standing
+is therefore granted only inside an anchored prefix (and, for `REVOKED` and `COMPROMISED`, inside `retainedBefore`); a verifier advances
+its anchor deliberately. This is what limits a former key's ability to backdate. (Found by review, in two rounds: first an attack that
+appended a post-compromise statement to a ledger behind an old anchor, then the same attack through a superseded key, which the first
+fix had left out; both are pinned by tests and vectors `10f`, `09c` and `14b`.) The designed hardening that would lift the restriction,
+a registry snapshot committing the ledger head at its publication so later entries must name at least that version, is a follow-up
+(section 21).
 
 **Revocation latency is real.** A verifier knows only the chain it holds. There is no online status check, by design.
 `current` is "the head of the chain you were given", and the result states which version that was.
@@ -419,7 +422,7 @@ previousEntryDigest, entryDigest }`. The `acceptedUnder` pair is the "historical
 store judged the key under. It is recorded by the store, never taken from the signer (the statement has no registry field, so a key
 holder cannot choose the context it is judged in). The acceptance gate (section 16) admits an attestation only when, under the
 current head, the signature is valid, the target matches and the key is `ACTIVE` and authorized, and pins that head (a claim the verifier
-cannot check from the ledger alone, which is why section 11 and section 10 restrict what a withdrawn key's entry can earn).
+cannot check from the ledger alone, which is why section 10 restricts what the entry of a key that is no longer `ACTIVE` can earn).
 
 **The pin is bound to one attestation, in a sequence a rewrite has to break, and the verifier reads it from its own trusted channel.**
 The verifier looks a pin up *by attestation digest* in a ledger it obtained from the same trusted channel as the key registry; there is
@@ -431,7 +434,7 @@ A ledger that fails any rule is not read (`ACCEPTANCE_INDEX_INVALID`). **What th
 party that controls the store can write a whole new ledger or append entries after any anchor, exactly as for the registry chain
 (section 8); the ledger's authenticity is the channel's and the anchor's. **The ledger and the registry chain are two separate logs with no
 cross-ordering**: the ledger cannot prove that an entry naming registry version N was written before version N+1 existed. The
-monotone-version rule stops back-dating *within* the ledger only. So for a key that is now `REVOKED` or `COMPROMISED` the entry's pin
+monotone-version rule stops back-dating *within* the ledger only. So for a key that is no longer `ACTIVE` the entry's pin
 is trusted only if the entry lies inside a ledger prefix the verifier already holds an anchor for (section 10); the registry's retained
 window then applies to what the verifier had already seen, and entries appended after the anchor wait for a deliberate anchor advance. A
 compromised key can still get *new* attestations accepted in the window between its compromise and the registry version that records it,
@@ -618,7 +621,7 @@ are bounded as in section 7. The directory split keeps the two address spaces ap
 
 **Limits that remain:** the discovery lists and the ledger are unsigned, so a store controller could withhold an attestation (absence is
 not evidence) or write a new ledger. The repository's history, the registry and ledger anchors, and the rules that an attestation with no
-entry, or with an entry outside the held anchor's prefix, is `WITHDRAWN` for a withdrawn key narrow what that can do; they do not remove it,
+entry, or with an entry outside the held anchor's prefix, is `WITHDRAWN` for a key that is no longer `ACTIVE` narrow what that can do; they do not remove it,
 because the two logs have no cross-ordering (section 11). A signed ledger head is a candidate later purpose.
 An attestation first accepted while its key was unregistered stays accepted under that earlier version (a late binding does not upgrade
 it); the signer's remedy is a new attestation by a registered key, since an identical re-signature is the same attestation.
@@ -631,7 +634,7 @@ it); the signer's remedy is a new attestation by a registered key, since an iden
 | T2 | Wrong key (statement names key K, key material is another) | the registry's algorithm and public key are compared with the signed statement (`MATERIAL_MISMATCH`); the key is inside the signed bytes | none for a registered key |
 | T3 | Valid key, wrong purpose | per-purpose grants; signer kind per purpose; domain tags | a key granted a purpose can sign anything within it |
 | T4 | Valid key, wrong issuer | `authorityId` equality; all four issuer conditions; role and purpose must agree | an issuer key whose binding evidence was wrong (governance error) |
-| T5 | Retired or superseded key | gate refuses it; `atAcceptance` shows `KEY_RETIRED` / `KEY_SUPERSEDED`; standing is held for what it legitimately signed | an unpinned attestation cannot show when it was signed |
+| T5 | Retired or superseded key | gate refuses it; `atAcceptance` shows `KEY_RETIRED` / `KEY_SUPERSEDED`; standing is held only for an entry inside an anchored ledger prefix (vectors `09c`, `14b`), so a stolen old key cannot append a post-retirement statement behind the anchor | an advanced anchor may already contain a back-dated entry; a verifier with no anchor holds nothing for a former key |
 | T6 | Compromised or revoked key | `current.standing` withdraws acceptances outside `retainedBefore`; unpinned attestations are withdrawn | a window between compromise and the registry version that records it; the signature stays valid |
 | T7 | Registry rollback | `trustAnchor` requires the anchored version and digest in the chain | a verifier with no anchor, or a stale one, sees an older head (revocation latency) |
 | T8 | Registry substitution | hash chain; digest in the ledger entry; anchor; append-only evolution rules | an attacker who controls the channel can append a valid version after the anchor (section 8) |
@@ -684,12 +687,12 @@ anyone can sign as it. The file says so, signing exists only in the test support
 | 6 target digest mismatch | `06-target-digest-mismatch` |
 | 7 algorithm mismatch | `07a-algorithm-unsupported`, `07b-algorithm-differs-from-registry` |
 | 8 malformed signature | `08a-malformed-signature-length`, `08b-malformed-signature-not-hex` |
-| 9 retired key | `09a-retired-key-before-retirement`, `09b-retired-key-accepted-after-retirement` |
+| 9 retired key | `09a-retired-key-before-retirement`, `09b-retired-key-accepted-after-retirement`, `09c-retired-key-entry-after-the-held-anchor` |
 | 10 revoked or compromised key | `10a` to `10f` (inside, outside and at the boundary of the retained window; no acceptance record; an entry after the held anchor) |
 | 11 record attestation replayed as assessment attestation | `11a-…`, `11b-…` |
 | 12 assessment attestation replayed against another policy | `12a-…`; across WallPrint versions: `12b-…` |
 | 13 historical key valid under an old registry version | `13-historical-key-valid-under-old-registry-version` |
-| 14 same key no longer current today | `13`, `14-assessor-key-superseded-today`, `10d` |
+| 14 same key no longer current today | `13`, `14-assessor-key-superseded-today`, `14b-superseded-key-entry-after-the-held-anchor`, `10d` |
 | 15 multiple signatures, deterministic ordering | the `set` section: five inputs, shuffled, one duplicate |
 | extra | `18` issuer without record context; `19` assessor key on an issuer-role assessment; `22` WalletWall's own assessment; `23` substituted registry; `24` unanchored; `25` no acceptance record; an assessor-declared key is simply the unregistered case (`02`) |
 
@@ -742,4 +745,4 @@ Recommended implementation order: (1) publisher gate and the static store layout
 | D15 | WalletWall's generated assessment is not attestable | It is already established by recomputation; a second statement would invite "WalletWall endorses" |
 | D16 | No "assessor declared it" binding method | A flag on a bound result is not a boundary a consumer switches on; a self-declared key stays unregistered and `KEY_ONLY` (found by review) |
 | D17 | Strict signature checking: R and S as well as the key | Key admission alone leaves a signer-crafted torsion R on which verifiers disagree (found by review) |
-| D18 | Retained standing for a withdrawn key only inside an anchored ledger prefix | Trusting any entry's version: the ledger cannot prove an entry predates a registry version (found by review); cross-binding the logs is a follow-up |
+| D18 | Retained standing for any key that is no longer `ACTIVE` only inside an anchored ledger prefix | Trusting any entry's version: the ledger cannot prove an entry predates a registry version, for a compromised key or a stolen retired one (found by review, two rounds); cross-binding the logs is a follow-up |

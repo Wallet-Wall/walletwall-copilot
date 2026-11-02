@@ -154,6 +154,20 @@ describe("attestation vectors: historical key state is never reinterpreted under
     assert.deepEqual(run("09b-retired-key-accepted-after-retirement").atAcceptance.reasons, ["KEY_RETIRED"]);
   });
 
+  test("a retired or superseded key keeps standing only inside an anchored ledger prefix: the same chronology gap as for a compromised key", () => {
+    for (const id of ["09c-retired-key-entry-after-the-held-anchor", "14b-superseded-key-entry-after-the-held-anchor"]) {
+      const r = run(id);
+      assert.equal(r.signature.status, "VALID", id);
+      assert.equal(r.acceptance.status, "PINNED", id);
+      assert.equal(r.current.standing, "WITHDRAWN", id);
+      assert.ok(r.current.reasons.includes("WITHDRAWN_ACCEPTANCE_UNANCHORED"), id);
+      assert.equal(r.origin, "KEY_ONLY", id);
+    }
+    assert.equal(run("09a-retired-key-before-retirement").current.standing, "HELD");
+    assert.equal(run("14-assessor-key-superseded-today").current.standing, "HELD");
+    assert.equal(run("13-historical-key-valid-under-old-registry-version").current.standing, "HELD");
+  });
+
   test("the acceptance-time result is a pure function of the pinned snapshot: appending later versions, or truncating after the pin, changes nothing about it", () => {
     for (const spec of vectorSpecs().filter((s) => s.acceptedUnder !== null && s.record !== null && s.pinDigestOf === undefined)) {
       const pin = spec.acceptedUnder ?? 1;

@@ -195,16 +195,18 @@ function assessKey(snapshot: KeyRegistrySnapshot, statement: AttestationStatemen
 
   let standing: StandingStatus;
   if (mode === "ACCEPTANCE") standing = authorization === "AUTHORIZED" ? "HELD" : "NOT_EVALUATED";
-  else if (key.status === "ACTIVE" || key.status === "RETIRED" || key.status === "SUPERSEDED") standing = "HELD";
+  else if (key.status === "ACTIVE") standing = "HELD";
   else if (acceptance.version === null) {
     standing = "WITHDRAWN";
     reasons.push("WITHDRAWN_ACCEPTANCE_UNKNOWN");
   } else if (!acceptance.covered) {
     // The ledger and the registry are separate unsigned logs with no cross-ordering, so an entry appended after the prefix the
-    // caller holds an anchor for could have been written after the status change with an older version. Not trusted for a withdrawn key.
+    // caller holds an anchor for could have been written after the status change with an older version. Not trusted for any key
+    // that is no longer ACTIVE (a retired key can be stolen too).
     standing = "WITHDRAWN";
     reasons.push("WITHDRAWN_ACCEPTANCE_UNANCHORED");
-  } else if (key.retainedBefore !== null && Number(acceptance.version) >= Number(key.addedIn) && Number(acceptance.version) < Number(key.retainedBefore)) standing = "HELD";
+  } else if (key.status === "RETIRED" || key.status === "SUPERSEDED") standing = "HELD";
+  else if (key.retainedBefore !== null && Number(acceptance.version) >= Number(key.addedIn) && Number(acceptance.version) < Number(key.retainedBefore)) standing = "HELD";
   else {
     standing = "WITHDRAWN";
     reasons.push("WITHDRAWN_AFTER_ACCEPTANCE");
