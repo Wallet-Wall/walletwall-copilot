@@ -18,7 +18,7 @@ const walk = (dir: string): string[] =>
     return e.isDirectory() ? walk(p) : [relative(ROOT.replace(/[\\/]$/, ""), p).replaceAll("\\", "/")];
   });
 
-const MODULES = ["attestation-vocabulary", "attestation", "attestation-verify", "key-registry", "ed25519"].map((m) => `packages/mcp/src/wallprint/${m}.ts`);
+const MODULES = ["attestation-vocabulary", "attestation", "attestation-verify", "key-registry", "acceptance-ledger", "ed25519"].map((m) => `packages/mcp/src/wallprint/${m}.ts`);
 
 describe("attestation lane: no shipped runtime change", () => {
   test("the shipped server, tools, resources and every non-WallPrint engine module never reach the attestation modules", () => {

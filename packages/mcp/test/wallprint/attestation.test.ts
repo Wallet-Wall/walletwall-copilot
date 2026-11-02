@@ -17,7 +17,7 @@ import { verifyEd25519 } from "../../src/wallprint/ed25519.ts";
 import { findReservedAssuranceTerms } from "../../src/wallprint/language.ts";
 import { verifyReceipt, wallPrintReceipt } from "../../src/wallprint/receipt.ts";
 import { WallPrintRecordSchema, validateWallPrintRecord, wallPrintDigest } from "../../src/wallprint/record.ts";
-import { WHO, assessmentTargetOf, attest, goldenRecord, statementFor, registryChain, anchorOf, pinOf } from "../support/wallprint-attestations.ts";
+import { WHO, assessmentTargetOf, attest, goldenRecord, pinnedContext, statementFor, syntheticKey } from "../support/wallprint-attestations.ts";
 
 const golden = goldenRecord();
 const recT = recordTarget(golden);
@@ -96,6 +96,36 @@ describe("attestation: the exact signed bytes and domain separation", () => {
       (locate(copy, path) as unknown as unknown[]).push("obs-identity");
       assert.notEqual(verifyAttestation(copy, {}).signature.status, "VALID", path.join("."));
     }
+    // The mutants above often stop parsing, which proves the shape, not the signature. These stay well-formed, so it is the
+    // signature that must refuse each one: every field that carries meaning is inside the signed bytes.
+    const alternatives: [(string | number)[], unknown][] = [
+      [["statement", "purpose"], "ISSUER_ASSESSMENT_ORIGIN"],
+      [["statement", "signer", "signerId"], "synthetic-other"],
+      [["statement", "signer", "keyId"], "synthetic-reviewer-y-9"],
+      [["statement", "signer", "publicKey"], syntheticKey(2).publicKey],
+      [["statement", "target", "wallprintVersion"], "0.1"],
+      [["statement", "target", "bundleDigest"], "0".repeat(64)],
+      [["statement", "target", "focalAssertionId"], "a-balance"],
+      [["statement", "target", "assessment", "assessor"], "reviewer-q"],
+      [["statement", "target", "assessment", "assessorRole"], "OTHER"],
+      [["statement", "target", "assessment", "assessment"], "CONFIRMED"],
+      [["statement", "target", "assessment", "statement"], "Another statement."],
+      [["statement", "target", "assessment", "policy"], "reviewer-y-review-b"],
+      [["statement", "target", "assessment", "policyVersion"], "2"],
+      [["statement", "target", "assessment", "assessedAt"], "2026-10-23T12:00:01Z"],
+      [["statement", "target", "assessment", "evidenceRefs"], ["obs-identity"]],
+      [["statement", "target", "assessment", "limitations"], ["TRANSPORT_FIDELITY_NOT_VERIFIED"]],
+    ];
+    for (const [path, value] of alternatives) {
+      const copy = JSON.parse(JSON.stringify(original)) as Record<string, unknown>;
+      locate(copy, path.slice(0, -1))[path[path.length - 1] as string] = value;
+      const r = verifyAttestation(copy, {});
+      assert.equal(r.parse, "PARSED", path.join("."));
+      assert.equal(r.signature.status, "INVALID", path.join("."));
+    }
+    const otherAlgorithm = JSON.parse(JSON.stringify(original)) as AttestationEnvelope;
+    otherAlgorithm.statement.signer.algorithm = "ED25519B";
+    assert.equal(verifyAttestation(otherAlgorithm, {}).signature.status, "NOT_CHECKED", "an unsupported algorithm is never valid");
     // Unsigned additions are refused, never ignored.
     for (const where of [[], ["statement"], ["statement", "signer"], ["statement", "target"], ["statement", "target", "assessment"]]) {
       const copy = JSON.parse(JSON.stringify(original)) as Record<string, unknown>;
@@ -200,7 +230,7 @@ describe("attestation: reading untrusted input", () => {
     const marker = "ECHO-CANARY-7f3a";
     const hostile = [null, undefined, 1, true, [], {}, "x", marker, { type: marker }, { ...valid, signature: marker }, { ...valid, statement: marker }, { ...valid, statement: { ...valid.statement, purpose: marker } }, JSON.parse(`{"${marker}": 1}`)];
     for (const input of hostile) {
-      const result = verifyAttestation(input, { record: marker, keyRegistry: marker, trustAnchor: { version: marker, digest: marker }, acceptedUnder: { keyRegistryVersion: marker, keyRegistryDigest: marker } });
+      const result = verifyAttestation(input, { record: marker, keyRegistry: marker, trustAnchor: { version: marker, digest: marker }, acceptance: { ledger: marker, anchor: { seq: marker, digest: marker } } });
       assert.equal(JSON.stringify(result).includes(marker), false);
       assert.equal(result.origin, "NONE");
     }
@@ -216,8 +246,7 @@ describe("attestation: the language it speaks", () => {
   });
 
   test("a verification result has no flag named for a verdict, and carries what it does not establish", () => {
-    const chain = registryChain();
-    const result = verifyAttestation(publication, { record: golden, keyRegistry: chain, trustAnchor: anchorOf(chain), acceptedUnder: pinOf(chain, 2) });
+    const result = verifyAttestation(publication, pinnedContext(publication, 2));
     const names: string[] = [];
     const walk = (node: unknown): void => {
       if (Array.isArray(node)) node.forEach(walk);

@@ -88,8 +88,12 @@ export const KEY_STATUS_TRANSITIONS: Readonly<Record<KeyStatus, readonly KeyStat
   COMPROMISED: [],
 });
 
-/** How a key was bound to its signer, strongest evidence first. A binding is a registry governance fact, never something a key can say about itself. */
-export const BINDING_METHODS = ["GOVERNANCE_DECLARATION", "ISSUER_PUBLICATION", "ASSESSOR_PUBLICATION", "ASSESSOR_DECLARATION"] as const;
+/**
+ * How a key was bound to its signer, strongest evidence first. A binding is a registry governance fact, never something a
+ * key can say about itself. There is deliberately no "assessor declared it" method: a key an assessor merely tells
+ * WalletWall about has no trust path from the assessor's identity to the key, so it stays unregistered and is `KEY_ONLY`.
+ */
+export const BINDING_METHODS = ["GOVERNANCE_DECLARATION", "ISSUER_PUBLICATION", "ASSESSOR_PUBLICATION"] as const;
 export type BindingMethod = (typeof BINDING_METHODS)[number];
 
 /** Dimensions of a verification result. They never collapse into one verdict. */
@@ -133,6 +137,8 @@ export const SIGNATURE_REASONS = [
   "RUNTIME_UNSUPPORTED",
   "SIGNATURE_LENGTH_INVALID",
   "SIGNATURE_MISMATCH",
+  "SIGNATURE_R_INADMISSIBLE",
+  "SIGNATURE_S_NON_CANONICAL",
 ] as const;
 export type SignatureReason = (typeof SIGNATURE_REASONS)[number];
 
@@ -174,8 +180,10 @@ export const KEY_REASONS = [
 
 /** Limitations are the things a reader must not assume. They are reported, never hidden, and sorted. */
 export const VERIFICATION_LIMITATIONS = [
+  "ACCEPTANCE_ANCHOR_MISMATCH",
+  "ACCEPTANCE_INDEX_INVALID",
   "ACCEPTANCE_NOT_PINNED",
-  "BINDING_METHOD_ASSESSOR_DECLARATION",
+  "ACCEPTANCE_UNANCHORED",
   "DUPLICATE_OF_EARLIER_ATTESTATION",
   "KEY_NOT_ACTIVE_NOW",
   "KEY_REGISTRY_UNANCHORED",
@@ -196,6 +204,7 @@ export const ATTESTATION_LIMITS = Object.freeze({
   maxAssessorIdsPerSigner: 16,
   maxRegistryVersions: 4096,
   maxAttestationsPerSet: 256,
+  maxLedgerEntries: 100_000,
 });
 
 /** What a valid attestation establishes. Authentication of origin, stated with its precondition, and nothing about truth. */

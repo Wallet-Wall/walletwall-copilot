@@ -113,6 +113,8 @@ describe("WallPrint attestations specification", () => {
       "packages/mcp/src/wallprint/key-registry.ts",
       "packages/mcp/src/wallprint/ed25519.ts",
       "packages/mcp/src/wallprint/attestation-verify.ts",
+      "packages/mcp/src/wallprint/acceptance-ledger.ts",
+      "packages/mcp/test/wallprint/acceptance-ledger.test.ts",
       "packages/mcp/test/wallprint/attestation-ed25519.test.ts",
       "packages/mcp/test/wallprint/attestation.test.ts",
       "packages/mcp/test/wallprint/key-registry.test.ts",

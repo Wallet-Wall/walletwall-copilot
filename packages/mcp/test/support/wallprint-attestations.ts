@@ -1,6 +1,7 @@
 import { createPrivateKey, createPublicKey, sign, type KeyObject } from "node:crypto";
 import { canonicalize } from "../../src/canonical.ts";
-import { attestationPreimage, assessmentTarget, recordTarget, type AttestationEnvelope, type AttestationStatement, type AttestationTarget } from "../../src/wallprint/attestation.ts";
+import { attestationDigest, attestationPreimage, assessmentTarget, parseAttestation, recordTarget, type AttestationEnvelope, type AttestationStatement, type AttestationTarget } from "../../src/wallprint/attestation.ts";
+import { acceptanceEntryDigest, type AcceptanceEntry } from "../../src/wallprint/acceptance-ledger.ts";
 import type { AttestationPurpose } from "../../src/wallprint/attestation-vocabulary.ts";
 import { verifyAttestation, verifyAttestations, type AcceptancePin, type AttestationVerification, type VerificationContext } from "../../src/wallprint/attestation-verify.ts";
 import { keyRegistryDigest, type KeyRegistrySnapshot, type RegisteredKey, type RegisteredSigner } from "../../src/wallprint/key-registry.ts";
@@ -74,7 +75,6 @@ export const WHO = {
   reviewerY2: { signerId: "synthetic-reviewer-y", keyId: "synthetic-reviewer-y-2", n: 10 },
   reviewerW1: { signerId: "synthetic-reviewer-w", keyId: "synthetic-reviewer-w-1", n: 6 },
   reviewerR1: { signerId: "synthetic-reviewer-r", keyId: "synthetic-reviewer-r-1", n: 11 },
-  declared1: { signerId: "synthetic-declared", keyId: "synthetic-declared-1", n: 7 },
   future1: { signerId: "synthetic-future", keyId: "synthetic-future-1", n: 12 },
   unregistered: { signerId: "synthetic-reviewer-y", keyId: "synthetic-unregistered-1", n: 8 },
   lookalike: { signerId: "synthetic-circle", keyId: "synthetic-circle-label", n: 8 },
@@ -120,9 +120,6 @@ const ROSTER: SignerSpec[] = [
   ] },
   { signerId: "synthetic-reviewer-r", kind: "EXTERNAL_ASSESSOR", authorityId: null, assessorIds: ["reviewer-r"], binding: published("ASSESSOR_PUBLICATION", "Reviewer R synthetic"), keys: [
     { who: WHO.reviewerR1, purposes: ["ASSESSMENT_ORIGIN"], addedIn: 1, timeline: [{ from: 3, status: "RETIRED" }] },
-  ] },
-  { signerId: "synthetic-declared", kind: "EXTERNAL_ASSESSOR", authorityId: null, assessorIds: ["declared-z"], binding: { method: "ASSESSOR_DECLARATION", publisher: "Declared Z synthetic", url: null, locator: null, retrievedAt: "2026-10-24" }, keys: [
-    { who: WHO.declared1, purposes: ["ASSESSMENT_ORIGIN"], addedIn: 1 },
   ] },
   { signerId: "synthetic-future", kind: "EXTERNAL_ASSESSOR", authorityId: null, assessorIds: ["future-q"], binding: published("ASSESSOR_PUBLICATION", "Future Q synthetic"), keys: [
     { who: WHO.future1, purposes: ["ASSESSMENT_ORIGIN"], addedIn: 1, algorithm: "ML_DSA_65" },
@@ -175,6 +172,27 @@ function buildChain(through: number): KeyRegistrySnapshot[] {
 }
 
 export const pinOf = (chain: readonly KeyRegistrySnapshot[], version: number): AcceptancePin => ({ keyRegistryVersion: String(version), keyRegistryDigest: chain[version - 1]?.digest ?? "" });
+
+/** An acceptance ledger of the given acceptances, in order: each entry chained to the one before. */
+export function ledgerOf(accepted: readonly { digest: string; pin: AcceptancePin }[]): AcceptanceEntry[] {
+  const out: AcceptanceEntry[] = [];
+  accepted.forEach((a, i) => {
+    const body = { seq: String(i + 1), attestationDigest: a.digest, acceptedUnder: a.pin, previousEntryDigest: out[i - 1]?.entryDigest ?? null };
+    out.push({ ...body, entryDigest: acceptanceEntryDigest({ ...body, entryDigest: "" }) });
+  });
+  return out;
+}
+export const ledgerAnchor = (ledger: readonly AcceptanceEntry[]): { seq: string; digest: string } => ({ seq: String(ledger.length), digest: ledger[ledger.length - 1]?.entryDigest ?? "" });
+export const digestOfEnvelope = (envelope: unknown): string => {
+  const parsed = parseAttestation(envelope);
+  return parsed.ok ? attestationDigest(parsed.envelope) : "0".repeat(64);
+};
+/** The one-entry ledger a vector carries, or null when the vector has no acceptance record. */
+export function vectorLedger(spec: { envelope: unknown; acceptedUnder: number | null; pinDigestOf?: number }, chain: readonly KeyRegistrySnapshot[]): AcceptanceEntry[] | null {
+  if (spec.acceptedUnder === null) return null;
+  const pin = { ...pinOf(chain, spec.acceptedUnder), ...(spec.pinDigestOf === undefined ? {} : { keyRegistryDigest: pinOf(chain, spec.pinDigestOf).keyRegistryDigest }) };
+  return ledgerOf([{ digest: digestOfEnvelope(spec.envelope), pin }]);
+}
 export const anchorOf = (chain: readonly KeyRegistrySnapshot[]): { version: string; digest: string } => {
   const head = chain[chain.length - 1];
   return { version: head?.keyRegistryVersion ?? "", digest: head?.digest ?? "" };
@@ -200,7 +218,7 @@ function buildGolden(over: { id?: string; policy?: string }): WallPrintRecord {
   return buildWallPrintSnapshot(
     baseInput({
       id: over.id ?? "wp-attest-golden",
-      assessments: [issuerAssessment(), reviewer, extra("reviewer-w", "INDEPENDENT_REVIEWER", "SUPPORTED"), extra("reviewer-r", "OTHER", "CONFIRMED"), extra("declared-z", "OTHER", "SUPPORTED"), extra("future-q", "OTHER", "SUPPORTED")],
+      assessments: [issuerAssessment(), reviewer, extra("reviewer-w", "INDEPENDENT_REVIEWER", "SUPPORTED"), extra("reviewer-r", "OTHER", "CONFIRMED"), extra("future-q", "OTHER", "SUPPORTED")],
     }),
   );
 }
@@ -277,10 +295,7 @@ export function vectorSpecs(): VectorSpec[] {
   add("18-issuer-attestation-without-record-context", "a valid issuer attestation with no record: the attribution to the focal deployment's authority is not evaluated, so no issuer origin", attest("ISSUER_ASSESSMENT_ORIGIN", WHO.circle2, circleT), null, 3, { signature: "VALID", target: "NOT_COMPARED", origin: "KEY_ONLY", originBasis: "NONE" });
   add("19-assessor-key-signs-an-issuer-role-assessment", "an assessor key signs the ISSUER-role assessment under the assessor purpose", attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, circleT), "golden", 3, { signature: "VALID", target: "MISMATCHED", origin: "NONE", originBasis: "NONE" });
   add("20-key-label-says-circle", "an unregistered key whose signer id reads like an issuer signs the issuer assessment: a label is not a binding", attest("ISSUER_ASSESSMENT_ORIGIN", WHO.lookalike, circleT), "golden", null, { signature: "VALID", target: "MATCHED", origin: "KEY_ONLY", originBasis: "NONE" });
-  add("21-self-declared-binding", "an assessor binding recorded from the assessor's own declaration: bound, and the limitation says so", attest("ASSESSMENT_ORIGIN", WHO.declared1, target("declared-z")), "golden", 1, { signature: "VALID", target: "MATCHED", origin: "BOUND_ASSESSOR", originBasis: "ACCEPTANCE" });
   add("22-walletwall-assessment-is-not-attestable", "the WalletWall-generated assessment is never an attestation target: WalletWall speaks through the publication attestation", attest("ASSESSMENT_ORIGIN", WHO.publisher2, target("walletwall-rules")), "golden", 2, { signature: "VALID", target: "MISMATCHED", origin: "NONE", originBasis: "NONE" });
-  add("23-registry-substituted", "the acceptance record names registry version 2 but carries another version's digest: the presented chain is not the registry that was pinned, so no historical decision is made", publication, "golden", 2, { signature: "VALID", target: "MATCHED", origin: "KEY_ONLY", originBasis: "NONE" }, true, 1);
-  add("25-active-key-no-acceptance-record", "an active key presented with no acceptance record: bound under the current registry only, and the limitation says nothing was pinned", publication, "golden", null, { signature: "VALID", target: "MATCHED", origin: "BOUND_WALLETWALL_PUBLISHER", originBasis: "CURRENT" });
   add("23-registry-substituted", "the acceptance record names registry version 2 but carries another version's digest: the presented chain is not the registry that was pinned, so no historical decision is made", publication, "golden", 2, { signature: "VALID", target: "MATCHED", origin: "KEY_ONLY", originBasis: "NONE" }, true, 1);
   add("25-active-key-no-acceptance-record", "an active key presented with no acceptance record: bound under the current registry only, and the limitation says nothing was pinned", publication, "golden", null, { signature: "VALID", target: "MATCHED", origin: "BOUND_WALLETWALL_PUBLISHER", originBasis: "CURRENT" });
   add("24-unanchored-registry", "no trust anchor supplied: the chain is only self-consistent and the result says so", publication, "golden", 2, { signature: "VALID", target: "MATCHED", origin: "BOUND_WALLETWALL_PUBLISHER", originBasis: "ACCEPTANCE" }, false);
@@ -293,11 +308,12 @@ function envelopeOf(statement: AttestationStatement, signature: string): Attesta
 
 export function vectorContext(spec: VectorSpec, chain = registryChain()): VerificationContext {
   const records = { golden: goldenRecord(), other: goldenRecord({ id: "wp-attest-other" }), "renamed-policy": goldenRecord({ policy: "reviewer-y-review-b" }) };
+  const ledger = vectorLedger(spec, chain);
   return {
     ...(spec.record === null ? {} : { record: records[spec.record] }),
     keyRegistry: chain,
     ...(spec.anchored ? { trustAnchor: anchorOf(chain) } : {}),
-    acceptedUnder: spec.acceptedUnder === null ? null : { ...pinOf(chain, spec.acceptedUnder), ...(spec.pinDigestOf === undefined ? {} : { keyRegistryDigest: pinOf(chain, spec.pinDigestOf).keyRegistryDigest }) },
+    ...(ledger === null ? {} : { acceptance: { ledger, anchor: ledgerAnchor(ledger) } }),
   };
 }
 
@@ -305,23 +321,42 @@ export function runVector(spec: VectorSpec, chain = registryChain()): Attestatio
   return verifyAttestation(spec.envelope, vectorContext(spec, chain));
 }
 
+/** A full, anchored context in which `envelope` was accepted under registry version `version`, for tests that need one attestation pinned. */
+export function pinnedContext(envelope: unknown, version: number, record: WallPrintRecord | null = goldenRecord(), chain = registryChain()): VerificationContext {
+  const ledger = ledgerOf([{ digest: digestOfEnvelope(envelope), pin: pinOf(chain, version) }]);
+  return { ...(record === null ? {} : { record }), keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger, anchor: ledgerAnchor(ledger) } };
+}
+
 /** The set vector: several attestations about one record, shuffled on purpose, one exact duplicate. */
-export function setVectorInputs(chain = registryChain()): { attestation: unknown; acceptedUnder: AcceptancePin }[] {
+export function setVectorInputs(chain = registryChain()): AttestationEnvelope[] {
   const golden = goldenRecord();
   const reviewerT = assessmentTargetOf(golden, "reviewer-y");
   const circleT = assessmentTargetOf(golden, "issuer:circle");
   const pub = attest("RECORD_PUBLICATION", WHO.publisher2, recordTarget(golden));
+  void chain;
   return [
-    { attestation: attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, reviewerT), acceptedUnder: pinOf(chain, 3) },
-    { attestation: pub, acceptedUnder: pinOf(chain, 2) },
-    { attestation: attest("ISSUER_ASSESSMENT_ORIGIN", WHO.circle2, circleT), acceptedUnder: pinOf(chain, 3) },
-    { attestation: pub, acceptedUnder: pinOf(chain, 2) },
-    { attestation: attest("RECORD_PUBLICATION", WHO.publisher1, recordTarget(golden)), acceptedUnder: pinOf(chain, 1) },
+    attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, reviewerT),
+    pub,
+    attest("ISSUER_ASSESSMENT_ORIGIN", WHO.circle2, circleT),
+    pub,
+    attest("RECORD_PUBLICATION", WHO.publisher1, recordTarget(golden)),
   ];
 }
 
+/** Everything the set shares: the record, the registry chain and its anchor, and one ledger naming each distinct attestation under the version it was accepted under, in version order. */
+export function setVectorContext(chain = registryChain()): VerificationContext {
+  const [reviewer, pub2, circle, , pub1] = setVectorInputs(chain);
+  const ledger = ledgerOf([
+    { digest: digestOfEnvelope(pub1), pin: pinOf(chain, 1) },
+    { digest: digestOfEnvelope(pub2), pin: pinOf(chain, 2) },
+    { digest: digestOfEnvelope(reviewer), pin: pinOf(chain, 3) },
+    { digest: digestOfEnvelope(circle), pin: pinOf(chain, 3) },
+  ]);
+  return { record: goldenRecord(), keyRegistry: chain, trustAnchor: anchorOf(chain), acceptance: { ledger, anchor: ledgerAnchor(ledger) } };
+}
+
 export function runSetVector(chain = registryChain()): AttestationVerification[] {
-  return verifyAttestations(setVectorInputs(chain), { record: goldenRecord(), keyRegistry: chain, trustAnchor: anchorOf(chain) });
+  return verifyAttestations(setVectorInputs(chain), setVectorContext(chain));
 }
 
 /** The committed file's text: structure expanded to the vector's own fields, each envelope, snapshot and expected result on one line, so a diff is reviewable. */
@@ -364,14 +399,17 @@ export function buildVectorFile(): unknown {
         id: spec.id,
         description: spec.description,
         record: spec.record,
-        acceptedUnder: vectorContext(spec, chain).acceptedUnder ?? null,
+        acceptance: ((): unknown => {
+          const ledger = vectorLedger(spec, chain);
+          return ledger === null ? null : { ledger, anchor: ledgerAnchor(ledger) };
+        })(),
         trustAnchor: spec.anchored ? anchorOf(chain) : null,
         envelope: spec.envelope,
         ...(env.statement === undefined ? {} : { signedBytes: { domainTag: tagOf(env.statement), preimage: new TextDecoder().decode(attestationPreimage(env.statement)) } }),
         expected: strip(result),
       };
     }),
-    set: { description: "five inputs in shuffled order, one an exact duplicate: the order is deterministic and the duplicate is flagged, never counted", expected: runSetVector(chain).map(strip) },
+    set: { description: "five inputs in shuffled order, one an exact duplicate: the order is deterministic and the duplicate is flagged, never counted", acceptance: setVectorContext(chain).acceptance, expected: runSetVector(chain).map(strip) },
   };
 }
 

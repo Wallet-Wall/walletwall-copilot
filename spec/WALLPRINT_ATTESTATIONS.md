@@ -103,7 +103,7 @@ key label != signer identity
 | **Signer** | a registry entity with a kind (`WALLETWALL_PUBLISHER`, `EXTERNAL_ASSESSOR`, `ISSUER_AUTHORITY`) and one or more keys |
 | **Key** | a public key with an id, an algorithm, granted purposes, a status and the registry versions that dated them |
 | **Key registry snapshot / chain** | one immutable, digest-carrying version of the signing-key registry; the append-only chain of them |
-| **Acceptance pin** | the registry version and digest the store recorded when it accepted an attestation |
+| **Acceptance ledger entry** | the registry version and digest the store recorded, in an append-only hash-chained ledger and bound to one attestation digest, when it accepted an attestation |
 | **Verification result** | separate dimensions (section 12); never a single verdict |
 
 ## 5. What gets signed
@@ -172,8 +172,11 @@ authentication layer around that attribution.
 
 Without a registry binding, the system can truthfully say only *this key signed an assessment claiming assessor X*
 (`KEY_ONLY`). That is weaker than authenticated assessor identity, and the result model keeps the two apart (section 12).
-Self-declared key metadata never establishes real-world identity: a binding recorded from the assessor's own declaration is
-labelled `ASSESSOR_DECLARATION` and carries the limitation `BINDING_METHOD_ASSESSOR_DECLARATION`.
+Self-declared key metadata never establishes real-world identity, and a limitation flag is not a boundary a consumer
+switches on, so **there is no registry binding method for "the assessor told us this key is theirs"**: such a key is simply not
+registered and is `KEY_ONLY`. The only external-assessor binding is `ASSESSOR_PUBLICATION`: governance recorded, point-in-time,
+where the assessor's own publication names the key. That is a defined trust path from the assessor's published identity to the
+key, still not proof of a real-world party, and the result carries its binding method.
 
 ### 6.3 Issuer attestation (`ISSUER_ASSESSMENT_ORIGIN`)
 
@@ -277,11 +280,13 @@ most 256 attestations (publication and set limits: the pure verifier takes parse
 
 - One target may have many attestations, by different signers, different keys and different purposes. They are separate
   statements. **There is no count, score, quorum or "majority"**, and the verifier returns none (`signature count != trust`).
-- The same signer, same key, same purpose and same target is one attestation. Two such envelopes are a duplicate even when their
-  bytes differ: Ed25519 signing is deterministic per RFC 8032 but a signing implementation need not be (the Web Crypto
-  implementation in Safari produces randomized signatures, per MDN's compatibility data), so equality of bytes cannot define
-  "the same". The later one by deterministic order is reported with `DUPLICATE_OF_EARLIER_ATTESTATION` and contributes nothing.
-  Byte-identical repeats are idempotent in the store; differing bytes under the same duplicate key are refused at publication.
+- The same signer, same key (algorithm and material), same purpose and same target is one attestation. Two such envelopes are
+  a duplicate even when their bytes differ: Ed25519 signing is deterministic per RFC 8032 but a signing implementation need not
+  be (the Web Crypto implementation in Safari produces randomized signatures, per MDN's compatibility data), so equality of bytes
+  cannot define "the same". **Only VALID signatures are ever duplicates of each other**: of several valid ones the first by
+  deterministic order is the attestation and the rest are reported with `DUPLICATE_OF_EARLIER_ATTESTATION` and contribute
+  nothing; an invalid or unchecked twin never displaces a genuine attestation, however its digest sorts (found by review and
+  pinned by a test). Byte-identical repeats are idempotent in the store; differing bytes under the same duplicate key are refused at publication.
 - One signer with several keys, or several algorithms, produces several independent attestations (a hybrid policy is a consumer
   requirement over them, section 14), never one object with summed trust.
 - **Replacement** does not exist: a signer who wants to supersede an attestation uses a new key (rotation); the old attestation
@@ -331,7 +336,7 @@ purposes strictly ordered; key ids and public keys unique; supported-algorithm k
 `WALLETWALL_PUBLISHER`; one signer per `authorityId`; an `ISSUER_AUTHORITY` lists exactly its authority id and its binding method
 is `ISSUER_PUBLICATION` with a URL; an `EXTERNAL_ASSESSOR`'s ids may not read as WalletWall or WallPrint or equal a registry or engine
 authority (the 0.2 admission rules); an assessor id belongs to one signer (case-folded); a `WALLETWALL_PUBLISHER` has
-`GOVERNANCE_DECLARATION` and no external evidence; `ACTIVE` has `statusFrom == addedIn`; `SUPERSEDED` names a successor in the same
+`GOVERNANCE_DECLARATION` and no external evidence, an `EXTERNAL_ASSESSOR` has `ASSESSOR_PUBLICATION` with full evidence; `ACTIVE` has `statusFrom == addedIn`; `SUPERSEDED` names a successor in the same
 signer and no other status does; only `REVOKED` and `COMPROMISED` state `retainedBefore`.
 
 **Chain rules** (`verifyKeyRegistryChain`): versions are `1..N`, consecutive; each snapshot carries its digest and names the previous
@@ -342,8 +347,9 @@ narrow what a revocation retained and never widen it. A later version therefore 
 historical lookup under version N is the same bytes for ever.
 
 **Binding methods** (strongest evidence first): `ISSUER_PUBLICATION` (the issuer's own publication names the key; required for an
-issuer signer), `ASSESSOR_PUBLICATION` (the assessor's own publication names the key), `GOVERNANCE_DECLARATION` (WalletWall's own
-key, no external evidence), `ASSESSOR_DECLARATION` (the assessor told WalletWall; the weakest, and flagged in every result).
+issuer signer), `ASSESSOR_PUBLICATION` (the assessor's own publication names the key; required for an external assessor),
+`GOVERNANCE_DECLARATION` (WalletWall's own key, no external evidence). There is no weaker method: a key without a trust path from
+its signer's published identity is not registered (section 6.2).
 
 **Who controls it.** The registry is WalletWall governance data, the same root the evidence registry rests on. Its source is
 reviewed code in this repository (CODEOWNERS applies), and its published form would be immutable static files
@@ -372,7 +378,7 @@ Designed before implementation, and independent of any online key infrastructure
 4. **If the old key is unavailable** nothing changes: rotation needs nothing from it. If it is believed exposed, section 10.
 5. **Several keys may be `ACTIVE` at once**, per signer and per purpose, so overlap and algorithm migration need no flag day.
 6. **Keys are purpose-scoped**: a key lists the purposes it may sign, within what its signer's kind allows.
-7. **Historical verification knows which registry version applied** from the acceptance pin (section 11), not from anything the
+7. **Historical verification knows which registry version applied** from the acceptance ledger (section 11), not from anything the
    signer says.
 
 ## 10. Revocation and compromise
@@ -400,11 +406,24 @@ nothing shows it predates the status change, so none is assumed. This is what li
 
 ## 11. Historical verification and replay
 
-**The acceptance pin.** When the store accepts an attestation, it records which registry version and digest it judged the key
-under. That pair is the "historical trust decision". It is recorded by the store, never taken from the signer: the statement has
-no registry field, so a key holder cannot choose the context it is judged in. The acceptance gate (section 16) admits an
-attestation only when, under the current head, the signature is valid, the target matches and the key is `ACTIVE` and authorized,
-and pins that head.
+**The acceptance ledger.** When the store accepts an attestation it appends an entry to an append-only, hash-chained **acceptance
+ledger** (`acceptance-ledger.ts`): `{ seq, attestationDigest, acceptedUnder: { keyRegistryVersion, keyRegistryDigest },
+previousEntryDigest, entryDigest }`. The `acceptedUnder` pair is the "historical trust decision": the registry version and digest the
+store judged the key under. It is recorded by the store, never taken from the signer (the statement has no registry field, so a key
+holder cannot choose the context it is judged in). The acceptance gate (section 16) admits an attestation only when, under the
+current head, the signature is valid, the target matches and the key is `ACTIVE` and authorized, and pins that head.
+
+**The pin is bound to one attestation, in a sequence a rewrite has to break, and the verifier reads it from its own trusted channel.**
+The verifier looks a pin up *by attestation digest* in a ledger it obtained from the same trusted channel as the key registry; there is
+no parameter by which a presenter can supply a pin, so a statement signed today with a later-compromised key has no entry and is
+`NOT_PINNED`. Entries chain by digest (an edit, reorder or drop breaks every later entry); registry versions never decrease along the
+ledger (an entry cannot be back-dated below an earlier one without re-chaining what follows); an attestation is accepted at most once;
+and a caller-held `anchor` (a sequence number and entry digest) detects a ledger rewritten behind it (`ACCEPTANCE_ANCHOR_MISMATCH`).
+A ledger that fails any rule is not read (`ACCEPTANCE_INDEX_INVALID`). **What this does not give:** nothing signs the ledger, so a
+party that controls the store can write a whole new ledger or append entries after any anchor, exactly as for the registry chain
+(section 8); the ledger's authenticity is the channel's and the anchor's. A compromised key can still get *new* attestations accepted
+in the window between its compromise and the registry version that records it, which is why compromise is bounded by `retainedBefore`
+and not by the signer's honesty. An attestation that arrives without a ledger entry, from anywhere, is judged on present-day state only.
 
 **Two evaluations, reported together.** `atAcceptance` evaluates the key under the pinned snapshot (is it known, bound, authorized
 for the purpose, and `ACTIVE`). `current` evaluates it under the head of the supplied chain (what is its status now, and what
@@ -419,8 +438,8 @@ bound, authorized and held, with `originBasis: CURRENT` and the limitation `ACCE
 | the envelope (statement and signature) | signature validity: reproducible for ever with no registry |
 | the record (or the receipt's identity, for a record target) | target comparison |
 | the key registry chain, versions `1..N` | binding, authorization and status |
-| the acceptance pin | the historical decision |
-| optionally a trust anchor | detecting rollback and substitution |
+| the acceptance ledger | the historical decision (the entry naming this attestation) |
+| optionally a registry anchor and a ledger anchor | detecting rollback, rewrite and substitution |
 | the verifier implementation | nothing else; the algorithm is named in the statement |
 
 | State | When |
@@ -436,7 +455,7 @@ it (tested for every pinned vector).
 
 ## 12. The verification result
 
-`verifyAttestation(envelope, { record, keyRegistry, trustAnchor, acceptedUnder })` never throws and returns separate dimensions.
+`verifyAttestation(envelope, { record, keyRegistry, trustAnchor, acceptance: { ledger, anchor } })` never throws and returns separate dimensions.
 There is no `verified` flag.
 
 | Dimension | Values | Needs |
@@ -444,11 +463,18 @@ There is no `verified` flag.
 | `parse` | `PARSED`, `MALFORMED`, `UNSUPPORTED_VERSION` | the envelope |
 | `signature` | `VALID`, `INVALID`, `NOT_CHECKED` (+ reasons) | the envelope only |
 | `target` | `MATCHED`, `MISMATCHED`, `NOT_COMPARED` (+ reasons) | the record |
-| `acceptance` | `PINNED`, `NOT_PINNED` | the store's pin |
-| `atAcceptance`, `current` | `evaluation` (`EVALUATED`, `UNAVAILABLE`), `key` (`KNOWN`, `UNKNOWN`, `MATERIAL_MISMATCH`), `keyStatus`, `signerKind`, `bindingMethod`, `binding` (`BOUND`, `UNBOUND`, `NOT_EVALUATED`), `authorization`, `standing` (`HELD`, `WITHDRAWN`, `NOT_EVALUATED`), `reasons` | the chain; the pin for `atAcceptance` |
+| `acceptance` | `PINNED`, `NOT_PINNED` | the ledger entry naming this attestation |
+| `atAcceptance`, `current` | `evaluation` (`EVALUATED`, `UNAVAILABLE`), `key` (`KNOWN`, `UNKNOWN`, `MATERIAL_MISMATCH`), `keyStatus`, `signerKind`, `bindingMethod`, `binding` (`BOUND`, `UNBOUND`, `NOT_EVALUATED`), `authorization`, `standing` (`HELD`, `WITHDRAWN`, `NOT_EVALUATED`), `reasons` | the chain; the ledger entry for `atAcceptance` |
 | `origin`, `originBasis` | `NONE`, `KEY_ONLY`, `BOUND_ASSESSOR`, `BOUND_ISSUER_AUTHORITY`, `BOUND_WALLETWALL_PUBLISHER`; basis `ACCEPTANCE`, `CURRENT`, `NONE` | all of the above |
 | `limitations` | sorted codes the reader must not assume past | |
 | `establishes`, `doesNotEstablish` | fixed sentences | |
+
+The limitation codes, each a thing the reader must not assume: `ACCEPTANCE_NOT_PINNED` (no ledger entry names this attestation, so no
+historical decision was made); `ACCEPTANCE_UNANCHORED` (the ledger is only self-consistent); `ACCEPTANCE_ANCHOR_MISMATCH` (the ledger is not
+the one the caller's anchor names, so no pin was taken); `ACCEPTANCE_INDEX_INVALID` (the ledger failed its own rules, so no pin was taken);
+`DUPLICATE_OF_EARLIER_ATTESTATION` (the same purpose, signer, key and target already counted once); `KEY_NOT_ACTIVE_NOW` (the key's
+status in the head you were given is not `ACTIVE`); `KEY_REGISTRY_UNANCHORED` (the chain is only self-consistent); `RECORD_INVALID`
+(the record supplied did not validate, so nothing was compared with it); `TARGET_NOT_COMPARED` (no record was supplied).
 
 The origin levels, in the words the resolver prints (`ORIGIN_STATEMENTS`; none uses a verdict term):
 
@@ -489,8 +515,14 @@ algorithm presented under another is `MATERIAL_MISMATCH`; a WalletWall-generated
   and no torsion at all (`ed25519KeyProblem`: `KEY_NON_CANONICAL`, `KEY_NOT_ON_CURVE`, `KEY_SMALL_ORDER`, `KEY_TORSION`). The check is about
   70 lines of arbitrary-precision arithmetic over public values only (no signing, no secrets); it is tested against RFC 8032 known answers, all
   eight small-order encodings with their sign variants, the non-canonical encodings, and a mixed-order key built by an independent
-  implementation. It also removes the cofactored/cofactorless disagreement. A registry rejects an inadmissible key at validation.
-- A runtime without Ed25519 (a browser older than the versions above) reports `NOT_CHECKED` with `RUNTIME_UNSUPPORTED`, never `VALID`.
+  implementation. A registry rejects an inadmissible key at validation.
+- **A signature is checked strictly too.** Its R is held to the same standard as a key (canonical, on the curve, no small-order component, no
+  torsion) and its S must be below the group order, before the platform primitive is asked. An honest signature always passes (R = [r]B is
+  torsion-free), so this costs nothing, and it closes the one cofactored/cofactorless disagreement key admission alone leaves open: a key holder
+  crafting an R with a torsion component, which a lax verifier would accept and a strict one would not (found by review; pinned by a test).
+  A browser binding must run the same admission, which is pure and dependency-free, around Web Crypto's `verify`.
+- A runtime that cannot run the primitive (an Ed25519-less provider, or a browser older than the versions above) reports `NOT_CHECKED` with
+  `RUNTIME_UNSUPPORTED`, never `VALID` and never `INVALID`; the primitive is injectable so this is tested.
 - **Algorithm agility, bounded.** The algorithm is a signed token in the statement and a field of the registered key; `SUPPORTED_ALGORITHMS`
   is a closed table. A statement naming an algorithm this verifier does not support is `NOT_CHECKED` (`ALGORITHM_UNSUPPORTED`): neither valid nor
   invalid. A new algorithm is additive and arrives with its own vectors and a format version if sizes change. There is no negotiation, no
@@ -514,7 +546,7 @@ size review of the envelope and registry limits (an ML-DSA-65 attestation is abo
 **Coexistence.** A future PQ attestation does not invalidate a historical Ed25519 one: each is judged alone, its algorithm is signed, and
 its key is in the registry under its own algorithm. The long-term risk is real and not solved here: an Ed25519 attestation of a long-lived
 record is forgeable by a future quantum adversary. The mitigations are structural: attestations authenticate origin, not truth, so a forged
-one forges "who published this digest" for a digest that must still match a real record; the acceptance pin and the repository history bound
+one forges "who published this digest" for a digest that must still match a real record; the acceptance ledger and the repository history bound
 when an attestation existed; and a PQ re-attestation of historical targets can be added without touching the old ones.
 
 ## 15. Interaction with receipts, references, the resolver, import, lifecycle
@@ -553,24 +585,29 @@ published for this record at this resolver", never "unsigned" as a fault, becaus
 Static, content-addressed, no database, no write endpoint, publication deliberate:
 
 ```text
-attestations/records/<recordDigest>/index.json              append-only list for one record
+attestations/records/<recordDigest>/index.json              discovery: attestation digests for one record, sorted
 attestations/records/<recordDigest>/<attestationDigest>.json immutable envelope
-attestations/assessments/<targetKey>/index.json            append-only list for one assessment target
+attestations/assessments/<targetKey>/index.json            discovery: attestation digests for one assessment target, sorted
 attestations/assessments/<targetKey>/<attestationDigest>.json
+attestations/ledger.json                                   the acceptance ledger (sharded by registry version if it grows)
 keys/index.json                                            append-only list of { keyRegistryVersion, digest }
 keys/<keyRegistryVersion>.json                             immutable snapshot
 ```
 
-An index entry is `{ attestationDigest, purpose, signerId, keyId, acceptedUnder: { keyRegistryVersion, keyRegistryDigest } }`, sorted, never
-edited, carrying no instant (publication time is the repository's history). Rules: an envelope's name is `evidenceDigest(envelope)` and the
-reader recomputes it; identical bytes are idempotent; different bytes under one duplicate key (section 7.1) are a conflict, never an overwrite;
-an index only extends; the acceptance gate (section 11) must pass before an entry is written; the same privacy gate as the disclosure artifacts
-runs on every envelope; sizes are bounded as in section 7. The directory split keeps the two address spaces apart.
+A per-target `index.json` is only a discovery list of attestation digests: it carries no authority, and an attestation it lists is
+read, and its envelope name recomputed, like any other. **The acceptance decision lives only in the ledger** (section 11), whose entries
+are `{ seq, attestationDigest, acceptedUnder: { keyRegistryVersion, keyRegistryDigest }, previousEntryDigest, entryDigest }`: chained,
+carrying no instant (publication time is the repository's history), versions never decreasing, one entry per attestation. Rules: an
+envelope's name is `evidenceDigest(envelope)` and the reader recomputes it; identical bytes are idempotent; different bytes under one
+duplicate key (section 7.1) are a conflict, never an overwrite; the ledger and the key registry only extend; the acceptance gate
+(section 11) must pass before a ledger entry is written; the same privacy gate as the disclosure artifacts runs on every envelope; sizes
+are bounded as in section 7. The directory split keeps the two address spaces apart.
 
-**Limits that remain:** the index is unsigned, so a store controller could withhold an attestation (absence is not evidence) or rewrite an
-acceptance pin to an earlier version; the repository's history, the registry anchor and the rule that an unpinned attestation with a withdrawn
-key is `WITHDRAWN` bound the damage, and a signed index head is a candidate later purpose. If one attestation has several index entries (accepted
-again under a later version), the resolver reports each; none is merged.
+**Limits that remain:** the discovery lists and the ledger are unsigned, so a store controller could withhold an attestation (absence is
+not evidence) or write a new ledger; the repository's history, the registry and ledger anchors, the monotone-version rule and the rule that
+an attestation with no entry and a withdrawn key is `WITHDRAWN` bound the damage, and a signed ledger head is a candidate later purpose.
+An attestation first accepted while its key was unregistered stays accepted under that earlier version (a late binding does not upgrade
+it); the signer's remedy is a new attestation by a registered key, since an identical re-signature is the same attestation.
 
 ## 17. Threat model
 
@@ -583,21 +620,21 @@ again under a later version), the resolver reports each; none is merged.
 | T5 | Retired or superseded key | gate refuses it; `atAcceptance` shows `KEY_RETIRED` / `KEY_SUPERSEDED`; standing is held for what it legitimately signed | an unpinned attestation cannot show when it was signed |
 | T6 | Compromised or revoked key | `current.standing` withdraws acceptances outside `retainedBefore`; unpinned attestations are withdrawn | a window between compromise and the registry version that records it; the signature stays valid |
 | T7 | Registry rollback | `trustAnchor` requires the anchored version and digest in the chain | a verifier with no anchor, or a stale one, sees an older head (revocation latency) |
-| T8 | Registry substitution | hash chain; digest in the pin; anchor; append-only evolution rules | an attacker who controls the channel can append a valid version after the anchor (section 8) |
+| T8 | Registry substitution | hash chain; digest in the ledger entry; anchor; append-only evolution rules | an attacker who controls the channel can append a valid version after the anchor (section 8) |
 | T9 | Replay across types (record vs assessment vs issuer) | three tags; purpose and target kind inside the statement; purpose/role agreement | none known |
 | T10 | Replay across versions | `wallprintVersion` and `attestationVersion` inside the statement; a mismatch is a target mismatch | an assessor must sign once per version a statement should hold under |
 | T11 | Digest substitution | the target is compared with the record in hand; `canonicalization` and `digestAlgorithm` are signed | SHA-256 and RFC 8785 are assumed sound |
 | T12 | Algorithm confusion; key confusion | algorithm signed and compared with the registry; closed table; unsupported is `NOT_CHECKED`; no `none` | a future algorithm needs its own admission procedure |
 | T13 | Malformed key or signature | fixed length and shape checks before cryptography; strict JSON | none |
-| T14 | Duplicate attestations | duplicate key (purpose, signer, key, target); flagged; no count | a signer can mint many valid-looking signatures; none adds anything |
+| T14 | Duplicate attestations; a forged twin that sorts first | duplicate key (purpose, signer, key, algorithm, material, target); only valid signatures are duplicates, so an invalid twin never displaces the genuine one; flagged; no count | a signer can mint many valid-looking signatures; none adds anything |
 | T15 | Malicious assessor statement | authentication is not truth: the statement is recorded as stated and the evidence engine is untouched | a bound assessor can still be wrong or dishonest |
 | T16 | One signer posing as many assessors | one key and one assessor id per signer in the registry; unregistered keys are `KEY_ONLY` | a party can hold several unregistered keys, so assessors are never counted as independent |
 | T17 | Compromised WalletWall publishing key | revocation by registry version; the gate refuses a revoked key; unpinned attestations are withdrawn | until revoked, the key can publish false "WalletWall published D" statements for any D; the signed record must still exist to be believed |
-| T18 | Backdating by a compromised key | no timestamp to forge; acceptance is the store's pin, not the signer's | a store controller can rewrite an unsigned pin |
+| T18 | Backdating by a compromised key | no timestamp to forge; the pin is looked up by attestation digest in a hash-chained, monotone, anchorable ledger and never supplied by the presenter; a statement with no entry is judged on present-day state and withdrawn if the key is | a store controller can write a new ledger; a compromised key can get new attestations accepted before its compromise is recorded |
 | T19 | Compromised registry governance or channel | review, CODEOWNERS, anchor, a chain that cannot rewrite its past | a malicious valid extension; the trust root is WalletWall governance |
 | T20 | Selective publication | none; absence is not failure | a store can omit an attestation |
 | T21 | Look-alike names (`synthetic-circle`, `issuer-circle`) | binding is by key id, signer id and authority id, never a display name; assessor ids pass the 0.2 admission rules | none for registered keys |
-| T22 | Signature malleability, implementation variance | admitted keys have no torsion; duplicates are keyed by (purpose, signer, key, target), not by bytes | a signer may produce differing valid encodings; treated as one attestation |
+| T22 | Signature malleability, implementation variance | the key and the signature's R are admitted only if canonical and torsion-free and S is below the group order, so cofactored and cofactorless verifiers agree; duplicates are keyed by (purpose, signer, key, target), not by bytes | a signer may produce differing valid encodings (randomized signing); treated as one attestation |
 | T23 | Authentication read as truth | no `verified` flag; fixed sentences; `doesNotEstablish`; reserved assurance terms barred | a reader can still misread; UX must keep the rows apart |
 | T24 | Quantum forgery of classical signatures | algorithm is signed; PQ coexistence designed | long-lived classical attestations are forgeable later (section 14) |
 | T25 | Private key leakage in the repository | no signing code, no key, no secret in engine code or CI; tests pin it; synthetic seeds are public labels | a future operational lane must keep it so |
@@ -615,9 +652,10 @@ again under a later version), the resolver reports each; none is merged.
 ## 19. The prototype and the vectors
 
 `verifyAttestation` and `verifyAttestations` are pure: no clock, no I/O, no randomness, no network, no signing. They are not imported by the MCP
-server, tools or resources, are not in the shipped bundle, and are not wired into the resolver or the canvas. Tests:
-`attestation-ed25519.test.ts`, `attestation.test.ts`, `key-registry.test.ts`, `attestation-verify.test.ts`, `attestation-isolation.test.ts`,
-`attestation-spec-doc.test.ts`; vectors by `npm run gen:wallprint-attestation-vectors` / `npm run verify:wallprint-attestation-vectors`.
+server, tools or resources, are not in the shipped bundle, and are not wired into the resolver or the canvas. Modules:
+`attestation-vocabulary.ts`, `attestation.ts`, `key-registry.ts`, `acceptance-ledger.ts`, `ed25519.ts`, `attestation-verify.ts`. Tests:
+`attestation-ed25519.test.ts`, `attestation.test.ts`, `key-registry.test.ts`, `acceptance-ledger.test.ts`, `attestation-verify.test.ts`,
+`attestation-isolation.test.ts`, `attestation-spec-doc.test.ts`; vectors by `npm run gen:wallprint-attestation-vectors` / `npm run verify:wallprint-attestation-vectors`.
 
 **Every key in the vectors is a synthetic test key** whose private seed is a public ASCII label (`SYNTHETIC-NON-PRODUCTION-KEY-001` and so on), so
 anyone can sign as it. The file says so, signing exists only in the test support, and a test pins that these keys appear in no shipped or published place.
@@ -639,7 +677,7 @@ anyone can sign as it. The file says so, signing exists only in the test support
 | 13 historical key valid under an old registry version | `13-historical-key-valid-under-old-registry-version` |
 | 14 same key no longer current today | `13`, `14-assessor-key-superseded-today`, `10d` |
 | 15 multiple signatures, deterministic ordering | the `set` section: five inputs, shuffled, one duplicate |
-| extra | `18` issuer without record context; `19` assessor key on an issuer-role assessment; `21` self-declared binding; `22` WalletWall's own assessment; `23` substituted registry; `24` unanchored; `25` no acceptance record |
+| extra | `18` issuer without record context; `19` assessor key on an issuer-role assessment; `22` WalletWall's own assessment; `23` substituted registry; `24` unanchored; `25` no acceptance record; an assessor-declared key is simply the unregistered case (`02`) |
 
 ## 20. Stop conditions, evaluated
 
@@ -650,14 +688,14 @@ anyone can sign as it. The file says so, signing exists only in the test support
 | issuer identity binding has no defensible trust root | **not triggered, with a caveat.** The root is WalletWall governance binding a key to an issuer's own publication; no issuer publishes a key today, so no issuer signer exists |
 | browser or runtime crypto insufficient | **not triggered for Ed25519** (Web Crypto verify in the evergreen browsers named above; older ones report `NOT_CHECKED`); **triggered for PQ-only**, which is why PQ is deferred |
 | needs a database or an online verification service | **not triggered.** Static files and a pure function |
-| historical key state cannot be deterministically reconstructed | **not triggered.** It is a function of the chain and the pin. The weak link is the unsigned pin (section 16), stated |
+| historical key state cannot be deterministically reconstructed | **not triggered.** It is a function of the chain and the ledger entry. The weak link is the unsigned ledger (section 16), stated |
 | would change the WallPrint 0.2 digest or shape | **not triggered.** Detached |
 | PQ maturity insufficient | **triggered for production use; PQ is deferred, not forced** |
 
 ## 21. Unresolved design risks and follow-ups
 
 1. **Registry extension trust.** An anchor protects history, not new versions. Needs governance-signed versions, a pinned-head update process or an independent mirror.
-2. **The unsigned acceptance pin and index.** A store controller can rewrite a pin or withhold an attestation. A signed index head (purpose `STANDING_HEAD`) is the natural next purpose.
+2. **The unsigned ledger.** Nothing signs the acceptance ledger or the registry chain; a store controller can write a new ledger and append entries after an anchor. A signed ledger head (purpose `STANDING_HEAD`) is the natural next purpose.
 3. **Revocation latency.** No online status; a verifier is as fresh as its chain. A short validity convention for the head a page embeds may be wanted.
 4. **No issuer key exists.** The issuer model is untested against a real publication; the first binding will test the evidence format.
 5. **`UPSTREAM_AUTHORITY` assessors** are bound only by assessor id, as the admission rules leave them; no authority-level firewall exists for that role.
@@ -666,7 +704,7 @@ anyone can sign as it. The file says so, signing exists only in the test support
 8. **Signing operations** (custody, ceremony, separation from the deployment host, publication gate tooling) are the next lane and must not start from this repository's CI.
 9. **PQ migration** follows the criteria in section 14.
 
-Recommended implementation order: (1) publisher gate and the static store layout with the acceptance pin; (2) the browser verification binding and the resolver's separate-row presentation; (3) assessor and issuer attestations, with the first real binding evidence; (4) custody and the WalletWall publication key last, because it is the weakest claim and needs the key held apart from the host.
+Recommended implementation order: (1) publisher gate and the static store layout with the acceptance ledger; (2) the browser verification binding and the resolver's separate-row presentation; (3) assessor and issuer attestations, with the first real binding evidence; (4) custody and the WalletWall publication key last, because it is the weakest claim and needs the key held apart from the host.
 
 ## 22. Decision record
 
@@ -677,7 +715,7 @@ Recommended implementation order: (1) publisher gate and the static store layout
 | D3 | `tag \|\| 0x00 \|\| RFC 8785` preimage | JWS, COSE or DSSE: closest in intent (DSSE's pre-authentication encoding frames a payload type the same way) but add a parser surface and, for JWS and COSE, unsigned algorithm headers; revisit if interop needs them |
 | D4 | No timestamp | A signer clock is forgeable and backdates; a trusted timestamp needs online infrastructure |
 | D5 | Separate signing-key registry | Keys in the evidence registry would break replay for every record and change the shipped artifacts on each rotation |
-| D6 | Versions as the clock; acceptance pin recorded by the store | Validity instants are signer or governance clocks; a signer-chosen registry version is a backdating channel |
+| D6 | Versions as the clock; an acceptance ledger recorded by the store, bound to the attestation digest | Validity instants are signer or governance clocks; a signer-chosen or presenter-supplied registry version is a backdating channel |
 | D7 | `retainedBefore` as registry data | A hard-coded rule cannot express a governance finding of when a compromise began |
 | D8 | Ed25519 now | ECDSA P-256 (non-reproducible vectors, encoding variants); PQ-only (no browser verification); hybrid now (cost without runtime) |
 | D9 | Admit keys before verifying | Trusting the platform primitive alone leaves a measured universal-forgery hole |
@@ -687,3 +725,5 @@ Recommended implementation order: (1) publisher gate and the static store layout
 | D13 | Receipt unsigned, reference unchanged | A signed receipt becomes a certificate; a signed reference becomes a credential |
 | D14 | No new SHA-256 site | A new digest computation would need an integrity-policy exception |
 | D15 | WalletWall's generated assessment is not attestable | It is already established by recomputation; a second statement would invite "WalletWall endorses" |
+| D16 | No "assessor declared it" binding method | A flag on a bound result is not a boundary a consumer switches on; a self-declared key stays unregistered and `KEY_ONLY` (found by review) |
+| D17 | Strict signature checking: R and S as well as the key | Key admission alone leaves a signer-crafted torsion R on which verifiers disagree (found by review) |

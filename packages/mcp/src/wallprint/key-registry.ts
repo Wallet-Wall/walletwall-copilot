@@ -126,7 +126,7 @@ export function keyRegistrySnapshotFindings(raw: unknown): Finding[] {
       else if (authorityIds.has(signer.authorityId)) out.push(finding("AUTHORITY_DUPLICATE", `${at}.authorityId`));
       else authorityIds.add(signer.authorityId);
     } else {
-      if (signer.authorityId !== null || signer.assessorIds.length === 0 || (signer.binding.method !== "ASSESSOR_PUBLICATION" && signer.binding.method !== "ASSESSOR_DECLARATION")) out.push(finding("SIGNER_KIND_INVALID", at));
+      if (signer.authorityId !== null || signer.assessorIds.length === 0 || signer.binding.method !== "ASSESSOR_PUBLICATION") out.push(finding("SIGNER_KIND_INVALID", at));
       for (const id of signer.assessorIds) {
         if (rules.readsAsReservedIdentity(id) || rules.collidesWithAuthorityIdentity(id)) out.push(finding("ASSESSOR_ID_RESERVED", `${at}.assessorIds`));
       }
@@ -138,7 +138,7 @@ export function keyRegistrySnapshotFindings(raw: unknown): Finding[] {
     }
     const evidence = signer.binding;
     const present = [evidence.url !== null, evidence.locator !== null, evidence.retrievedAt !== null];
-    const expected = evidence.method === "GOVERNANCE_DECLARATION" ? [false, false, false] : evidence.method === "ASSESSOR_DECLARATION" ? [false, false, true] : [true, true, true];
+    const expected = evidence.method === "GOVERNANCE_DECLARATION" ? [false, false, false] : [true, true, true];
     if (!same(present, expected)) out.push(finding("BINDING_EVIDENCE_INVALID", `${at}.binding`));
     if (!strictlyAscending(signer.keys.map((k) => k.keyId))) out.push(finding("KEYS_NOT_ORDERED", `${at}.keys`));
 

@@ -19,6 +19,7 @@ import {
   type StandingStatus,
   type TargetStatus,
 } from "./attestation-vocabulary.ts";
+import { acceptanceFor, verifyAcceptanceLedger, type AcceptanceLedgerResult } from "./acceptance-ledger.ts";
 import {
   attestationDigest,
   attestationPreimage,
@@ -61,8 +62,12 @@ export interface VerificationContext {
   keyRegistry?: unknown;
   /** A registry head the caller already trusts (version and digest). Without one the chain is only self-consistent. */
   trustAnchor?: { version: string; digest: string } | null;
-  /** The registry version the store recorded when it accepted this attestation. Without one, no historical decision is made. */
-  acceptedUnder?: AcceptancePin | null;
+  /**
+   * The store's acceptance ledger, read from the same trusted channel as the key registry (never from whoever presents the
+   * attestation), and an optional entry the caller already trusts. The pin is looked up here BY ATTESTATION DIGEST; there is
+   * no way to supply a pin for an attestation the ledger does not name. Without a ledger entry no historical decision is made.
+   */
+  acceptance?: { ledger: unknown; anchor?: { seq: string; digest: string } | null } | null;
 }
 
 export interface KeyAssessment {
@@ -123,7 +128,8 @@ function checkSignature(statement: AttestationStatement, signature: string): { s
   const { algorithm, publicKey } = statement.signer;
   if (!(SUPPORTED_ALGORITHMS as readonly string[]).includes(algorithm)) return { status: "NOT_CHECKED", reasons: ["ALGORITHM_UNSUPPORTED"] };
   const result = verifyEd25519(publicKey, attestationPreimage(statement), signature);
-  return result.valid ? { status: "VALID", reasons: [] } : { status: "INVALID", reasons: [result.reason] };
+  if (result.valid) return { status: "VALID", reasons: [] };
+  return result.reason === "RUNTIME_UNSUPPORTED" ? { status: "NOT_CHECKED", reasons: ["RUNTIME_UNSUPPORTED"] } : { status: "INVALID", reasons: [result.reason] };
 }
 
 function compareTarget(statement: AttestationStatement, record: WallPrintRecord | null): { status: TargetStatus; reasons: string[] } {
@@ -229,10 +235,12 @@ interface Prepared {
   recordInvalid: boolean;
   chain: ChainResult | null;
   anchor: { version: string; digest: string } | null;
+  ledger: AcceptanceLedgerResult | null;
+  ledgerAnchor: { seq: string; digest: string } | null;
 }
 
-/** The inputs every attestation of a set shares, checked once: the record is validated and the registry chain verified. */
-function prepare(context: Omit<VerificationContext, "acceptedUnder">): Prepared {
+/** The inputs every attestation of a set shares, checked once: the record is validated, the registry chain and the acceptance ledger verified. */
+function prepare(context: VerificationContext): Prepared {
   let record: WallPrintRecord | null = null;
   let recordInvalid = false;
   if (context.record !== undefined) {
@@ -240,11 +248,19 @@ function prepare(context: Omit<VerificationContext, "acceptedUnder">): Prepared 
     if (validated.ok) record = validated.record;
     else recordInvalid = true;
   }
-  return { record, recordInvalid, chain: context.keyRegistry === undefined ? null : verifyKeyRegistryChain(context.keyRegistry), anchor: context.trustAnchor ?? null };
+  return {
+    record,
+    recordInvalid,
+    chain: context.keyRegistry === undefined ? null : verifyKeyRegistryChain(context.keyRegistry),
+    anchor: context.trustAnchor ?? null,
+    ledger: context.acceptance === undefined || context.acceptance === null ? null : verifyAcceptanceLedger(context.acceptance.ledger),
+    ledgerAnchor: context.acceptance?.anchor ?? null,
+  };
 }
 
-function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared, pin: AcceptancePin | null): AttestationVerification {
+function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared): AttestationVerification {
   const { statement } = envelope;
+  const digest = attestationDigest(envelope);
   const limitations: string[] = [];
 
   const signature = checkSignature(statement, envelope.signature);
@@ -254,6 +270,17 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared, pin: Ac
   const target = compareTarget(statement, record);
   if (target.status === "NOT_COMPARED") limitations.push("TARGET_NOT_COMPARED");
 
+  let pin: AcceptancePin | null = null;
+  if (prepared.ledger !== null) {
+    const ledger = prepared.ledger;
+    const anchor = prepared.ledgerAnchor;
+    if (!ledger.ok) limitations.push("ACCEPTANCE_INDEX_INVALID");
+    else if (anchor !== null && !ledger.entries.some((e) => e.seq === anchor.seq && e.entryDigest === anchor.digest)) limitations.push("ACCEPTANCE_ANCHOR_MISMATCH");
+    else {
+      if (anchor === null) limitations.push("ACCEPTANCE_UNANCHORED");
+      pin = acceptanceFor(ledger.entries, digest)?.acceptedUnder ?? null;
+    }
+  }
   const acceptance = pin === null ? ({ status: "NOT_PINNED", keyRegistryVersion: null } as const) : ({ status: "PINNED", keyRegistryVersion: pin.keyRegistryVersion } as const);
   if (pin === null) limitations.push("ACCEPTANCE_NOT_PINNED");
 
@@ -285,8 +312,6 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared, pin: Ac
     }
   }
   if (current.keyStatus !== null && current.keyStatus !== "ACTIVE") limitations.push("KEY_NOT_ACTIVE_NOW");
-  const method = (pin === null ? current : atAcceptance).bindingMethod;
-  if (method === "ASSESSOR_DECLARATION") limitations.push("BINDING_METHOD_ASSESSOR_DECLARATION");
 
   let origin: Origin = "NONE";
   let originBasis: "ACCEPTANCE" | "CURRENT" | "NONE" = "NONE";
@@ -306,7 +331,7 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared, pin: Ac
     verificationVersion: VERIFICATION_VERSION,
     parse: "PARSED",
     parseProblem: null,
-    attestationDigest: attestationDigest(envelope),
+    attestationDigest: digest,
     purpose: statement.purpose,
     signerId: statement.signer.signerId,
     keyId: statement.signer.keyId,
@@ -324,16 +349,11 @@ function verifyParsed(envelope: AttestationEnvelope, prepared: Prepared, pin: Ac
   });
 }
 
-export interface AttestationInput {
-  attestation: unknown;
-  acceptedUnder?: AcceptancePin | null;
-}
-
 /** Verify one attestation. See the module comment for the dimensions; spec/WALLPRINT_ATTESTATIONS.md for their meaning. */
 export function verifyAttestation(input: unknown, context: VerificationContext = {}): AttestationVerification {
   const parsed = parseAttestation(input);
   if (!parsed.ok) return deepFreeze(emptyResult(parsed.unsupportedVersion ? "UNSUPPORTED_VERSION" : "MALFORMED", parsed.problem));
-  return verifyParsed(parsed.envelope, prepare(context), context.acceptedUnder ?? null);
+  return verifyParsed(parsed.envelope, prepare(context));
 }
 
 function orderKey(result: AttestationVerification, index: number): string {
@@ -341,23 +361,26 @@ function orderKey(result: AttestationVerification, index: number): string {
   return `${result.purpose ?? ""}\u0000${result.signerId ?? ""}\u0000${result.keyId ?? ""}\u0000${result.attestationDigest ?? ""}`;
 }
 
+/** What "the same attestation" means: purpose, signer, key (with its algorithm and material) and target. Never the bytes. */
 function duplicateKey(envelope: AttestationEnvelope): string {
   const s = envelope.statement;
-  return `${s.purpose}\u0000${s.signer.signerId}\u0000${s.signer.keyId}\u0000${targetKeyOf(s.target)}`;
+  return [s.purpose, s.signer.signerId, s.signer.keyId, s.signer.algorithm, s.signer.publicKey, targetKeyOf(s.target)].join("\u0000");
 }
 
 /**
  * Verify a set of attestations about one target. The order is deterministic (purpose, signer, key, attestation digest;
- * unparsable inputs last in input order). The same purpose, signer, key and target twice is one attestation: the later
- * one is reported with `DUPLICATE_OF_EARLIER_ATTESTATION` and contributes nothing. There is no count, no score and no
- * "majority": several signatures are several statements, and the number of them is not evidence.
+ * unparsable inputs last in input order) and does not depend on input order: every pin comes from the shared ledger by
+ * attestation digest. Of several VALID signatures for the same purpose, signer, key and target only the first is the
+ * attestation; the rest are reported with `DUPLICATE_OF_EARLIER_ATTESTATION` and contribute nothing. An invalid or
+ * unchecked twin is never the "first" and never makes a genuine attestation a duplicate. There is no count, no score and
+ * no "majority": several signatures are several statements, and the number of them is not evidence.
  */
-export function verifyAttestations(items: readonly AttestationInput[], shared: Omit<VerificationContext, "acceptedUnder"> = {}): AttestationVerification[] {
+export function verifyAttestations(items: readonly unknown[], shared: VerificationContext = {}): AttestationVerification[] {
   const prepared = prepare(shared);
   const rows = items.slice(0, ATTESTATION_LIMITS.maxAttestationsPerSet).map((item, index) => {
-    const parsed = parseAttestation(item.attestation);
-    const result = parsed.ok ? verifyParsed(parsed.envelope, prepared, item.acceptedUnder ?? null) : deepFreeze(emptyResult(parsed.unsupportedVersion ? "UNSUPPORTED_VERSION" : "MALFORMED", parsed.problem));
-    return { result, order: orderKey(result, index), duplicate: parsed.ok ? duplicateKey(parsed.envelope) : null };
+    const parsed = parseAttestation(item);
+    const result = parsed.ok ? verifyParsed(parsed.envelope, prepared) : deepFreeze(emptyResult(parsed.unsupportedVersion ? "UNSUPPORTED_VERSION" : "MALFORMED", parsed.problem));
+    return { result, order: orderKey(result, index), duplicate: parsed.ok && result.signature.status === "VALID" ? duplicateKey(parsed.envelope) : null };
   });
   rows.sort((a, b) => ordinal(a.order, b.order));
   const seen = new Set<string>();

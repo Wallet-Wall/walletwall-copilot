@@ -101,7 +101,7 @@ describe("signing-key registry: a snapshot is refused for each rule it breaks", 
     assert.deepEqual(codes([]), ["CHAIN_SHAPE"]);
     assert.deepEqual(codes([JSON.parse('{"__proto__":{}}')]), ["FORBIDDEN_STRUCTURE"]);
     assert.ok(snap((s) => s.signers.reverse()).includes("SIGNERS_NOT_ORDERED"));
-    assert.ok(snap((s) => signer(s, "synthetic-publisher").keys.reverse()).length === 0, "a single key cannot be out of order");
+    assert.ok(codes(altered(3, (s) => signer(s, "synthetic-reviewer-y").keys.reverse())).includes("KEYS_NOT_ORDERED"), "two keys must be in key id order");
     assert.ok(snap((s) => (signer(s, "synthetic-issuer-circle").assessorIds = ["issuer:circle", "issuer:circle"])).includes("ASSESSOR_IDS_NOT_ORDERED"));
   });
 
@@ -119,7 +119,8 @@ describe("signing-key registry: a snapshot is refused for each rule it breaks", 
     assert.ok(snap((s) => (signer(s, "synthetic-reviewer-y").keys[0]!.purposes = ["ISSUER_ASSESSMENT_ORIGIN"])).includes("PURPOSES_INVALID"));
     assert.ok(snap((s) => (signer(s, "synthetic-issuer-circle").keys[0]!.purposes = ["RECORD_PUBLICATION"])).includes("PURPOSES_INVALID"));
     assert.ok(snap((s) => (signer(s, "synthetic-issuer-circle").assessorIds = ["issuer:circle-labs"])).includes("SIGNER_KIND_INVALID"), "an issuer lists exactly its authority id");
-    assert.ok(snap((s) => (signer(s, "synthetic-issuer-circle").binding = { method: "ASSESSOR_DECLARATION", publisher: "x", url: null, locator: null, retrievedAt: "2026-10-24" })).includes("SIGNER_KIND_INVALID"), "an issuer binding rests on the issuer's own publication");
+    assert.ok(snap((s) => (signer(s, "synthetic-issuer-circle").binding = { method: "ASSESSOR_PUBLICATION", publisher: "x", url: "https://example.invalid/x", locator: "row", retrievedAt: "2026-10-24" })).includes("SIGNER_KIND_INVALID"), "an issuer binding rests on the issuer's own publication");
+    assert.deepEqual(snap((s) => (signer(s, "synthetic-reviewer-y").binding.method = "ASSESSOR_DECLARATION" as never)), ["SHAPE"], "there is no 'the assessor told us' binding method: such a key stays unregistered and key-only");
     assert.ok(snap((s) => (signer(s, "synthetic-issuer-circle").authorityId = null)).includes("SIGNER_KIND_INVALID"));
     assert.ok(snap((s) => (signer(s, "synthetic-publisher").assessorIds = ["reviewer-q"])).includes("SIGNER_KIND_INVALID"));
     assert.ok(snap((s) => (signer(s, "synthetic-reviewer-y").authorityId = "issuer:circle")).includes("SIGNER_KIND_INVALID"));
@@ -167,7 +168,8 @@ describe("signing-key registry: history cannot be rewritten by a later version",
     assert.ok(rule(2, (s) => (s.signers = s.signers.filter((x) => x.signerId !== "synthetic-issuer-tether"))).includes("SIGNER_CHANGED"));
     assert.ok(rule(2, (s) => (signer(s, "synthetic-issuer-circle").binding.publisher = "Someone Else")).includes("SIGNER_CHANGED"));
     assert.ok(rule(2, (s) => (signer(s, "synthetic-reviewer-y").assessorIds = ["reviewer-y", "reviewer-y2"])).includes("SIGNER_CHANGED"));
-    assert.ok(rule(2, (s) => (signer(s, "synthetic-reviewer-y").keys = [])).length > 0);
+    assert.deepEqual(rule(2, (s) => (signer(s, "synthetic-reviewer-y").keys = [])), ["SHAPE"], "a signer holds at least one key");
+    assert.ok(rule(4, (s) => (signer(s, "synthetic-reviewer-y").keys = signer(s, "synthetic-reviewer-y").keys.filter((k) => k.keyId !== "synthetic-reviewer-y-1"))).includes("KEY_CHANGED"), "a key never disappears");
     assert.ok(rule(2, (s) => (signer(s, "synthetic-reviewer-y").keys[0]!.publicKey = syntheticKey(30).publicKey)).includes("KEY_CHANGED"));
     assert.ok(rule(2, (s) => (signer(s, "synthetic-reviewer-y").keys[0]!.algorithm = "ML_DSA_65")).includes("KEY_CHANGED"));
     assert.ok(rule(2, (s) => (signer(s, "synthetic-reviewer-y").keys[0]!.purposes = ["ASSESSMENT_ORIGIN"].slice(0, 0) as never)).length > 0);

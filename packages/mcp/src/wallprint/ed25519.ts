@@ -8,8 +8,9 @@ import { ALGORITHM_SIZES, type SignatureReason } from "./attestation-vocabulary.
  * addition the design requires: a public key is admitted before any signature is checked. Measured on this repository's
  * Node (24.16, OpenSSL 3.5): both Node and Web Crypto accept a signature made by the identity point's encoding over ANY
  * message, so a key that is not admitted would let anyone "sign" anything. A key is admitted only when it is a canonical
- * encoding of a point on the curve that has neither a small-order component nor any torsion at all. That also removes the
- * known disagreement between cofactored and cofactorless verifiers (the key then has no torsion for them to disagree on).
+ * encoding of a point on the curve that has neither a small-order component nor any torsion at all, and a signature's R is
+ * held to the same standard (`verifyEd25519`), so cofactored and cofactorless verifiers have no torsion left to disagree about
+ * in the key or in R; S is checked below the group order explicitly.
  *
  * Pure: no clock, no I/O, no randomness, no signing (nothing here can produce a signature). The curve arithmetic is
  * arbitrary-precision and not constant-time; it only ever handles public values.
@@ -121,17 +122,43 @@ function computeKeyProblem(publicKeyHex: string): KeyProblem | null {
 
 const SPKI_PREFIX = Uint8Array.from([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00]);
 
-export type Ed25519Result = { valid: true } | { valid: false; reason: Extract<SignatureReason, "KEY_LENGTH_INVALID" | "KEY_NON_CANONICAL" | "KEY_NOT_ON_CURVE" | "KEY_SMALL_ORDER" | "KEY_TORSION" | "SIGNATURE_LENGTH_INVALID" | "SIGNATURE_MISMATCH"> };
+/** The platform's raw Ed25519 verification, injectable so a runtime without it (or a browser's Web Crypto) is the same decision procedure. */
+export interface Ed25519Primitive {
+  verify(publicKeyHex: string, message: Uint8Array, signature: Uint8Array): boolean;
+}
 
-/** Verify one Ed25519 signature over `message`. Never throws; an inadmissible key or a malformed signature is a fixed reason, not a guess. */
-export function verifyEd25519(publicKeyHex: string, message: Uint8Array, signatureHex: string): Ed25519Result {
+const nodePrimitive: Ed25519Primitive = {
+  verify(publicKeyHex, message, signature) {
+    const key = createPublicKey({ key: Buffer.concat([SPKI_PREFIX, hexToBytes(publicKeyHex)]), format: "der", type: "spki" });
+    return verify(null, message, key, signature);
+  },
+};
+
+export type Ed25519Result =
+  | { valid: true }
+  | { valid: false; reason: Extract<SignatureReason, "KEY_LENGTH_INVALID" | "KEY_NON_CANONICAL" | "KEY_NOT_ON_CURVE" | "KEY_SMALL_ORDER" | "KEY_TORSION" | "SIGNATURE_LENGTH_INVALID" | "SIGNATURE_R_INADMISSIBLE" | "SIGNATURE_S_NON_CANONICAL" | "SIGNATURE_MISMATCH" | "RUNTIME_UNSUPPORTED"> };
+
+/**
+ * Verify one Ed25519 signature over `message`, strictly: the public key and the signature's R are canonical, on the curve
+ * and in the prime-order subgroup, and S is below the group order, before the platform primitive is asked. An honest
+ * signature always passes these (R = [r]B has no torsion), so they cost nothing, and a signature the key holder crafted with a
+ * torsion component in R, which cofactored and cofactorless verifiers disagree about, is refused outright.
+ *
+ * Never throws. An inadmissible key or a malformed signature is a fixed reason. A runtime that cannot run the primitive is
+ * `RUNTIME_UNSUPPORTED`, which the caller reports as not checked: it is not a finding about the signature.
+ */
+export function verifyEd25519(publicKeyHex: string, message: Uint8Array, signatureHex: string, primitive: Ed25519Primitive = nodePrimitive): Ed25519Result {
   const problem = ed25519KeyProblem(publicKeyHex);
   if (problem !== null) return { valid: false, reason: problem };
   if (signatureHex.length !== ALGORITHM_SIZES.ED25519.signatureHex || !HEX_RE.test(signatureHex)) return { valid: false, reason: "SIGNATURE_LENGTH_INVALID" };
+  const bytes = hexToBytes(signatureHex);
+  let s = 0n;
+  for (let i = 63; i >= 32; i--) s = (s << 8n) | BigInt(bytes[i] ?? 0);
+  if (s >= L) return { valid: false, reason: "SIGNATURE_S_NON_CANONICAL" };
+  if (computeKeyProblem(signatureHex.slice(0, 64)) !== null) return { valid: false, reason: "SIGNATURE_R_INADMISSIBLE" };
   try {
-    const key = createPublicKey({ key: Buffer.concat([SPKI_PREFIX, hexToBytes(publicKeyHex)]), format: "der", type: "spki" });
-    return verify(null, message, key, hexToBytes(signatureHex)) ? { valid: true } : { valid: false, reason: "SIGNATURE_MISMATCH" };
+    return primitive.verify(publicKeyHex, message, bytes) ? { valid: true } : { valid: false, reason: "SIGNATURE_MISMATCH" };
   } catch {
-    return { valid: false, reason: "SIGNATURE_MISMATCH" };
+    return { valid: false, reason: "RUNTIME_UNSUPPORTED" };
   }
 }

@@ -101,7 +101,7 @@ describe("Ed25519 verification floor", () => {
     const { publicKey } = syntheticKey(1);
     assert.deepEqual(verifyEd25519(publicKey, new Uint8Array(), "00".repeat(63)), { valid: false, reason: "SIGNATURE_LENGTH_INVALID" });
     assert.deepEqual(verifyEd25519(publicKey, new Uint8Array(), "zz".repeat(64)), { valid: false, reason: "SIGNATURE_LENGTH_INVALID" });
-    assert.deepEqual(verifyEd25519(publicKey, new Uint8Array(), "00".repeat(64)), { valid: false, reason: "SIGNATURE_MISMATCH" });
+    assert.deepEqual(verifyEd25519(publicKey, new Uint8Array(), "00".repeat(64)), { valid: false, reason: "SIGNATURE_R_INADMISSIBLE" });
   });
 
   test("the Web Crypto API a browser would use gives the same answer on a real attestation: Node and the browser primitive agree", async () => {
@@ -115,6 +115,37 @@ describe("Ed25519 verification floor", () => {
     altered[altered.length - 1] = (altered[altered.length - 1] ?? 0) ^ 1;
     assert.equal(await globalThis.crypto.subtle.verify({ name: "Ed25519" }, key, hexToBytes(envelope.signature), altered), false);
     assert.equal(verifyEd25519(envelope.statement.signer.publicKey, altered, envelope.signature).valid, false);
+  });
+
+  test("a signature whose R carries a torsion or small-order component, or whose S is not below the group order, is refused before the platform is asked", () => {
+    const envelope = attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, assessmentTargetOf(goldenRecord(), "reviewer-y"));
+    const message = attestationPreimage(envelope.statement);
+    const pk = envelope.statement.signer.publicKey;
+    const sig = envelope.signature;
+    assert.deepEqual(verifyEd25519(pk, message, sig), { valid: true }, "the honest signature passes every strict check");
+    const mixedR = encode(add(decode(sig.slice(0, 64)), decode("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05")));
+    assert.deepEqual(verifyEd25519(pk, message, mixedR + sig.slice(64)), { valid: false, reason: "SIGNATURE_R_INADMISSIBLE" });
+    assert.deepEqual(verifyEd25519(pk, message, `01${"00".repeat(31)}${sig.slice(64)}`), { valid: false, reason: "SIGNATURE_R_INADMISSIBLE" }, "an identity R");
+    assert.deepEqual(verifyEd25519(pk, message, `${"ff".repeat(32)}${sig.slice(64)}`), { valid: false, reason: "SIGNATURE_R_INADMISSIBLE" }, "a non-canonical R");
+    const L = 2n ** 252n + 27742317777372353535851937790883648493n;
+    const le = (v: bigint): string => {
+      let out = "";
+      for (let i = 0; i < 32; i++) out += Number((v >> BigInt(8 * i)) & 0xffn).toString(16).padStart(2, "0");
+      return out;
+    };
+    let s = 0n;
+    for (let i = 63; i >= 32; i--) s = (s << 8n) | BigInt(parseInt(sig.slice(i * 2, i * 2 + 2), 16));
+    assert.deepEqual(verifyEd25519(pk, message, sig.slice(0, 64) + le(s + L)), { valid: false, reason: "SIGNATURE_S_NON_CANONICAL" }, "S + L is the same scalar to a lax verifier");
+    assert.deepEqual(verifyEd25519(pk, message, sig.slice(0, 64) + le(L)), { valid: false, reason: "SIGNATURE_S_NON_CANONICAL" });
+  });
+
+  test("a runtime that cannot run the primitive is reported as such, never as an invalid signature", () => {
+    const envelope = attest("ASSESSMENT_ORIGIN", WHO.reviewerY2, assessmentTargetOf(goldenRecord(), "reviewer-y"));
+    const message = attestationPreimage(envelope.statement);
+    const throwing = { verify: (): boolean => { throw new Error("no Ed25519 provider"); } };
+    assert.deepEqual(verifyEd25519(envelope.statement.signer.publicKey, message, envelope.signature, throwing), { valid: false, reason: "RUNTIME_UNSUPPORTED" });
+    const refusing = { verify: (): boolean => false };
+    assert.deepEqual(verifyEd25519(envelope.statement.signer.publicKey, message, envelope.signature, refusing), { valid: false, reason: "SIGNATURE_MISMATCH" });
   });
 
   test("signing is deterministic for the reference signer, so a regenerated vector file equals the committed one", () => {
