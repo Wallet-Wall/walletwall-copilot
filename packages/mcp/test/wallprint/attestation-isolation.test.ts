@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { describe, test } from "node:test";
 import { ROOT } from "../support/harness.ts";
 import { WHO, seedLabel, syntheticKey } from "../support/wallprint-attestations.ts";
+import { GOV } from "../support/wallprint-checkpoints.ts";
 
 /**
  * This lane defines verification and trust semantics. It ships no runtime change, holds no private key and performs no
@@ -18,7 +19,9 @@ const walk = (dir: string): string[] =>
     return e.isDirectory() ? walk(p) : [relative(ROOT.replace(/[\\/]$/, ""), p).replaceAll("\\", "/")];
   });
 
-const MODULES = ["attestation-vocabulary", "attestation", "attestation-verify", "key-registry", "acceptance-ledger", "ed25519"].map((m) => `packages/mcp/src/wallprint/${m}.ts`);
+const CHECKPOINT_MODULES = ["checkpoint-vocabulary", "checkpoint", "checkpoint-verify"].map((m) => `packages/mcp/src/wallprint/${m}.ts`);
+const MODULES = ["attestation-vocabulary", "attestation", "attestation-verify", "key-registry", "acceptance-ledger", "ed25519"].map((m) => `packages/mcp/src/wallprint/${m}.ts`).concat(CHECKPOINT_MODULES);
+const VECTOR_FILES = ["packages/mcp/test/wallprint/fixtures/wallprint-attestation-vectors-0.1.json", "packages/mcp/test/wallprint/fixtures/wallprint-checkpoint-vectors-0.1.json"];
 
 describe("attestation lane: no shipped runtime change", () => {
   test("the shipped server, tools, resources and every non-WallPrint engine module never reach the attestation modules", () => {
@@ -72,7 +75,7 @@ describe("attestation lane: no private key, no signing in the engine", () => {
   });
 
   test("the synthetic keys appear nowhere that ships or publishes: not in the plugin, the bundle, the manifests, the canvas, the MCPB or the public store", () => {
-    const publics = [...new Set(Object.values(WHO).map((w) => syntheticKey(w.n).publicKey))];
+    const publics = [...new Set([...Object.values(WHO), ...Object.values(GOV)].map((w) => syntheticKey(w.n).publicKey))];
     const shipped = walk(ROOT).filter((f) => /^(plugin|security|canvas|mcpb|packages\/wallprint-web\/publication|packages\/wallprint-web\/lib|packages\/wallprint-web\/browser)\//.test(f) && !/\.(png|woff2?)$/.test(f));
     assert.ok(shipped.length > 20);
     for (const f of shipped) {
@@ -89,19 +92,80 @@ describe("attestation lane: no private key, no signing in the engine", () => {
     for (const f of walk(`${ROOT}scripts`).filter((x) => /publish|build-wallprint-public/.test(x))) assert.doesNotMatch(read(f), /attestation|key-registry/i, f);
   });
 
-  test("no key material shaped like a real private key is in the vector file: no PEM block, no PKCS#8 header, only labelled seeds and public keys", () => {
-    const text = read("packages/mcp/test/wallprint/fixtures/wallprint-attestation-vectors-0.1.json");
-    assert.doesNotMatch(text, /BEGIN [A-Z ]*PRIVATE KEY|MC4CAQAwBQYDK2Vw|302e020100300506032b6570/);
-    const file = JSON.parse(text) as { keys: { seedLabel: string }[] };
-    for (const k of file.keys) assert.match(k.seedLabel, /^SYNTHETIC-NON-PRODUCTION-KEY-\d{3}$/);
-    assert.match(text, /"notice": "SYNTHETIC NON-PRODUCTION FIXTURE/);
+  test("no key material shaped like a real private key is in either vector file: no PEM block, no PKCS#8 header, only labelled seeds and public keys", () => {
+    for (const path of VECTOR_FILES) {
+      const text = read(path);
+      assert.doesNotMatch(text, /BEGIN [A-Z ]*PRIVATE KEY|MC4CAQAwBQYDK2Vw|302e020100300506032b6570/, path);
+      const file = JSON.parse(text) as { keys: { seedLabel: string }[] };
+      for (const k of file.keys) assert.match(k.seedLabel, /^SYNTHETIC-NON-PRODUCTION-KEY-\d{3}$/, path);
+      assert.match(text, /"notice": "SYNTHETIC NON-PRODUCTION FIXTURE/, path);
+    }
   });
 
-  test("no secret reaches a workflow: the CI workflow names no signing step, key or attestation secret", () => {
+  test("no secret reaches a workflow: the CI workflow names no signing step, key, attestation, checkpoint or governance-root secret", () => {
     const ci = read(".github/workflows/ci.yml");
     assert.doesNotMatch(ci, /\$\{\{\s*secrets\.|SIGNING|PRIVATE_KEY|attestation|cosign|gpg/i);
+    assert.doesNotMatch(ci, /checkpoint|governance[-_ ]?(?:key|root)|trust[-_ ]?root/i);
   });
 });
+
+describe("checkpoint lane: nothing ships, nothing signs, no production trust root exists", () => {
+  test("no module outside the lane imports a checkpoint module: the runtime, the tools, the resources, the canvas and the resolver cannot reach it", () => {
+    for (const f of walk(`${ROOT}packages`).filter((x) => /\.(ts|mjs)$/.test(x) && x.startsWith("packages/") && !x.startsWith("packages/mcp/test/") && !CHECKPOINT_MODULES.includes(x))) {
+      assert.doesNotMatch(read(f), /from\s+"[^"]*checkpoint(?:-verify|-vocabulary)?\.ts"/, f);
+    }
+    for (const f of walk(`${ROOT}scripts`).filter((x) => /\.ts$/.test(x) && x !== "scripts/gen-wallprint-checkpoint-vectors.ts")) assert.doesNotMatch(read(f), /wallprint\/checkpoint|trust-checkpoint/, f);
+    for (const f of ["plugin/server/walletwall-mcp.mjs", "security/tool-manifest.json", "security/plugin-manifest.json"]) {
+      const text = read(f);
+      for (const needle of ["walletwall.wallprint.trust-checkpoint", "governance-trust-root", "REGISTRY_LEDGER_CHECKPOINT", "registry-ledger-checkpoint", "LEDGER_ENTRY_PREDATES_ANCHORED_REGISTRY_HEAD"]) assert.equal(text.includes(needle), false, `${f}: ${needle}`);
+    }
+  });
+
+  test("the six tools and eleven resources are unchanged, and none is named for a checkpoint, a trust root or a governance key", () => {
+    const manifest = JSON.parse(read("security/tool-manifest.json")) as { tools: { name: string }[]; resources: { uri: string }[] };
+    assert.equal(manifest.tools.length, 6);
+    assert.equal(manifest.resources.length, 11);
+    assert.deepEqual(manifest.tools.map((t) => t.name).filter((n) => /checkpoint|governance|trust[-_]?root/i.test(n)), []);
+    assert.deepEqual(manifest.resources.map((r) => r.uri).filter((u) => /checkpoint|governance|trust[-_]?root/i.test(u)), []);
+  });
+
+  test("the checkpoint modules hold no signing primitive, no key generation, no secret, no clock, no randomness, and no governance key literal", () => {
+    for (const m of CHECKPOINT_MODULES) {
+      const text = read(m);
+      assert.doesNotMatch(text, /createPrivateKey|generateKeyPair|createSign|createSecretKey|createHmac|\bsign\(|subtle\.|privateKey|PRIVATE KEY|process\.env|randomBytes|randomUUID|Math\.random|Date\.now|new Date\(|readFile|writeFile|fetch\(/, m);
+      assert.doesNotMatch(text, /\b[0-9a-f]{64}\b/, `${m} holds no 32-byte hex literal: no key, no digest, no root`);
+      assert.doesNotMatch(text, /createHash|sha256Hex\(|crypto\.subtle/, `${m} adds no SHA-256 site`);
+    }
+    assert.doesNotMatch(read("packages/mcp/src/wallprint/checkpoint.ts"), /\bexport const (?:DEFAULT|PRODUCTION|WALLETWALL)[A-Z_]*ROOT\b/);
+  });
+
+  test("the checkpoint's identity is the engine's existing digest function, and the signed bytes use the one shared construction", () => {
+    const checkpoint = read("packages/mcp/src/wallprint/checkpoint.ts");
+    assert.match(checkpoint, /evidenceDigest\(envelope\)/);
+    assert.match(checkpoint, /domainSeparatedPreimage\(CHECKPOINT_DOMAIN_TAGS\[statement\.purpose\], statement\)/);
+    assert.doesNotMatch(checkpoint, /TextEncoder\(\)\.encode\(tag|set\(tag|out\.set\(/, "no second assembly of the signed bytes");
+    assert.match(read("packages/mcp/src/wallprint/attestation.ts"), /domainSeparatedPreimage\(DOMAIN_TAGS\[statement\.purpose\], statement\)/);
+    const integrity = JSON.parse(read("security/integrity-policy.json")) as { sha256Exceptions: Record<string, Record<string, string>> };
+    const registered = Object.values(integrity.sha256Exceptions).flatMap((group) => Object.values(group));
+    for (const m of CHECKPOINT_MODULES) assert.equal(registered.includes(m), false, `${m} is not, and needs not be, an integrity-policy exception`);
+  });
+
+  test("the lane publishes no checkpoint and no trust root: the public store has no checkpoints directory and the resolver reads none", () => {
+    for (const dir of ["checkpoints", "attestation-trust", "governance"]) assert.equal(existsSync(`${ROOT}packages/wallprint-web/publication/${dir}`), false, dir);
+    for (const f of walk(`${ROOT}packages/wallprint-web`).filter((x) => /^packages\/wallprint-web\/(lib|browser)\//.test(x))) assert.doesNotMatch(read(f), /trust-checkpoint|governance-trust-root|REGISTRY_LEDGER/i, f);
+    for (const f of walk(`${ROOT}scripts`).filter((x) => /publish|build-wallprint-public/.test(x))) assert.doesNotMatch(read(f), /trust-checkpoint|governance-trust-root/i, f);
+  });
+
+  test("the synthetic governance keys are labelled public seeds, and signing still exists in exactly one place", () => {
+    for (const g of Object.values(GOV)) {
+      assert.match(seedLabel(g.n), /^SYNTHETIC-NON-PRODUCTION-KEY-\d{3}$/);
+      assert.equal(Buffer.from(seedLabel(g.n), "utf8").length, 32);
+    }
+    const signers = walk(ROOT).filter((f) => /\.(ts|mjs)$/.test(f) && f.startsWith("packages/mcp/test/") && f !== "packages/mcp/test/wallprint/attestation-isolation.test.ts" && /createPrivateKey|\bsign\(/.test(read(f)));
+    assert.deepEqual(signers.filter((f) => /wallprint/.test(f)), ["packages/mcp/test/support/wallprint-attestations.ts"]);
+  });
+});
+
 
 describe("attestation lane: WallPrint 0.2 is unchanged", () => {
   test("the WallPrint contract version, its supported versions and the record shape did not move", async () => {

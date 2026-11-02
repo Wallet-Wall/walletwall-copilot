@@ -12,6 +12,11 @@ What exists in this lane: this specification, a pure verifier prototype
 operation, any private key, any production key registry, any published attestation, any change to the record, the
 digest, the receipt, the reference, the resolver or the MCP surface. **No signature system is shipped by this lane.**
 
+A follow-up lane (section 23) adds one more object above the same logs: a **signed trust checkpoint** that commits the
+signing-key registry head and the acceptance-ledger head together. It is implemented as a further pure verifier
+(`checkpoint-vocabulary.ts`, `checkpoint.ts`, `checkpoint-verify.ts`) with its own synthetic vectors, is equally outside
+the shipped runtime, and adds no signing operation, no private key and no production governance key.
+
 ## 1. The question, and the short answer
 
 > What exactly does a WallPrint signature prove, who may sign what, how is a signer identity bound to a key, how are
@@ -408,8 +413,9 @@ is therefore granted only inside an anchored prefix (and, for `REVOKED` and `COM
 its anchor deliberately. This is what limits a former key's ability to backdate. (Found by review, in two rounds: first an attack that
 appended a post-compromise statement to a ledger behind an old anchor, then the same attack through a superseded key, which the first
 fix had left out; both are pinned by tests and vectors `10f`, `09c` and `14b`.) The designed hardening that would lift the restriction,
-a registry snapshot committing the ledger head at its publication so later entries must name at least that version, is a follow-up
-(section 21).
+a registry snapshot committing the ledger head at its publication so later entries must name at least that version, was a follow-up here;
+section 23 realises its signed form as a checkpoint that commits both heads together, and feeds the anchored prefix rule above
+with anchors a governance key signed instead of anchors the caller merely holds.
 
 **Revocation latency is real.** A verifier knows only the chain it holds. There is no online status check, by design.
 `current` is "the head of the chain you were given", and the result states which version that was.
@@ -608,6 +614,8 @@ attestations/assessments/<targetKey>/<attestationDigest>.json
 attestations/ledger.json                                   the acceptance ledger (sharded by registry version if it grows)
 keys/index.json                                            append-only list of { keyRegistryVersion, digest }
 keys/<keyRegistryVersion>.json                             immutable snapshot
+checkpoints/<checkpointDigest>.json                        immutable signed trust checkpoint (section 23)
+checkpoints/index.json                                     discovery: checkpoint digests with their committed counts, sorted
 ```
 
 A per-target `index.json` is only a discovery list of attestation digests: it carries no authority, and an attestation it lists is
@@ -622,7 +630,8 @@ are bounded as in section 7. The directory split keeps the two address spaces ap
 **Limits that remain:** the discovery lists and the ledger are unsigned, so a store controller could withhold an attestation (absence is
 not evidence) or write a new ledger. The repository's history, the registry and ledger anchors, and the rules that an attestation with no
 entry, or with an entry outside the held anchor's prefix, is `WITHDRAWN` for a key that is no longer `ACTIVE` narrow what that can do; they do not remove it,
-because the two logs have no cross-ordering (section 11). A signed ledger head is a candidate later purpose.
+because the two logs have no cross-ordering (section 11). A signed checkpoint over both heads, specified in section 23, narrows this further
+for a verifier that holds a governance trust root; it is not published by this lane.
 An attestation first accepted while its key was unregistered stays accepted under that earlier version (a late binding does not upgrade
 it); the signer's remedy is a new attestation by a registered key, since an identical re-signature is the same attestation.
 
@@ -655,6 +664,17 @@ it); the signer's remedy is a new attestation by a registered key, since an iden
 | T23 | Authentication read as truth | no `verified` flag; fixed sentences; `doesNotEstablish`; reserved assurance terms barred | a reader can still misread; UX must keep the rows apart |
 | T24 | Quantum forgery of classical signatures | algorithm is signed; PQ coexistence designed | long-lived classical attestations are forgeable later (section 14) |
 | T25 | Private key leakage in the repository | no signing code, no key, no secret in engine code or CI; tests pin it; synthetic seeds are public labels | a future operational lane must keep it so |
+| T26 | Mix and match: a valid registry presented with a valid ledger from another history | the checkpoint commits both heads and both counts in one signed statement; the verifier compares the head at the committed position of each log and checks every committed entry's registry pin against the committed registry (section 23) | governance signing a pair it should not have signed |
+| T27 | A checkpoint that names its own signing key | authorization is by an explicit governance trust root only; the root's key material is compared with the statement's, id for id; a key the checkpoint merely names authorizes nothing | a wrong root supplied through the verifier's own channel (the bootstrap) |
+| T28 | Circular trust: the registry being checkpointed authorizing its checkpoint's signer | the trust root is a separate input; the registry's WalletWall publication key is not a governance key (vectors `cp-03c`) | the same party controlling both the registry channel and the verifier's root |
+| T29 | Truncation, extension, reordering or rewriting of either log relative to a checkpoint | exact state by default; a shorter log, a different head at the committed position, a reordered, dropped or edited entry each have their own reason; an extension is refused unless asked for and is then reported as not covered | versions and entries after the committed heads are unsigned until a later checkpoint covers them |
+| T30 | Rollback: an older checkpoint presented as current | an anchor the caller holds; the older state is reported `BEHIND_ANCHOR` from counts alone; it stays cryptographically valid and is never authenticated as current | a verifier with no anchor cannot tell old from new |
+| T31 | A fork: a different history with the anchor's counts, or a later state that does not contain the anchored heads | `FORKED_FROM_ANCHOR` from heads and from the supplied logs' contents | equivocation: a key holder signs two internally consistent histories, which no single verifier can see without comparing them |
+| T32 | Replay of a signature across purposes or objects | a checkpoint domain tag that is no attestation's tag and no prefix of one; the same preimage construction (vectors `cp-18a` to `cp-18c`) | none known |
+| T33 | Back-dating after a compromise (T18, revisited) | the authenticated prefix (entries up to the committed count); an entry after it is `WITHDRAWN` for a key that is no longer `ACTIVE`; an entry appended since an anchor must name the anchored registry head or later (section 23.8) | a back-dated entry naming a registry version at or after the held anchor's head; governance signing over a ledger it has not reviewed (vector `cp-22b`) |
+| T34 | A compromised governance key | the key is removed from the root the verifier supplies | checkpoints it signed before removal still verify under a root that still lists it; the root has no history or lifecycle in this lane (section 23.4) |
+| T35 | A checkpoint read as certification of the records, attestations or assessors in the logs | no `verified` flag; fixed `doesNotEstablish`; the verifier changes no attestation's origin; a covered acceptance still earns only what its own dimensions earn | a reader can still misread; UX must keep the rows apart |
+| T36 | Unsigned metadata, labels, timestamps or links riding on a checkpoint | a closed schema; an unknown field is refused, never dropped; no timestamp, no status | none |
 
 ## 18. Versioning
 
@@ -673,6 +693,7 @@ server, tools or resources, are not in the shipped bundle, and are not wired int
 `attestation-vocabulary.ts`, `attestation.ts`, `key-registry.ts`, `acceptance-ledger.ts`, `ed25519.ts`, `attestation-verify.ts`. Tests:
 `attestation-ed25519.test.ts`, `attestation.test.ts`, `key-registry.test.ts`, `acceptance-ledger.test.ts`, `attestation-verify.test.ts`,
 `attestation-isolation.test.ts`, `attestation-spec-doc.test.ts`; vectors by `npm run gen:wallprint-attestation-vectors` / `npm run verify:wallprint-attestation-vectors`.
+The checkpoint modules, tests and vectors are listed in section 23.14.
 
 **Every key in the vectors is a synthetic test key** whose private seed is a public ASCII label (`SYNTHETIC-NON-PRODUCTION-KEY-001` and so on), so
 anyone can sign as it. The file says so, signing exists only in the test support, and a test pins that these keys appear in no shipped or published place.
@@ -711,8 +732,8 @@ anyone can sign as it. The file says so, signing exists only in the test support
 
 ## 21. Unresolved design risks and follow-ups
 
-1. **Registry extension trust.** An anchor protects history, not new versions. Needs governance-signed versions, a pinned-head update process or an independent mirror.
-2. **The unsigned ledger.** Nothing signs the acceptance ledger or the registry chain; a store controller can write a new ledger and append entries after an anchor. A signed ledger head (purpose `STANDING_HEAD`) is the natural next purpose.
+1. **Registry extension trust.** An anchor protects history, not new versions. Needs governance-signed versions, a pinned-head update process or an independent mirror. *Partly addressed in section 23:* a checkpoint is a governance signature over the registry head as it stood, so the history up to the newest checkpoint is authenticated; versions after it are still accepted only on the strength of the channel, until a later checkpoint covers them.
+2. **The unsigned ledger.** Nothing signs the acceptance ledger or the registry chain; a store controller can write a new ledger and append entries after an anchor. *Addressed in section 23* by a signed checkpoint of purpose `REGISTRY_LEDGER_CHECKPOINT` that commits both heads together. (`STANDING_HEAD`, the lifecycle-ledger head named in section 2, remains reserved and unimplemented.) What remains: governance signing keys and ceremony (item 11), publication (item 12), and anything after the last checkpoint.
 3. **Revocation latency.** No online status; a verifier is as fresh as its chain. A short validity convention for the head a page embeds may be wanted.
 4. **No issuer key exists.** The issuer model is untested against a real publication; the first binding will test the evidence format.
 5. **`UPSTREAM_AUTHORITY` assessors** are bound only by assessor id, as the admission rules leave them; no authority-level firewall exists for that role.
@@ -720,7 +741,12 @@ anyone can sign as it. The file says so, signing exists only in the test support
 7. **Per-attestation withdrawal** and **detached-attestation discovery by reference section** are deferred.
 8. **Signing operations** (custody, ceremony, separation from the deployment host, publication gate tooling) are the next lane and must not start from this repository's CI.
 9. **PQ migration** follows the criteria in section 14.
-10. **Cross-log ordering.** The key registry and the acceptance ledger have no ordering between them. A registry snapshot committing the ledger head at its publication (so entries appended later must name at least that version) would let retained standing apply beyond an anchored prefix; it couples two publication processes and is only meaningful once a head is signed.
+10. **Cross-log ordering.** The key registry and the acceptance ledger have no ordering between them. *Addressed in section 23*, in signed form: one governance statement commits both heads, so a checkpoint is a cut and an entry after the cut is not covered; an entry appended since an anchor must name the anchored registry head or later. What remains is the window before the first checkpoint that records a compromise (section 23.10) and the publication convention a verifier cannot enforce (a checkpoint is signed over the logs exactly as they stand).
+11. **The governance key ceremony.** The checkpoint verifier needs a governance trust root, and this repository holds none and generates none. Production bootstrap (how a verifier first learns the root), custody, separation from the deployment host and from the WalletWall publication key, rotation, revocation and a history for governance keys are the next lane. It must not start from this repository's CI.
+12. **Checkpoint publication tooling.** The static layout in section 16 and the conflict rule in section 23.12 are a design. A publication gate that refuses a checkpoint over a lagging prefix, refuses two checkpoints of one state by one key with different bytes, and writes nothing else is not built.
+13. **Resolver and browser binding for checkpoints.** The resolver does not read checkpoints; the decision procedure is pure and dependency-free so the same code can run around Web Crypto, but that binding and its feature flag are a later lane.
+14. **Equivocation.** Two internally consistent histories signed by one key are indistinguishable to a verifier that sees only one. Detecting it needs a verifier comparing checkpoints from independent mirrors, or a transparency log; neither is designed here.
+15. **Checkpoint cadence.** How often governance signs, and the rule that it signs over the logs exactly as they stand, are publication policy. The verifier cannot enforce them, and a lagging checkpoint makes the since-the-anchor rule refuse honest later entries (fail closed).
 
 Recommended implementation order: (1) publisher gate and the static store layout with the acceptance ledger; (2) the browser verification binding and the resolver's separate-row presentation; (3) assessor and issuer attestations, with the first real binding evidence; (4) custody and the WalletWall publication key last, because it is the weakest claim and needs the key held apart from the host.
 
@@ -745,4 +771,282 @@ Recommended implementation order: (1) publisher gate and the static store layout
 | D15 | WalletWall's generated assessment is not attestable | It is already established by recomputation; a second statement would invite "WalletWall endorses" |
 | D16 | No "assessor declared it" binding method | A flag on a bound result is not a boundary a consumer switches on; a self-declared key stays unregistered and `KEY_ONLY` (found by review) |
 | D17 | Strict signature checking: R and S as well as the key | Key admission alone leaves a signer-crafted torsion R on which verifiers disagree (found by review) |
-| D18 | Retained standing for any key that is no longer `ACTIVE` only inside an anchored ledger prefix | Trusting any entry's version: the ledger cannot prove an entry predates a registry version, for a compromised key or a stolen retired one (found by review, two rounds); cross-binding the logs is a follow-up |
+| D18 | Retained standing for any key that is no longer `ACTIVE` only inside an anchored ledger prefix | Trusting any entry's version: the ledger cannot prove an entry predates a registry version, for a compromised key or a stolen retired one (found by review, two rounds); cross-binding the logs is section 23 |
+| D19 | One small detached checkpoint that commits both heads in one signed statement | Signing each head separately (the pair is then not committed, and mix and match is back); a registry snapshot that embeds the ledger head (couples two publication processes and rewrites the registry's bytes and digest chain, which every pin and anchor already rests on); a Merkle structure (no requirement a count and a head do not meet) |
+| D20 | Governance keys are authorized only by an explicit, caller-supplied trust root | A key a checkpoint names (self-signed trust); the signing-key registry authorizing its own checkpoint's signer (circular: whoever controls the registry channel authorizes themselves); a default root in this repository (no production key may exist yet) |
+| D21 | Counts and heads both signed, with distinct reasons for truncation, extension and a different head | A head alone (a shorter or longer log cannot be told from a rewritten one, and rollback cannot be ordered without the logs) |
+| D22 | The supplied state must be exactly the committed state by default; extension is an explicit mode and is always reported as not covered | Silently accepting a longer log under an old checkpoint (an appended entry would borrow its authority) |
+| D23 | Independent checkpoints, no previous-checkpoint link | A chain (it adds no resistance to rollback, fork or rewrite that the signed counts, the logs' own hash chains and a held anchor do not already give; it needs a second identity and a sequence; it does not help against a key holder, who can sign a well-linked successor of anything); revisit with a transparency log (section 23.9) |
+| D24 | An entry appended since an anchored checkpoint must name the anchored registry head or later | Trusting any appended entry's pin (a later checkpoint over a polluted ledger would legitimise back-dated entries); the rule is conditional on the publication convention and says so (section 23.8) |
+| D25 | Anchors for the attestation verifier are derived from the signed statement only, by a separate function; `verifyAttestation` is unchanged | Changing the #29 verifier or its vectors (every historical result would have to be re-argued) |
+| D26 | The checkpoint's identity is the engine's existing digest of its envelope | A new digest construction or a new SHA-256 site (integrity policy, D14) |
+| D27 | The trust root carries no status, history or validity interval | A lifecycle for governance keys without a custody and ceremony design to ground it; it is the next lane |
+| D28 | `STANDING_HEAD` is a reserved key scope only | Implementing a second signed object now; leaving no way to scope a governance key by purpose |
+
+## 23. Signed trust checkpoints
+
+Status: implemented as a pure verifier prototype with synthetic vectors, outside the shipped runtime. **No governance key, trust root or checkpoint is
+produced, held or published by this repository.** The governance key ceremony is a later lane (section 21, item 11).
+
+### 23.1 The gap, exactly
+
+The signing-key registry (section 8) and the acceptance ledger (section 11) are each hash-chained, and each verifies on its own. Nothing signed
+commits to both heads together, and neither log carries the other's head. So a verifier cannot establish, as one statement by anyone, that *ledger
+head L was accepted against registry head R*. The characterization is pinned by `checkpoint-gap.test.ts`, which uses only the #29 modules: a valid registry
+and a valid ledger from different histories each verify alone; a ledger that names a registry version past the registry's head verifies as a ledger;
+a ledger with one more entry is another independently valid ledger; the statement shape that is signed today names neither head; and the anchors the
+attestation verifier takes are plain values the caller holds, so whichever prefix the caller names is the prefix that is covered.
+
+This is not the claim that history is forgeable in every context. A verifier that holds the right anchors from a channel it relies upon is protected, and
+section 11 says so. What is missing is *an authenticated statement of the pairing, and of the cut*.
+
+### 23.2 The checkpoint
+
+```text
+envelope  = { "type": "walletwall.wallprint.trust-checkpoint",
+              "checkpointVersion": "0.1",
+              "statement": statement,
+              "signature": "<lower-case hex>" }
+statement = { "checkpointVersion": "0.1",
+              "purpose": "REGISTRY_LEDGER_CHECKPOINT",
+              "signer": { "keyId", "algorithm", "publicKey": "<lower-case hex>" },
+              "registry": { "headVersion": "<decimal>", "headDigest": "<hex64>" },
+              "acceptanceLedger": { "entryCount": "<decimal>", "headDigest": "<hex64> | null" } }
+```
+
+Every value is a string or null. Unknown fields are refused, never dropped. The one purpose is `REGISTRY_LEDGER_CHECKPOINT`. Every field has a verification purpose; there is no timestamp, label,
+comment, status, identifier or link.
+
+| Field | Verification purpose |
+| --- | --- |
+| `type` | rejects a signed object of another kind presented as a checkpoint |
+| envelope `checkpointVersion` | a parse selector only, so an unsupported version is reported before its grammar is read; it must equal the signed twin |
+| `statement.checkpointVersion` | signed: it fixes how both heads are read (the registry snapshot format, the ledger entry construction, the digest construction) |
+| `purpose` | signed: selects the domain tag, and is what a governance key is authorized for |
+| `signer.keyId`, `signer.algorithm`, `signer.publicKey` | signed: the statement names its key, so a signature cannot be re-presented under another key; the verifier compares all three with the trust root's entry and takes none of them on the checkpoint's word |
+| `registry.headVersion` | signed: the number of snapshots committed (versions are `1..N`, so N is both); lets truncation, extension and order against an anchor be told apart without walking a chain |
+| `registry.headDigest` | signed: the head snapshot's own digest, which commits the whole chain behind it |
+| `acceptanceLedger.entryCount` | signed: the length of the committed prefix; the cut |
+| `acceptanceLedger.headDigest` | signed: the last committed entry's digest, which commits the whole prefix; `null` exactly when the count is `0` |
+| `signature` | the only unsigned field of the envelope |
+
+The ledger has no `version` field of its own: `checkpointVersion` fixes the entry construction the head is read under, exactly as `attestationVersion` fixes the
+statement's. A checkpoint is detached from every WallPrint record and attestation; no record, receipt, reference, digest or attestation byte changes, and WallPrint stays `0.2`.
+
+### 23.3 The exact signed bytes
+
+```text
+signed bytes = UTF-8(domain tag) || 0x00 || UTF-8(RFC 8785(statement))
+domain tag   = walletwall.wallprint.trust-checkpoint/0.1/registry-ledger-checkpoint
+```
+
+The domain tag is `walletwall.wallprint.trust-checkpoint/0.1/registry-ledger-checkpoint`. It is the same construction as an attestation's, through one
+shared function (`domainSeparatedPreimage`), not a second convention; it differs from every attestation tag and is a prefix of none, and the preimage is not JSON.
+So a signature over a checkpoint is not a signature over any attestation, and the reverse (vectors `cp-18a` to `cp-18c`). A raw digest is never signed.
+The exact preimage of every vector is in the vector file (`signedBytes.preimage`).
+
+Ed25519 only, with the same strict admission as an attestation: the public key, and the signature's R and S, before the platform primitive is asked (section 13).
+No algorithm is read from unsigned data, and an unsupported algorithm is `NOT_CHECKED`.
+
+### 23.4 Who may sign: the governance trust root, and the bootstrap
+
+The checkpoint's signer is a WalletWall governance key. A checkpoint that carries a public key must not become relied upon because it signed itself,
+so authorization comes only from a **governance trust root** the verifier is handed explicitly:
+
+```text
+trust root = { "type": "walletwall.wallprint.governance-trust-root", "formatVersion": "0.1",
+               "keys": [ { "keyId", "algorithm", "publicKey", "purposes": [ "REGISTRY_LEDGER_CHECKPOINT" | "STANDING_HEAD" ] } ] }   // strictly ordered by keyId
+```
+
+- A key is authorized only if the root lists its id, its algorithm and public key equal the statement's, and its purposes include the statement's. Each of those is a separate
+  reason: `SIGNER_UNKNOWN`, `SIGNER_KEY_MATERIAL_MISMATCH`, `PURPOSE_NOT_GRANTED`. A key id is never inferred from a name or a label.
+- **The registry being checkpointed cannot authorize its own checkpoint's signer.** Its WalletWall publication key is not a governance key, and the root is a separate input
+  (vector `cp-03c`); otherwise whoever controls the registry channel could add a key and sign for it.
+- `STANDING_HEAD` is the deferred lifecycle-ledger head purpose named in section 2. No statement of that purpose exists; it is in the vocabulary so a root can scope a key to it and the
+  verifier can refuse that key for a checkpoint (vector `cp-04`).
+- A root has no status, history or validity interval. A key stops being accepted when the caller stops supplying it. A root that is missing or invalid authorizes nothing, and the
+  result says `TRUST_ROOT_NOT_SUPPLIED` or `TRUST_ROOT_INVALID` rather than evaluating.
+
+**The bootstrap.** *How does a verifier know the first authorized checkpoint key?* Not from anything this repository ships. The pure verifier takes the root as an input, and the tests pin a
+synthetic root. **A production bootstrap does not exist and requires the governance key ceremony**: generating the keys offline and apart from the deployment host and from the WalletWall
+publication key, recording their public halves somewhere a verifier's distributor can pin them and independent parties can compare, and defining rotation and revocation of governance keys.
+Until then every checkpoint result says, in `doesNotEstablish`, that it does not establish that the supplied root is WalletWall's production key set. This repository contains no governance
+private key, no seed phrase, no KMS or HSM integration, no environment-variable key and no workflow secret; signing exists only in the test support, with keys whose seeds are public ASCII labels.
+
+### 23.5 What a checkpoint means
+
+> WalletWall governance key K signed one statement committing signing-key registry state R (the snapshots `1..N`, by the digest of snapshot N) and acceptance-ledger prefix L (the entries
+> `1..M`, by the digest of entry M) together.
+
+- **Cross-binding.** The checkpoint commits both heads and both counts, so the pair cannot be mixed: a registry from one history with a ledger from another, a longer or shorter log, a log with an
+  entry reordered, dropped, rewritten or re-chained, each fail against the committed head at the committed position.
+- **The cut.** Every ledger entry up to `M` is covered. Every entry after `M`, and every registry version after `N`, is not: the checkpoint says nothing about them. A checkpoint over registry 5
+  and ledger 12 does not authenticate registry 6 with ledger 12, or registry 5 with ledger 13.
+- **Exact by default.** The supplied registry and ledger must be exactly the committed state. A longer log is refused as a different state claiming to be this checkpoint
+  (`REGISTRY_EXTENDED_BEYOND_CHECKPOINT`, `LEDGER_EXTENDED_BEYOND_CHECKPOINT`); a shorter one is `…_TRUNCATED`; a different head at the committed position is `…_HEAD_MISMATCH`; a log that is not a valid
+  chain is not compared at all (`…_CHAIN_INVALID`).
+- **Extension, on request.** With `allowExtension` the committed state must still be an exact prefix, and everything after it is reported as `EXTENDED` with the number of uncovered entries and a
+  limitation. The anchors a checkpoint yields (23.6) are the committed ones, never the supplied lengths.
+- **Cross-version consistency.** Every committed ledger entry must name a registry version that exists in the committed registry state (`LEDGER_REFERENCES_FUTURE_REGISTRY_VERSION` otherwise), and the digest it
+  records must be that version's own digest in the supplied chain (`LEDGER_REGISTRY_DIGEST_MISMATCH`). A checkpoint over a combination that cannot have existed is `INCONSISTENT`.
+- **What it does not prove.** It does not prove that entry *k* was written after registry version *v* existed, or before version *v+1* did. An entry's `acceptedUnder` is still the store's claim
+  (section 11); the checkpoint authenticates *which entries and versions governance committed together*, not the physical order in which they were written. It does not establish that any attestation
+  in the ledger is valid, matches its target, was rightly accepted or is correct, and it adds no origin to any attestation.
+
+Dimension by dimension, none of these collapses into another (the invariants, each pinned by a test):
+
+```text
+signature validity != factual truth
+checkpoint validity != record truth
+checkpoint validity != assessor correctness
+registry binding != issuer factual correctness
+historical acceptance != current key status
+assessor agreement != corroboration
+valid checkpoint != current checkpoint
+checkpoint signer != self-declared signer
+```
+
+### 23.6 The verification result
+
+`verifyCheckpoint(checkpoint, { trustRoot, keyRegistry, acceptanceLedger, allowExtension, anchor, expectedDigest })` never throws, reads no clock, file, network or environment, and returns separate
+dimensions. There is no `verified` flag, no top-level boolean, no score and no count.
+
+| Dimension | Values | Needs |
+| --- | --- | --- |
+| `parse` | `PARSED`, `MALFORMED`, `UNSUPPORTED_VERSION` | the checkpoint |
+| `checkpointDigest`, `committed` | the identity and the committed state the statement says | the checkpoint |
+| `identity` | `MATCHED`, `MISMATCHED`, `NOT_COMPARED` | the name it was published under |
+| `signature` | `VALID`, `INVALID`, `NOT_CHECKED` (+ the section 12 reasons) | the checkpoint only |
+| `signer` | `key` (`KNOWN`, `UNKNOWN`, `MATERIAL_MISMATCH`, `NOT_EVALUATED`), `authorization` (`AUTHORIZED`, `NOT_AUTHORIZED`, `NOT_EVALUATED`) | the trust root |
+| `registry`, `acceptanceLedger` | `chain` (`VALID`, `INVALID`, `NOT_SUPPLIED`), `state` (`MATCHED`, `EXTENDED`, `MISMATCHED`, `NOT_EVALUATED`), committed / supplied / uncovered counts, reasons | the log |
+| `crossBinding` | `CONSISTENT`, `INCONSISTENT`, `NOT_EVALUATED` (+ reasons) | both logs, and an anchor for the since-the-anchor rule |
+| `anchor` | `NO_ANCHOR`, `AT_ANCHOR`, `ADVANCES_ANCHOR`, `BEHIND_ANCHOR`, `FORKED_FROM_ANCHOR`, `ANCHOR_INVALID`, `NOT_EVALUATED` | a held committed state |
+| `limitations` | sorted: `CHECKPOINT_UNANCHORED`, `REGISTRY_EXTENDED_BEYOND_CHECKPOINT`, `LEDGER_EXTENDED_BEYOND_CHECKPOINT` | |
+| `establishes`, `doesNotEstablish` | fixed sentences | |
+
+Fixed reason codes, no caller text echoed: `TRUST_ROOT_NOT_SUPPLIED`, `TRUST_ROOT_INVALID`, `SIGNER_UNKNOWN`, `SIGNER_KEY_MATERIAL_MISMATCH`, `PURPOSE_NOT_GRANTED`;
+`REGISTRY_NOT_SUPPLIED`, `REGISTRY_CHAIN_INVALID`, `REGISTRY_TRUNCATED`, `REGISTRY_HEAD_MISMATCH`, `REGISTRY_EXTENDED_BEYOND_CHECKPOINT` and the same five for the ledger;
+`LEDGER_REFERENCES_FUTURE_REGISTRY_VERSION`, `LEDGER_REGISTRY_DIGEST_MISMATCH`, `LEDGER_ENTRY_PREDATES_ANCHORED_REGISTRY_HEAD`, `STATE_NOT_ESTABLISHED`;
+`CHECKPOINT_BEHIND_ANCHOR`, `CHECKPOINT_FORKS_FROM_ANCHOR`, `ANCHOR_MALFORMED`, `ANCHOR_CONTINUITY_NOT_CHECKED`; `CHECKPOINT_DIGEST_MISMATCH`.
+
+**`doesNotEstablish`** is fixed: factual truth of any record, claim or attestation; that any assessor or issuer is correct, independent or authoritative; that any attestation in the ledger is valid,
+matches its target or was rightly accepted; that a registry binding names the right party or that a key is relied upon today; that the checkpoint is the latest state; anything about registry versions or ledger
+entries after the committed heads; when the checkpoint was signed or when any entry was accepted; that the supplied governance trust root is WalletWall's production key set; safety, solvency, regulatory compliance or investment merit.
+
+**`checkpointAnchors(result)`** returns the committed registry head and ledger entry in the shapes `verifyAttestation` takes (`trustAnchor` and `acceptance.anchor`), or `null`. It returns them only when the signature is valid, the signer is
+authorized, the identifier does not mismatch, both logs are valid and are the committed state (or extend it), the ordering rule holds, and the checkpoint is not behind or a fork of an anchor the caller holds. The anchors come from the *signed statement*,
+never from the supplied logs. It is not a verdict about any attestation: it says which prefix is authenticated, and the attestation verifier is unchanged.
+
+### 23.7 Rollback, currentness and old checkpoints
+
+Cryptographic validity and currentness are separate dimensions. An old checkpoint is **not invalid**: it is authentic, authorized and silent about everything after its heads. Whether it is *current* is a statement relative to
+an anchor the caller holds, so the verifier makes no global "latest" claim and does no lookup.
+
+The caller may supply the committed state of a checkpoint it already relies upon (a previous result's `committed`). Counts decide order, and the supplied logs prove continuity:
+
+| Status | When |
+| --- | --- |
+| `NO_ANCHOR` | none supplied; the result carries `CHECKPOINT_UNANCHORED` |
+| `AT_ANCHOR` | the same counts and heads |
+| `ADVANCES_ANCHOR` | not behind on either log, ahead on at least one, and the supplied logs contain the anchored heads at the anchored positions |
+| `BEHIND_ANCHOR` | older on a log and not newer on the other: a rollback. Detected from counts alone, with no logs; never authenticated as current |
+| `FORKED_FROM_ANCHOR` | the anchor's counts with another head, ahead on one log and behind on the other (logs only append, so no honest state is both), or a later state whose logs do not contain the anchored heads |
+| `ANCHOR_INVALID` | the anchor is not exactly a committed state |
+| `NOT_EVALUATED` | ahead, but no usable logs to prove continuity (`ANCHOR_CONTINUITY_NOT_CHECKED`) |
+
+A verifier that has trusted checkpoint C10 and is shown C7 as current reports `BEHIND_ANCHOR`, and a verifier with no anchor cannot tell, which the result says.
+
+### 23.8 The ordering rule between the ledger and the registry
+
+A checkpoint is signed over the registry and the ledger **exactly as they stand**; it never commits a lagging prefix of a ledger that is longer when it is signed. That is a publication convention
+the verifier cannot enforce (section 21, item 15). Given it, and given that the registry only grows, an entry appended *after* an anchored checkpoint was accepted when the registry head was at least the anchored head.
+
+So, when a checkpoint advances an anchor, **every entry appended since the anchored prefix must name a registry version at or after the anchored registry head**, or the combination is `INCONSISTENT`
+(`LEDGER_ENTRY_PREDATES_ANCHORED_REGISTRY_HEAD`) and yields no anchors. An entry that names an older version, appended after a checkpoint that already showed the newer one, is what a back-dated acceptance
+looks like. The rule needs the caller's anchor; it cannot see a back-dated entry that names a version at or after the anchored head, and an entry's version is still the store's claim.
+
+### 23.9 Checkpoint chaining: decided against
+
+Two options were evaluated: **A**, each checkpoint independently signs both heads; **B**, each also commits the previous checkpoint's digest.
+
+Rollback, reorder and fork are already detected without a link. The signed counts order two checkpoints (`BEHIND_ANCHOR`, and a state ahead on one log and behind on the other); the logs are hash chains, so a checkpoint
+of another history cannot contain the anchored heads (`FORKED_FROM_ANCHOR`); and a verifier that holds an anchor needs nothing else. A link adds nothing for a verifier without an anchor either: it names a digest the
+verifier cannot check without already holding the previous checkpoint. It adds nothing against the attack a link cannot touch, a key holder, who can sign a correctly linked successor of any history, and nothing against
+equivocation, where two checkpoints both link to the same predecessor. It costs a second identity, a sequence number and a rule for a missing predecessor. **Option A is chosen** (D23). It is revisited if a verifier
+must walk checkpoint history without the logs, or together with a transparency log that makes equivocation visible (section 21, item 14).
+
+### 23.10 Compromise and back-dating, revisited
+
+The residual concern of section 10 and T18: key K is `ACTIVE`; attestation A is accepted; a checkpoint C binds registry R and ledger prefix L; later K becomes `COMPROMISED` or `SUPERSEDED`; an attacker appends a fake old acceptance
+behind the current state. `checkpoint-scenarios.test.ts` builds it step by step, with the genuine acceptances inside the prefix and the forged ones after, and checks every ledger position mechanically:
+
+- **Inside the prefix.** With the anchors a checkpoint yields once every dimension holds, an acceptance at or below the committed count keeps the standing the registry's own `retainedBefore` policy gives it, for a compromised key and for a superseded one. Checkpoint validity is not key standing:
+  where the registry retained nothing, a checkpointed acceptance is still `WITHDRAWN` (`WITHDRAWN_AFTER_ACCEPTANCE`).
+- **After the prefix.** An entry after the committed count is judged on present-day state and is `WITHDRAWN` for a key that is no longer `ACTIVE` (`WITHDRAWN_ACCEPTANCE_UNANCHORED`), whatever registry version it names, at every position and for every checkpoint size tested (vectors `cp-16` and `cp-17`).
+- **Without a checkpoint** no entry is inside any authenticated prefix, so even the genuine acceptances lose their standing. This is what the checkpoint buys.
+- **The next checkpoint cannot launder the forgery** if the verifier holds an anchor at or after the registry head that recorded the compromise: the forged entry names an older version than the anchored head, so the combination is `INCONSISTENT` (vector `cp-22a`).
+- **The residual, stated.** If the held anchor predates the registry version that recorded the compromise, a forged entry naming a version at or after that anchored head cannot be told from a genuine one, and a checkpoint governance signs over a ledger it has not reviewed
+  authenticates the ledger as it stands, including that entry (vector `cp-22b`, which exists to show it). A checkpoint commits what governance signed over; it does not show each entry was rightly accepted. It narrows the window to the interval between the last held checkpoint
+  and the next one that follows the registry's record of the compromise, and the compromise window itself (T6) remains.
+
+### 23.11 Evolution after a checkpoint
+
+A signed checkpoint is immutable historical evidence. A later registry version or ledger entry needs a later checkpoint; an old checkpoint is never mutated or refreshed, and a new one is a different artifact with its own identity. Registry and ledger only append, so the committed counts
+of successive checkpoints move forward. The verifier can say, of an old checkpoint: it is cryptographically valid; it authenticates registry head R5 and ledger head L12; newer state may exist; it says nothing about entries after L12.
+
+### 23.12 The checkpoint digest, the integrity policy and publication (design; nothing is published by this lane)
+
+A stable identifier is needed to publish and to name a checkpoint, and the signature alone is not one. The identity is `checkpointDigest(envelope) = evidenceDigest(envelope)`, the engine's existing SHA-256 over RFC 8785 through the existing function, never signed and used only as an
+address and a name the reader recomputes (`identity`). **No new SHA-256 computation site is created and `security/integrity-policy.json` is unchanged** (D26); a test pins that the checkpoint modules hold none.
+
+The static layout is in section 16 (`checkpoints/<checkpointDigest>.json`, with a `checkpoints/index.json` that is a discovery list only and carries no authority). Rules, as for attestations: the reader recomputes the name; identical bytes are idempotent; different bytes for one
+(signer key, committed state) are a conflict, never an overwrite; checkpoints only extend; the same privacy gate and size bounds apply. A published checkpoint would be read together with the registry and ledger it commits, and a verifier would hold its own trust root. No resolver loading is wired,
+no database, endpoint, remote fetch or hosted compute is added; the resolver feature-flag lane comes later.
+
+### 23.13 What this lane does not do (stop conditions, evaluated)
+
+| Condition | Result |
+| --- | --- |
+| a production signing key is required | **not triggered.** Synthetic test keys only; the root is an input |
+| secrets must enter CI | **not triggered.** No workflow change, no secret; a test pins it |
+| a network timestamp or notary is required | **not triggered.** No timestamp; order is by counts and logs |
+| cross-ordering cannot be expressed without rewriting historical data | **not triggered.** The registry's snapshot bytes and the ledger's entry bytes are unchanged; the committed #29 vectors regenerate byte for byte |
+| the model requires changing the WallPrint 0.2 record shape | **not triggered.** Detached |
+| a database or hosted service appears necessary | **not triggered.** A pure function over supplied values |
+| verification requires online revocation | **not triggered.** A governance key is revoked by the verifier no longer supplying it; there is no online status |
+
+Also unchanged: the six MCP tools, the eleven resources, `plugin/server/walletwall-mcp.mjs`, the tool manifest, the MCPB and the Claude Directory payload; no dependency is added and no second crypto library or algorithm is introduced.
+
+### 23.14 The prototype, the vectors and the mutation coverage
+
+Modules: `checkpoint-vocabulary.ts`, `checkpoint.ts`, `checkpoint-verify.ts` (and the shared `domainSeparatedPreimage` in `attestation.ts`, whose output for attestations is byte-identical to before). Tests: `checkpoint-gap.test.ts`,
+`checkpoint.test.ts`, `checkpoint-verify.test.ts`, `checkpoint-scenarios.test.ts`, `checkpoint-vectors.test.ts`, and the checkpoint cases in `attestation-isolation.test.ts`. Vectors, in a file separate from the section 19 vectors so those stay unchanged:
+`wallprint-checkpoint-vectors-0.1.json`, by `scripts/gen-wallprint-checkpoint-vectors.ts` (`npm run gen:wallprint-checkpoint-vectors` / `npm run verify:wallprint-checkpoint-vectors`). **Every key is a synthetic test key** whose seed is a public ASCII label; nothing that ships or publishes carries one.
+
+| Required case | Vector id(s) |
+| --- | --- |
+| valid checkpoint | `cp-01-valid-checkpoint`, `cp-01b-…`, `cp-01c-…` (an empty ledger) |
+| wrong signature | `cp-02-wrong-signature` |
+| unknown governance key | `cp-03a-…` (unlisted), `cp-03b-…` (names a listed id with its own key), `cp-03c-…` (the registry's publication key), `cp-03d-…`, `cp-03e-…` (no or invalid root) |
+| known key, wrong purpose | `cp-04-known-key-wrong-purpose` |
+| registry or ledger head mismatch | `cp-05-registry-head-mismatch`, `cp-06-ledger-head-mismatch` |
+| registry or ledger count mismatch | `cp-07a-…`, `cp-07b-…` (shorter, longer), `cp-08a-…`, `cp-08b-…` |
+| registry or ledger chain tampered | `cp-09-registry-chain-tampered`, `cp-10-ledger-chain-tampered` |
+| ledger entry beyond the checkpointed registry | `cp-11a-…` (a future version), `cp-11b-…` (a digest that is not the committed registry's) |
+| old checkpoint still valid | `cp-12-old-checkpoint-is-still-cryptographically-valid` |
+| rollback, fork, advance against an anchor | `cp-13a-…` to `cp-13e-…` |
+| post-checkpoint appends not covered | `cp-14-…` (ledger), `cp-15-…` (registry) |
+| compromised-key history, back-dating | `cp-16-…` (keeps its standing), `cp-17-…` (outside the older checkpoint), `cp-22a-…` (refused by the ordering rule), `cp-22b-…` (the stated residual) |
+| cross-purpose replay | `cp-18a-…` to `cp-18c-…` |
+| statement byte mutation | `cp-19a-…`, `cp-19b-…` |
+| linkage, identifier, version | `cp-20a-…` (a smuggled link is refused), `cp-20b-…`, `cp-20c-…`, `cp-20d-…`, `cp-20e-…` |
+| algorithm, key and signature material | `cp-21a-…` to `cp-21f-…` (unsupported algorithm, signature length, public key, S, R, not hex) |
+
+Mutation: `npm run test:wallprint-checkpoint-mutation` applies each realistic broken implementation to the real source by an exact patch (a signed statement that omits the registry head, the registry count, the ledger head, the ledger count, the key, the purpose or the version;
+dropped domain separation; a self-declared or wrong-purpose key; a default root; skipped registry or ledger chain verification; ignored heads, truncation or exactness; a future registry reference; a dropped ordering rule; disabled rollback detection; anchors given for a
+fork, an unsigned or unauthorized checkpoint; accepted malformed Ed25519 key, R or S; a generic `verified` flag; a covered acceptance that ignores the registry's retained window) and requires a suite to fail for each. A survivor fails the run.
+
+### 23.15 Limitations
+
+A checkpoint authenticates what governance committed together, not that any of it is right. It carries no time. It is only as relied upon as the governance trust root the verifier was handed, which this lane cannot establish. It does not detect equivocation. It leaves
+registry versions and ledger entries after the newest checkpoint on the strength of the channel. Its since-the-anchor ordering rule depends on a publication convention it cannot enforce and on an anchor the caller holds. The window between a compromise and the first checkpoint that records it remains.

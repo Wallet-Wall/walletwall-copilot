@@ -74,17 +74,26 @@ export type AttestationEnvelope = z.infer<typeof AttestationEnvelopeSchema>;
 const encoder = new TextEncoder();
 
 /**
+ * The one signed-bytes construction of every detached signature in WallPrint: `UTF-8(tag) || 0x00 || UTF-8(RFC 8785(value))`.
+ * The tag is a closed ASCII string with no 0x00, so the first 0x00 is the only boundary. Attestations and trust checkpoints both
+ * use exactly this function, so there is one signature encoding convention, not two.
+ */
+export function domainSeparatedPreimage(tag: string, value: unknown): Uint8Array {
+  const prefix = encoder.encode(tag);
+  const body = encoder.encode(canonicalize(value));
+  const out = new Uint8Array(prefix.length + 1 + body.length);
+  out.set(prefix, 0);
+  out.set(body, prefix.length + 1);
+  return out;
+}
+
+/**
  * The exact bytes that are signed: `UTF-8(domain tag) || 0x00 || UTF-8(RFC 8785(statement))`. The tag is chosen by the
  * statement's purpose, and the statement names the purpose too, the signer, the key, the algorithm and the whole target.
  * Nothing is signed that the reader cannot see, and no digest is signed without the context that gives it meaning.
  */
 export function attestationPreimage(statement: AttestationStatement): Uint8Array {
-  const tag = encoder.encode(DOMAIN_TAGS[statement.purpose]);
-  const body = encoder.encode(canonicalize(statement));
-  const out = new Uint8Array(tag.length + 1 + body.length);
-  out.set(tag, 0);
-  out.set(body, tag.length + 1);
-  return out;
+  return domainSeparatedPreimage(DOMAIN_TAGS[statement.purpose], statement);
 }
 
 /** The identity of one attestation artifact: SHA-256 over the RFC 8785 form of the envelope (the engine's `evidenceDigest`). Never signed; only an address. */
