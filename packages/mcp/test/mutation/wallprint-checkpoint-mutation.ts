@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,7 +9,8 @@ import { fileURLToPath } from "node:url";
  * must fail for it (it is KILLED), run one file at a time so the report says which suites noticed. The sources are restored
  * afterwards, whatever happens. A mutant that survives is a hole in the tests, and fails the run.
  *
- *   npm run test:wallprint-checkpoint-mutation
+ *   npm run test:wallprint-checkpoint-mutation                  every mutant
+ *   npm run test:wallprint-checkpoint-mutation -- --only=30,41  just those mutants
  *
  * It rewrites files in the working tree while it runs, so it is a developer / review tool, not part of `npm test` (it is not a
  * `*.test.ts` file, and lives under the test tree so that no script, canvas or plugin file refers to the verifier). RUN IT ALONE:
@@ -70,7 +71,7 @@ const MUTANTS: readonly Mutant[] = [
   M(28, "drop the since-the-anchor ordering rule (entries after an anchor may name older registry heads)", "checkpoint-verify.ts", "if (Number(entry.acceptedUnder.keyRegistryVersion) < anchoredHead)", "if (false)"),
   // rollback
   M(29, "disable rollback detection (an older checkpoint is not behind the anchor)", "checkpoint-verify.ts", "if (registryOrder < 0 || ledgerOrder < 0)", "if (false)"),
-  M(30, "the anchors are given even for a checkpoint that is behind or forked from the anchor", "checkpoint-verify.ts", 'if (v.anchor.status !== "NO_ANCHOR" && v.anchor.status !== "AT_ANCHOR" && v.anchor.status !== "ADVANCES_ANCHOR") return null;', ""),
+  M(30, "the anchors are given even for a checkpoint that is behind or forked from the anchor", "checkpoint-verify.ts", 'if (currentness !== "NO_ANCHOR" && currentness !== "AT_ANCHOR" && currentness !== "ADVANCES_ANCHOR") return null;', ""),
   M(31, "a checkpoint with the anchor's counts but another head is taken for the anchor", "checkpoint-verify.ts", "if (registryOrder === 0 && committed.registry.headDigest !== anchor.registry.headDigest) return forks;", ""),
   // dimensions and overclaims
   M(32, "the anchors are given without a valid signature", "checkpoint-verify.ts", 'if (v.signature.status !== "VALID" || v.signer.authorization !== "AUTHORIZED") return null;', 'if (v.signer.authorization !== "AUTHORIZED") return null;'),
@@ -83,7 +84,7 @@ const MUTANTS: readonly Mutant[] = [
   M(39, "a covered acceptance keeps its standing whatever the registry retained (checkpoint validity read as key standing)", "attestation-verify.ts", 'else if (key.retainedBefore !== null && Number(acceptance.version) >= Number(key.addedIn) && Number(acceptance.version) < Number(key.retainedBefore)) standing = "HELD";', 'else if (true) standing = "HELD";'),
   // found by the independent review
   M(40, "checkpointAnchors accepts a fabricated or revived result (any object of the right shape)", "checkpoint-verify.ts", 'if (typeof v !== "object" || v === null || !issued.has(v)) return null;', 'if (typeof v !== "object" || v === null) return null;'),
-  M(41, "a null, primitive or array context is not normalised", "checkpoint-verify.ts", 'const contextOf = (raw: unknown): CheckpointContext => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as CheckpointContext) : {});', "const contextOf = (raw: unknown): CheckpointContext => raw as CheckpointContext;"),
+  M(41, "a null, primitive or array context is not normalised", "checkpoint-verify.ts", 'const contextOf = (raw: unknown): CheckpointContext => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {});', "const contextOf = (raw: unknown): CheckpointContext => raw as CheckpointContext;"),
   M(42, "input that cannot be read throws instead of being refused", "checkpoint-verify.ts", '    return issue(deepFreeze(emptyResult("MALFORMED", "SHAPE")));', '    throw new Error("unreadable");'),
   M(43, "the anchors do not say whether the caller held an anchor", "checkpoint-verify.ts", "    currentness,", '    currentness: "AT_ANCHOR",'),
   M(44, "the anchors do not say what lies past the committed state", "checkpoint-verify.ts", 'uncovered: { registryVersions: v.registry.uncovered ?? "0", ledgerEntries: v.acceptanceLedger.uncovered ?? "0" },', 'uncovered: { registryVersions: "0", ledgerEntries: "0" },'),
@@ -109,21 +110,44 @@ async function suites(): Promise<{ file: string; ok: boolean }[]> {
 }
 
 const original = new Map<string, string>();
+// One run at a time. The lock is overwritten, never deleted (the repository bans deleting outside its owned-temp helper): "HELD:<pid>" while a run is
+// live, "FREE" after. A "HELD" whose process is gone is a run that died; its mutant may still be in the tree, which `git status` shows.
 const lock = join(root, "node_modules", ".wallprint-checkpoint-mutation.lock");
+const holder = (): number | null => {
+  try {
+    const m = /^HELD:(\d+)$/.exec(readFileSync(lock, "utf8").trim());
+    return m === null ? null : Number(m[1]);
+  } catch {
+    return null;
+  }
+};
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
 const restore = (): void => {
   for (const [file, text] of original) writeFileSync(join(root, file), text);
-  rmSync(lock, { force: true });
+  writeFileSync(lock, "FREE");
 };
 process.on("SIGINT", () => {
   restore();
   process.exit(130);
 });
 
-if (existsSync(lock)) {
-  console.error(`another mutation run holds ${lock}. Run this alone. Delete the file only if no run is active and \`git status\` shows the sources clean.`);
+const running = holder();
+if (running !== null && running !== process.pid && alive(running)) {
+  console.error(`another mutation run (pid ${running}) is live. Run this alone: it rewrites sources in place.`);
   process.exit(3);
 }
-writeFileSync(lock, String(process.pid));
+if (running !== null && !alive(running)) console.warn(`a previous run (pid ${running}) did not finish: check that \`git status\` shows the sources clean.`);
+writeFileSync(lock, `HELD:${process.pid}`);
+
+const only = new Set((process.argv.find((a) => a.startsWith("--only=")) ?? "").slice("--only=".length).split(",").filter((s) => s !== "").map(Number));
+const selected = only.size === 0 ? MUTANTS : MUTANTS.filter((m) => only.has(m.id));
 
 try {
   const baseline = await suites();
@@ -132,10 +156,10 @@ try {
     console.error(`baseline is not green: ${red.map((r) => r.file).join(", ")}`);
     process.exitCode = 2;
   } else {
-    console.log(`baseline green: ${SUITES.length} suites, ${MUTANTS.length} mutants`);
+    console.log(`baseline green: ${SUITES.length} suites, ${selected.length} of ${MUTANTS.length} mutants`);
 
     let survivors = 0;
-    for (const m of MUTANTS) {
+    for (const m of selected) {
       const path = join(root, m.file);
       const text = original.get(m.file) ?? readFileSync(path, "utf8");
       original.set(m.file, text);
@@ -154,7 +178,7 @@ try {
         writeFileSync(path, text);
       }
     }
-    console.log(`${MUTANTS.length - survivors} of ${MUTANTS.length} mutants killed`);
+    console.log(`${selected.length - survivors} of ${selected.length} mutants killed`);
     if (survivors > 0) process.exitCode = 1;
   }
 } finally {
