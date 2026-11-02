@@ -12,7 +12,9 @@ each record's portable reference (a locator: record id, committed digest, WallPr
 drawn QR code. A public HTTPS resolver ("Public resolver" below) serves deliberately published disclosures as static
 files and proves their bytes before showing them; it is a locator, not an authority. A local, pure external assessor
 import boundary exists in the engine ("External assessor import" below); there is no public or remote assessor import
-endpoint, no hosted compute, no chain write and no signature system.
+endpoint, no hosted compute, no chain write and no signature system. The trust model for signing and issuer attestation is
+designed, and not built, in `WALLPRINT_ATTESTATIONS.md`: detached attestations beside the record that change nothing in the
+record, its digest, the receipt or the reference.
 
 ## Principle
 
@@ -290,7 +292,7 @@ the named assessor stated it. An imported assessment may say `CERTIFIED` or `VER
 statement, and WalletWall's own entry is still generated from the engine's support state. It does not mean the conclusion
 is true, that WalletWall agrees, or that the assessor is who the input says: the identity is attribution, not
 authentication. No signature, key, certificate, DID, wallet signature or chain anchor exists in this lane; signing and
-issuer attestation remain a later trust-model lane.
+issuer attestation are designed in `WALLPRINT_ATTESTATIONS.md` and not built.
 
 ```text
 external != trusted                        assessor identity != issuer identity
@@ -510,7 +512,8 @@ published artifact as they were recorded at publication; the page checks that th
 says, on every resolved page, that the digest does not cover them. The standing is the store's index; it is checked
 against its own ledger, and nothing signs it, so an authentic but stale ledger and a well-formed extension appended by
 whoever controls the store are both printed as the index records them. Binding these to an identity is a signing
-question for a later lane.
+question for a later lane (`WALLPRINT_ATTESTATIONS.md` designs attestations of a record's publication, and names a signed
+standing head as a later purpose).
 
 **Outcomes** are the codec's six plus one, never collapsed: `RESOLVED`; `UNAVAILABLE` (no standing for that record id:
 "Record unavailable", not invalid, not false); `DIGEST_MISMATCH` (the record is published under other bytes, or the
@@ -614,8 +617,8 @@ UNREPLAYABLE != INCORRECT
   registry names issuer and protocol authorities only.
 - An imported assessor is identified because the input says who it is and passes the attribution rules above. That is
   attribution, not authentication: nothing proves the named assessor wrote the input, and an `ISSUER` entry shows that the
-  name matches the registry authority, not that the issuer made the statement. Signing and issuer attestation are a later
-  trust-model lane.
+  name matches the registry authority, not that the issuer made the statement. Signing and issuer attestation are designed
+  in `WALLPRINT_ATTESTATIONS.md` (a detached envelope, a separate signing-key registry, historical key state) and not built.
 - Because identity is a name, one party can appear under several spellings (`reviewer-y`, `reviewer.y`), each its own
   assessor, so a consumer must never count assessors as independent parties. The 0.2 rules close the spellings of
   *reserved* identities, namespaces and authority roles; they do not, and cannot without authentication, tell two spellings
@@ -687,8 +690,8 @@ UNREPLAYABLE != INCORRECT
   200 with another page for every unknown path turns every unpublished record into "Store unreachable" (never into a
   record, and never into "invalid"); `docs/WALLPRINT_PUBLIC_RESOLVER.md` states the host requirement.
 - A reference identifies a record by id and committed digest and nothing else; it is not a signature, and a digest match
-  on resolution proves bytes, not who committed them or whether any claim is true. Signing, attestation keys and any
-  trust model are a separate decision; `DIGEST_MISMATCH` is reported as an integrity finding and never as forgery.
+  on resolution proves bytes, not who committed them or whether any claim is true. Signing, attestation keys and the trust
+  model are designed in `WALLPRINT_ATTESTATIONS.md` and not built; `DIGEST_MISMATCH` is reported as an integrity finding and never as forgery.
 - Reference version `0.1` and WallPrint versions `0.1` and `0.2` resolve: a reference keeps the WallPrint version its record
   was committed under. A reference to any other version is `UNSUPPORTED_VERSION`; nothing is guessed about its grammar.
 - A self-contained reference (the record's canonical payload inside the code) is deliberately not offered: a record is
