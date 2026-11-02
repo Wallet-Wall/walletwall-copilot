@@ -8,3 +8,17 @@ dist/
 .DS_Store
 Thumbs.db
 .playwright-mcp/
+
+# Key material and ceremony working files must never be committed (docs/WALLPRINT_GOVERNANCE_KEY_CEREMONY.md).
+# This is a guard against an accidental git add, not a place to keep them: they belong on ephemeral, offline media.
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.age
+*.gpg
+*.kdbx
+id_ed25519*
+ceremony-private/
+ceremony-working/

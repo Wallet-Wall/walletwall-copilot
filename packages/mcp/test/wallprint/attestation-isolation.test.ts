@@ -20,6 +20,8 @@ const walk = (dir: string): string[] =>
   });
 
 const CHECKPOINT_MODULES = ["checkpoint-vocabulary", "checkpoint", "checkpoint-verify"].map((m) => `packages/mcp/src/wallprint/${m}.ts`);
+/** The governance-ceremony lane builds on the checkpoint modules (it derives their trust root); it is the one lane allowed to import them, and governance-isolation.test.ts pins everything else about it. */
+const GOVERNANCE_MODULES = ["governance-vocabulary", "governance", "governance-verify", "governance-transcript", "governance-secret-scan"].map((m) => `packages/mcp/src/wallprint/${m}.ts`);
 const MODULES = ["attestation-vocabulary", "attestation", "attestation-verify", "key-registry", "acceptance-ledger", "ed25519"].map((m) => `packages/mcp/src/wallprint/${m}.ts`).concat(CHECKPOINT_MODULES);
 const VECTOR_FILES = ["packages/mcp/test/wallprint/fixtures/wallprint-attestation-vectors-0.1.json", "packages/mcp/test/wallprint/fixtures/wallprint-checkpoint-vectors-0.1.json"];
 
@@ -111,7 +113,7 @@ describe("attestation lane: no private key, no signing in the engine", () => {
 
 describe("checkpoint lane: nothing ships, nothing signs, no production trust root exists", () => {
   test("no module outside the lane imports a checkpoint module: the runtime, the tools, the resources, the canvas and the resolver cannot reach it", () => {
-    for (const f of walk(`${ROOT}packages`).filter((x) => /\.(ts|mjs)$/.test(x) && x.startsWith("packages/") && !x.startsWith("packages/mcp/test/") && !CHECKPOINT_MODULES.includes(x))) {
+    for (const f of walk(`${ROOT}packages`).filter((x) => /\.(ts|mjs)$/.test(x) && x.startsWith("packages/") && !x.startsWith("packages/mcp/test/") && !CHECKPOINT_MODULES.includes(x) && !GOVERNANCE_MODULES.includes(x))) {
       assert.doesNotMatch(read(f), /from\s+"[^"]*checkpoint(?:-verify|-vocabulary)?\.ts"/, f);
     }
     for (const f of walk(`${ROOT}scripts`).filter((x) => /\.ts$/.test(x) && x !== "scripts/gen-wallprint-checkpoint-vectors.ts")) assert.doesNotMatch(read(f), /wallprint\/checkpoint|trust-checkpoint/, f);
