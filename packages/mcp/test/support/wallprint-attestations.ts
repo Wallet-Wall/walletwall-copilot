@@ -54,9 +54,14 @@ export function envelopeFor(statement: AttestationStatement, signature: string):
   return { type: "walletwall.wallprint.attestation", attestationVersion: statement.attestationVersion, statement, signature };
 }
 
-/** Sign a statement's exact preimage with a synthetic key. The only signing in the repository. */
+/** Sign exact preimage bytes with a synthetic key. The only signing in the repository: attestation and checkpoint fixtures both call it. */
+export function signPreimage(preimage: Uint8Array, n: number): string {
+  return sign(null, preimage, syntheticKey(n).privateKey).toString("hex");
+}
+
+/** Sign a statement's exact preimage with a synthetic key. */
 export function signStatement(statement: AttestationStatement, n: number): AttestationEnvelope {
-  return envelopeFor(statement, sign(null, attestationPreimage(statement), syntheticKey(n).privateKey).toString("hex"));
+  return envelopeFor(statement, signPreimage(attestationPreimage(statement), n));
 }
 
 export function attest(purpose: AttestationPurpose, who: Signer, target: AttestationTarget): AttestationEnvelope {
