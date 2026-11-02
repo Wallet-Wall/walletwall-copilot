@@ -51,7 +51,7 @@ registry + acceptance-ledger checkpoints   (specification section 23, unchanged)
 
 | Role | Responsibilities | Must not |
 | --- | --- | --- |
-| **Operator** | runs the pinned ceremony procedure on the ceremony machine; generates the keys; signs the authorization; writes the public artifacts to the output medium | expose a private key to anyone, including the witness; act without the witness present |
+| **Operator** | runs the pinned ceremony procedure on the ceremony machine; generates the root key; signs the authorization; writes the public artifacts to the output medium | expose a private key to anyone, including the witness; act without the witness present |
 | **Witness** | reads the pinned script and tool digests and compares them with the published list; watches that the network is off; compares the root fingerprint aloud against an independent copy; verifies the recovered public key; reviews the public outputs before they leave the room | hold the working key or a backup passphrase together with a media copy; sign off on anything they did not see |
 
 - **Who records the public artifacts:** the operator writes them to the output medium; the witness reads them back and compares digests on a second machine before publication.
@@ -128,7 +128,7 @@ Preconditions: the ceremony is open (`CEREMONY_OPENED`), the roles are acknowled
 2. The operator writes the **bootstrap** (section 8) with the public key, the key id, `rootEpoch` and the one root purpose to the output medium.
 3. The witness reads the public key from the medium, recomputes the bootstrap digest on a second machine and compares it with the operator's, aloud, in groups of eight characters. Event `ROOT_PUBLIC_KEY_RECORDED` records the digest, never the key material beyond what is public.
 4. The operator creates the backups (section 9; event `BACKUP_CREATED`), then the drill (section 10; event `BACKUP_RECOVERY_TESTED`).
-5. The operator generates the first **operational** key pair the same way, on the same ephemeral volume, and the root authorizes it (section 11; event `OPERATIONAL_KEY_AUTHORIZED`). The operational private key then leaves the room only as described in section 11.
+5. The first **operational** key pair is generated on the device where it will be used, never on the ceremony machine (section 11). Its **public key** is brought into the room as printed or hand-typed text, typed by the operator and read back by the witness against the destination device's display, and the root authorizes it (event `OPERATIONAL_KEY_AUTHORIZED`). No operational private key enters or leaves the room.
 6. The working secrets are removed (section 18; event `WORKING_SECRET_REMOVED`) and the ceremony is closed (`CEREMONY_CLOSED`).
 
 The checklist items attested at each step are in appendix B. A step that cannot be completed as written stops the ceremony: it is not improvised.
@@ -178,7 +178,7 @@ Minimums (`BACKUP_MINIMUMS`, checked by the transcript validator on a live cerem
 1. the operator decrypts one backup copy on the ceremony machine, using the sealed passphrase, into the encrypted ephemeral volume;
 2. the operator derives the public key from the recovered key and writes the bootstrap it would produce;
 3. the witness compares that bootstrap's digest with the recorded one. **They must be equal.** Any difference stops the ceremony: the backup is wrong and is remade;
-4. **every copy is drilled before the ceremony closes**: a copy that was never decrypted is not known to work. Periodic rehearsals drill at least one copy per place each time.
+4. **every copy is drilled before the ceremony closes**: a copy that was never decrypted is not known to work. The event records how many copies were drilled (`copiesDrilled`), and the transcript validator refuses fewer than the number of copies made (`BACKUP_NOT_ALL_DRILLED`). Periodic rehearsals drill at least one copy per place each time.
 
 **If one backup is lost or damaged:** the others recover the root; the lost copy's passphrase envelope is treated as exposed if the copy might have been taken, and a fresh backup is made in a ceremony of kind `OPERATIONAL_KEY_ACTION` or a dedicated backup ceremony. If a copy might have been stolen, the root's exposure is assessed as in section 16.
 
@@ -188,7 +188,7 @@ Minimums (`BACKUP_MINIMUMS`, checked by the transcript validator on a live cerem
 
 ## 11. Operational-key authorization
 
-1. The operational key pair is generated **on the device where it will be used** (section 11, item 5), never on the ceremony machine and never carried through it. The ceremony receives only the operational **public key**, which the witness compares with what the destination device displays. It is **a different key**, never the root key and never the WalletWall publication key.
+1. The operational key pair is generated **on the device where it will be used** (section 11, item 5), never on the ceremony machine and never carried through it. The ceremony receives only the operational **public key**, as printed or hand-typed text (never carried on removable media from the device), which both participants compare with what the destination device displays (`OPERATIONAL_PUBLIC_KEY_MATCHES_DEVICE`): this is the control against a substituted key. It is **a different key**, never the root key and never the WalletWall publication key.
 2. The root signs one **authorization statement** (specification section 24.6) naming the operational key, its grant (`REGISTRY_LEDGER_CHECKPOINT` only), the root epoch and the generation (1 for the first). The signed bytes are `UTF-8(domain tag) || 0x00 || UTF-8(RFC 8785(statement))`, with the authorization's own domain tag, produced by the pinned script and never by hand.
 3. The witness checks the statement on a second machine before and after signing: the root key, the epoch, the generation, the authorized public key, the grant and, for a later generation, the superseded digest, the standing and the retained state.
 4. The public authorization is written to the output medium; it is verified (section 19) before it is published.
@@ -294,7 +294,7 @@ For every threat, what the ceremony protects and what it cannot. The identifiers
 
 | # | Threat | What the ceremony protects | What it cannot protect |
 | --- | --- | --- | --- |
-| 1 | Compromised developer workstation | the root and operational keys never touch one: generation and use are on ephemeral, offline media from a hash-verified image | a ceremony machine or image that is itself compromised |
+| 1 | Compromised developer workstation | the root key never touches one (generation and use are on ephemeral, offline media from a hash-verified image) and the operational key is generated on its own dedicated device | a ceremony machine or image that is itself compromised |
 | 2 | Compromised GitHub account | no key or secret is in GitHub; GitHub is one origin, and a pin needs two distinct ones | a repository artifact the verifier's distributor ships; the second origin and the pinned fingerprint are the defence |
 | 3 | Compromised CI | CI holds no secret and signs nothing; it only verifies public artifacts | a later lane that adds a signing step on purpose |
 | 4 | Malicious dependency | the lane adds none; the ceremony uses a pinned, hash-verified tool list on offline media | a malicious pinned tool |
@@ -329,7 +329,7 @@ A ceremony is complete only when every event below is present, in order, atteste
 | `BACKUP_CREATED` | `BACKUP_ENCRYPTED`, `NO_CLOUD_OR_REPOSITORY_STORAGE`, `PASSPHRASE_STORED_APART_FROM_MEDIA` |
 | `BACKUP_RECOVERY_TESTED` | `RECOVERED_PUBLIC_KEY_MATCHES` |
 | `ROOT_KEY_RESTORED` | `NO_CLIPBOARD_USED`, `NO_SHELL_HISTORY_WRITTEN`, `RESTORED_PUBLIC_KEY_MATCHES_PINNED_BOOTSTRAP` |
-| `OPERATIONAL_KEY_AUTHORIZED` | `AUTHORIZATION_SIGNED_OFFLINE`, `OPERATIONAL_KEY_DISTINCT_FROM_ROOT` |
+| `OPERATIONAL_KEY_AUTHORIZED` | `AUTHORIZATION_SIGNED_OFFLINE`, `OPERATIONAL_KEY_DISTINCT_FROM_ROOT`, `OPERATIONAL_PUBLIC_KEY_MATCHES_DEVICE` |
 | `WORKING_SECRET_REMOVED` | `EPHEMERAL_MEDIA_POWERED_OFF`, `NO_PRIVATE_MATERIAL_ON_PERSISTENT_STORAGE` |
 | `CEREMONY_CLOSED` | `ONLY_PUBLIC_ARTIFACTS_EXPORTED` |
 

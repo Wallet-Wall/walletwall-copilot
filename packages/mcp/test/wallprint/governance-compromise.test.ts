@@ -112,6 +112,18 @@ describe("root compromise: nothing signed by the root repairs it", () => {
     assert.equal(withRetired.status, "RESET_REFUSED");
     assert.deepEqual(withRetired.reasons, ["ROOT_KEY_PREVIOUSLY_RETIRED"]);
     assert.equal(assessRootReset({ ...pinnedRoot2, retiredRootPublicKeys: ["nope"] }, back, confirmed, { allowSynthetic: true }).reasons[0], "PINNED_STATE_MALFORMED");
+    assert.equal(withRetired.nextPinned, null, "a refused reset gives no state to hold");
+  });
+
+  test("an accepted reset returns the pinned state to hold next, carrying every root key retired so far, so the protection does not depend on the caller remembering", () => {
+    const first = assessRootReset(pinnedRoot1, root2, origins(root2Digest, ["GITHUB", "WALLETWALL_WEBSITE"]), { allowSynthetic: true });
+    assert.deepEqual(first.nextPinned, { rootEpoch: "2", rootPublicKey: publicKeyOf(GK.root2), bootstrapDigest: root2Digest, retiredRootPublicKeys: [publicKeyOf(GK.root1)] });
+    const back = bootstrapFor(GK.root1, { rootEpoch: "3" });
+    const refused = assessRootReset(first.nextPinned, back, origins(bootstrapDigest(back), ["GITHUB", "WALLETWALL_WEBSITE"]), { allowSynthetic: true });
+    assert.deepEqual(refused.reasons, ["ROOT_KEY_PREVIOUSLY_RETIRED"]);
+    const third = bootstrapFor(GK.root3, { rootEpoch: "3" });
+    const next = assessRootReset(first.nextPinned, third, origins(bootstrapDigest(third), ["GITHUB", "WALLETWALL_WEBSITE"]), { allowSynthetic: true });
+    assert.deepEqual(next.nextPinned?.retiredRootPublicKeys, [publicKeyOf(GK.root1), publicKeyOf(GK.root2)].sort());
   });
 
   test("a root-signed 'new root' is not a reset: a new epoch under the same key, or an authorization naming another root, or any signature offered as a confirmation, is refused", () => {

@@ -121,6 +121,7 @@ const MUTANTS: readonly Mutant[] = [
   M(74, "governed verification throws on input it cannot read", P(VERIFY, `  } catch {\n    // Input that cannot even be read (a throwing getter, a revoked proxy, a value that changes between reads) is refused, never evaluated and never an exception.`, `  } catch (e) {\n    if (e !== undefined) throw e;\n    // refused`)),
   M(75, "reliance is judged on one read of the checkpoint and the section 23 verifier is given another", P(VERIFY, "verifyCheckpoint(parsed.ok ? parsed.envelope : checkpoint, forwarded)", "verifyCheckpoint(checkpoint, forwarded)")),
   M(76, "a checkpoint that parsed differently the second time is verified anyway", P(VERIFY, '  if (!parsed.ok && verified.parse === "PARSED") throw new Error("the checkpoint changed between reads");', "")),
+  M(78, "an accepted reset does not carry the retired root keys forward", P(VERIFY, "retiredRootPublicKeys: uniqueSorted([...(current.data.retiredRootPublicKeys ?? []), current.data.rootPublicKey]) };", "retiredRootPublicKeys: [] };")),
   M(77, "a reset may go back to a root key the caller retired", P(VERIFY, '      else if (current.data.retiredRootPublicKeys?.includes(parsed.artifact.root.publicKey) === true) reasons.push("ROOT_KEY_PREVIOUSLY_RETIRED");', "")),
   M(67, "a verifier that cannot read its input throws instead of refusing it", P(VERIFY, '    return issue(deepFreeze(emptyResult(emptyBootstrap("MALFORMED", ["BOOTSTRAP_MALFORMED"]))));', '    throw new Error("unreadable");')),
 
@@ -140,6 +141,8 @@ const MUTANTS: readonly Mutant[] = [
   M(88, "a rehearsal may name a production key", P(TRANSCRIPT, '    if (t.mode === "SYNTHETIC_REHEARSAL" && synthetic !== keyIds.length) reasons.push("SYNTHETIC_MODE_WITH_NON_SYNTHETIC_KEY");', "")),
   M(89, "one person may be both operator and witness", P(TRANSCRIPT, '  if (operators !== 1 || witnesses < 1 || new Set(t.participants.map((p) => p.participantId)).size !== t.participants.length) out.push("PARTICIPANTS_INVALID");', "")),
   M(90, "the ceremony id need not agree with the mode", P(TRANSCRIPT, '  if ((t.mode === "SYNTHETIC_REHEARSAL") !== t.ceremonyId.startsWith(SYNTHETIC_CEREMONY_ID_PREFIX)) out.push("CEREMONY_ID_MODE_MISMATCH");', "")),
+  M(79, "a recovery drill of fewer copies than were made is accepted", P(TRANSCRIPT, 'if (made !== undefined && drilled !== undefined && Number(drilled.ref.copiesDrilled) < Number(made.ref.mediaCopies)) out.push("BACKUP_NOT_ALL_DRILLED");', "")),
+  M(109, "the operational public key need not be compared with its device", P(VOCAB, '  OPERATIONAL_KEY_AUTHORIZED: ["AUTHORIZATION_SIGNED_OFFLINE", "OPERATIONAL_KEY_DISTINCT_FROM_ROOT", "OPERATIONAL_PUBLIC_KEY_MATCHES_DEVICE"],', '  OPERATIONAL_KEY_AUTHORIZED: ["AUTHORIZATION_SIGNED_OFFLINE", "OPERATIONAL_KEY_DISTINCT_FROM_ROOT"],')),
   M(92, "impossible backup counts are accepted", P(TRANSCRIPT, 'if (Number(r.mediaLocations) > Number(r.mediaCopies) || Number(r.passphraseLocations) > Number(r.passphraseEnvelopes)) out.push("BACKUP_COUNTS_IMPOSSIBLE");', "")),
   M(93, "authorizations signed by another root are accepted against a bootstrap", P(TRANSCRIPT, 'if (rootArtifact !== null && (envelope.statement.root.keyId !== rootArtifact.root.keyId || envelope.statement.root.publicKey !== rootArtifact.root.publicKey || envelope.statement.rootEpoch !== rootArtifact.rootEpoch)) reasons.push("AUTHORIZATION_ROOT_MISMATCH");', "")),
   M(94, "the root epoch of an authorization is not compared with the bootstrap's", P(TRANSCRIPT, "|| envelope.statement.rootEpoch !== rootArtifact.rootEpoch))", "))")),
@@ -160,6 +163,7 @@ const MUTANTS: readonly Mutant[] = [
 
   M(106, "a value nested too deep to scan is passed as clean", P(SCAN, '    out.push({ code: "SCAN_DEPTH_EXCEEDED", at: path });\n', "")),
   M(107, "a JWK private scalar field is not found", P(SCAN, '  "d",\n  "privatekey",', '  "privatekey",')),
+  M(113, "a .json file that does not parse strictly is not scanned for field names", P(SCAN, "read.ok ? scanCeremonyJson(read.value) : scanJsonKeyTokens(text)", "read.ok ? scanCeremonyJson(read.value) : []")),
   M(108, "a secret used as a field name is echoed back in the finding", P(SCAN, "(/^[A-Za-z][A-Za-z0-9_]{0,15}$/.test(key) ? key : `[key ${index}]`)", "key")),
 
   // ── isolation ──

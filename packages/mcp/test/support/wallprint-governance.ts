@@ -73,6 +73,8 @@ export const GK = {
   attacker: { keyId: "synthetic-attacker-signer-001", n: 47, label: "SYNTHETIC-NON-PRODUCTION-ATTACKER-SIGNER-001" },
   /** The operational key of the new root lineage after a trust reset. */
   op5: { keyId: "synthetic-checkpoint-signer-005", n: 48, label: "SYNTHETIC-NON-PRODUCTION-CHECKPOINT-SIGNER-005" },
+  /** A third root, for a second reset. */
+  root3: { keyId: "synthetic-governance-root-003", n: 49, label: "SYNTHETIC-NON-PRODUCTION-GOVERNANCE-ROOT-003" },
 } as const satisfies Record<string, GovKey>;
 
 export const publicKeyOf = (key: { n: number }): string => syntheticKey(key.n).publicKey;
@@ -318,7 +320,8 @@ export function transcriptFor(spec: TranscriptSpec): CeremonyTranscript {
   const events: Record<string, unknown>[] = [];
   for (const event of CEREMONY_SEQUENCES[spec.kind]) {
     const base = { event, by: ["OPERATOR", "WITNESS"], attests: [...EVENT_CHECKLIST[event]] };
-    if (event === "ROOT_PUBLIC_KEY_RECORDED" || event === "BACKUP_RECOVERY_TESTED" || event === "ROOT_KEY_RESTORED") events.push({ ...base, ref: { bootstrapDigest: digest } });
+    if (event === "ROOT_PUBLIC_KEY_RECORDED" || event === "ROOT_KEY_RESTORED") events.push({ ...base, ref: { bootstrapDigest: digest } });
+    else if (event === "BACKUP_RECOVERY_TESTED") events.push({ ...base, ref: { bootstrapDigest: digest, copiesDrilled: "3" } });
     else if (event === "BACKUP_CREATED") events.push({ ...base, ref: { mediaCopies: "3", mediaLocations: "2", passphraseEnvelopes: "2", passphraseLocations: "2" } });
     else if (event === "OPERATIONAL_KEY_AUTHORIZED") for (const a of spec.authorizations) events.push({ ...base, ref: { generation: a.statement.generation, authorizationDigest: authorizationDigest(a) } });
     else events.push(base);

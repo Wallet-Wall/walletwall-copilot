@@ -116,15 +116,25 @@ export function scanCeremonyJson(value: unknown): SecretFinding[] {
   return findings;
 }
 
+/** Every quoted word followed by a colon whose name could hold a secret, by line. The fallback for a `.json` file that does not parse strictly (a repeated key, a trailing comma, nesting past the reader's depth). */
+function scanJsonKeyTokens(text: string): SecretFinding[] {
+  const findings: SecretFinding[] = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    for (const match of line.matchAll(/"([^"\\\n]{1,64})"\s*:/g)) if (SECRET_FIELD_NAMES.has(normaliseField(match[1] ?? ""))) findings.push({ code: "SECRET_FIELD_NAME", at: `line ${i + 1}` });
+  });
+  return findings;
+}
+
 /**
- * Scan one file's text. A `.json` file is read as JSON (strictly: a duplicate key or malformed text falls back to the text rules, so a
- * hostile file cannot hide behind a parse failure) and as text; anything else is text only.
+ * Scan one file's text, which the caller has already decoded (UTF-16 text read as UTF-8 is not matched). A `.json` file is read as JSON
+ * (strictly) and as text; if it does not parse strictly, its quoted field names are scanned as text instead, so a hostile file cannot hide
+ * behind a parse failure (a byte-order mark is one). Anything else is text only.
  */
 export function scanCeremonyFile(path: string, text: string): SecretFinding[] {
   const findings = scanCeremonyText(text);
   if (path.endsWith(".json")) {
     const read = parseStrictJson(text, 32);
-    if (read.ok) findings.push(...scanCeremonyJson(read.value));
+    findings.push(...(read.ok ? scanCeremonyJson(read.value) : scanJsonKeyTokens(text)));
   }
   return findings;
 }

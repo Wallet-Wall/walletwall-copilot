@@ -79,7 +79,10 @@ describe("secret scan: what it catches", () => {
   test("a hostile JSON file cannot hide behind a parse failure: a repeated key falls back to the text rules", () => {
     const text = `{"a": 1, "a": 2, "note": "${PEM}"}`;
     assert.ok(codes(scanCeremonyFile("x.json", text)).includes("PEM_PRIVATE_KEY_BLOCK"));
-    assert.deepEqual(scanCeremonyFile("x.json", `{"seed": "x", "seed": "y"}`).map((f) => f.code).includes("SECRET_FIELD_NAME"), false, "a repeated key is not parsed as JSON; only the text rules run");
+    assert.ok(codes(scanCeremonyFile("x.json", `{"seed": "x", "seed": "y"}`)).includes("SECRET_FIELD_NAME"), "a repeated key is not parsed as JSON; its quoted field names are scanned as text");
+    for (const text of [`\uFEFF{"d": "x"}`, `{"d": "x",}`, `${"[".repeat(40)}{"secret": "x"}${"]".repeat(40)}`]) assert.ok(codes(scanCeremonyFile("k.json", text)).includes("SECRET_FIELD_NAME"), text.slice(0, 20));
+    assert.deepEqual(scanCeremonyFile("k.json", `{"note": "d: not a field", "public": 1,}`), [], "an ordinary file that does not parse is not flagged for what it does not hold");
+    assert.deepEqual(scanCeremonyFile("k.md", `{"d": "x",}`), [], "only a .json file is read for field names");
   });
 
   test("the codes are the declared vocabulary: every rule reports a declared code, and every declared code has a case here", () => {

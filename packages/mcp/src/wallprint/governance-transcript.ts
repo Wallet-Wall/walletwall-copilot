@@ -69,7 +69,7 @@ export const TranscriptEventSchema = z.discriminatedUnion("event", [
     ...base,
     ref: z.strictObject({ mediaCopies: Decimal, mediaLocations: Decimal, passphraseEnvelopes: Decimal, passphraseLocations: Decimal }),
   }),
-  z.strictObject({ event: z.literal("BACKUP_RECOVERY_TESTED"), ...base, ref: digestRef }),
+  z.strictObject({ event: z.literal("BACKUP_RECOVERY_TESTED"), ...base, ref: z.strictObject({ bootstrapDigest: Hex64, copiesDrilled: Decimal }) }),
   z.strictObject({ event: z.literal("ROOT_KEY_RESTORED"), ...base, ref: digestRef }),
   z.strictObject({ event: z.literal("OPERATIONAL_KEY_AUTHORIZED"), ...base, ref: z.strictObject({ generation: Generation, authorizationDigest: Hex64 }) }),
   plain("WORKING_SECRET_REMOVED"),
@@ -157,6 +157,10 @@ function structureReasons(t: CeremonyTranscript): string[] {
   const expected = CEREMONY_SEQUENCES[t.kind];
   if (t.events.some((e, i) => e.seq !== String(i + 1))) out.push("EVENT_ORDER_INVALID");
   if (collapsed(names).join("|") !== expected.join("|")) out.push(expected.every((e) => names.includes(e)) ? "EVENT_ORDER_INVALID" : "EVENT_REQUIRED_MISSING");
+
+  const made = t.events.find((e): e is Extract<TranscriptEvent, { event: "BACKUP_CREATED" }> => e.event === "BACKUP_CREATED");
+  const drilled = t.events.find((e): e is Extract<TranscriptEvent, { event: "BACKUP_RECOVERY_TESTED" }> => e.event === "BACKUP_RECOVERY_TESTED");
+  if (made !== undefined && drilled !== undefined && Number(drilled.ref.copiesDrilled) < Number(made.ref.mediaCopies)) out.push("BACKUP_NOT_ALL_DRILLED");
 
   for (const e of t.events) {
     if (!sameSet(e.by, CEREMONY_ROLES)) out.push("ONE_ATTESTER_ONLY");

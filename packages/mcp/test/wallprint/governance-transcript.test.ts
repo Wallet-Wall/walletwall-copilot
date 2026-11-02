@@ -114,8 +114,28 @@ describe("transcript: incomplete, out of order, one-sided or below the floor", (
       const impossible = field === "mediaCopies" || field === "passphraseEnvelopes" ? ["BACKUP_BELOW_MINIMUM", "BACKUP_COUNTS_IMPOSSIBLE"] : ["BACKUP_BELOW_MINIMUM"];
       assert.deepEqual(check(t).structure.reasons, impossible, field);
     }
-    const generous = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_CREATED")["ref"] as object, { mediaCopies: "5", mediaLocations: "3" }));
+    const generous = mutate(bootstrapT, (x) => {
+      Object.assign(event(x, "BACKUP_CREATED")["ref"] as object, { mediaCopies: "5", mediaLocations: "3" });
+      Object.assign(event(x, "BACKUP_RECOVERY_TESTED")["ref"] as object, { copiesDrilled: "5" });
+    });
     assert.deepEqual(check(generous).reasons, []);
+  });
+
+  test("every copy is drilled: a recovery drill that tested fewer copies than were made is refused, and testing more is not an error", () => {
+    const some = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_RECOVERY_TESTED")["ref"] as object, { copiesDrilled: "2" }));
+    assert.deepEqual(check(some).structure.reasons, ["BACKUP_NOT_ALL_DRILLED"]);
+    const none = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_RECOVERY_TESTED")["ref"] as object, { copiesDrilled: "0" }));
+    assert.deepEqual(check(none).structure.reasons, ["BACKUP_NOT_ALL_DRILLED"]);
+    const more = mutate(bootstrapT, (x) => void Object.assign(event(x, "BACKUP_RECOVERY_TESTED")["ref"] as object, { copiesDrilled: "4" }));
+    assert.deepEqual(check(more).reasons, []);
+    const noCount = mutate(bootstrapT, (x) => void delete (event(x, "BACKUP_RECOVERY_TESTED")["ref"] as Record<string, unknown>)["copiesDrilled"]);
+    assert.equal(check(noCount).parse, "MALFORMED", "the count is a required field of the event");
+  });
+
+  test("the operational public key is attested against the device that holds its private half: the checklist item cannot be dropped", () => {
+    assert.ok(EVENT_CHECKLIST.OPERATIONAL_KEY_AUTHORIZED.includes("OPERATIONAL_PUBLIC_KEY_MATCHES_DEVICE"));
+    const dropped = mutate(bootstrapT, (x) => void (event(x, "OPERATIONAL_KEY_AUTHORIZED")["attests"] = ["AUTHORIZATION_SIGNED_OFFLINE", "OPERATIONAL_KEY_DISTINCT_FROM_ROOT"]));
+    assert.deepEqual(check(dropped).structure.reasons, ["CHECKLIST_INCOMPLETE"]);
   });
 
   test("impossible counts are refused: more places than copies cannot be true of one backup", () => {

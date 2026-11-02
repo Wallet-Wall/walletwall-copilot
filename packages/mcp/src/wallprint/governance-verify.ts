@@ -565,6 +565,8 @@ export interface ResetAssessment {
   newBootstrapDigest: string | null;
   /** What the consumer does on acceptance: replace the pinned bootstrap and raise the minimum epoch. Nothing here does it for them. */
   consumerAction: "REPLACE_PINNED_BOOTSTRAP_AND_RAISE_MINIMUM_EPOCH" | "NONE";
+  /** On acceptance, the pinned state to hold next: the new root, with every root key the caller has now retired, so a later reset cannot go back to one. Null otherwise. */
+  nextPinned: { rootEpoch: string; rootPublicKey: string; bootstrapDigest: string; retiredRootPublicKeys: string[] } | null;
   reasons: string[];
   establishes: string;
   doesNotEstablish: readonly string[];
@@ -589,6 +591,7 @@ export function assessRootReset(pinned: unknown, candidate: unknown, confirmatio
     newRootEpoch: epoch,
     newBootstrapDigest: digest,
     consumerAction: "NONE",
+    nextPinned: null,
     reasons: uniqueSorted(reasons),
     establishes: RESET_ESTABLISHES,
     doesNotEstablish: RESET_DOES_NOT_ESTABLISH,
@@ -605,7 +608,8 @@ export function assessRootReset(pinned: unknown, candidate: unknown, confirmatio
       else if (current.data.retiredRootPublicKeys?.includes(parsed.artifact.root.publicKey) === true) reasons.push("ROOT_KEY_PREVIOUSLY_RETIRED");
     }
     if (reasons.length > 0 || !parsed.ok) return deepFreeze(refuse(reasons, parsed.ok ? parsed.artifact.rootEpoch : null, pin.digest));
-    return deepFreeze({ status: "RESET_ACCEPTED", newRootEpoch: parsed.artifact.rootEpoch, newBootstrapDigest: pin.digest, consumerAction: "REPLACE_PINNED_BOOTSTRAP_AND_RAISE_MINIMUM_EPOCH", reasons: [], establishes: RESET_ESTABLISHES, doesNotEstablish: RESET_DOES_NOT_ESTABLISH });
+    const nextPinned = { rootEpoch: parsed.artifact.rootEpoch, rootPublicKey: parsed.artifact.root.publicKey, bootstrapDigest: pin.digest ?? "", retiredRootPublicKeys: uniqueSorted([...(current.data.retiredRootPublicKeys ?? []), current.data.rootPublicKey]) };
+    return deepFreeze({ status: "RESET_ACCEPTED", newRootEpoch: parsed.artifact.rootEpoch, newBootstrapDigest: pin.digest, consumerAction: "REPLACE_PINNED_BOOTSTRAP_AND_RAISE_MINIMUM_EPOCH", nextPinned, reasons: [], establishes: RESET_ESTABLISHES, doesNotEstablish: RESET_DOES_NOT_ESTABLISH });
   } catch {
     return deepFreeze(refuse(["CANDIDATE_MALFORMED"]));
   }
