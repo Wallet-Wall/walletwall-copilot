@@ -48,7 +48,8 @@ export type AcceptanceLedgerResult = { ok: true; entries: readonly AcceptanceEnt
 /** Verify a whole ledger, entries 1..N in order. A ledger that fails is not read: no pin is taken from it. */
 export function verifyAcceptanceLedger(raw: unknown): AcceptanceLedgerResult {
   if (!Array.isArray(raw) || raw.length > ATTESTATION_LIMITS.maxLedgerEntries) return { ok: false, findings: [finding("LEDGER_SHAPE", "")] };
-  if (hasForbiddenStructure(raw)) return { ok: false, findings: [finding("FORBIDDEN_STRUCTURE", "")] };
+  // Entry by entry: the structure guard caps the nodes of one value, and a whole ledger of a few thousand entries would exceed it.
+  if (raw.some((item: unknown) => hasForbiddenStructure(item))) return { ok: false, findings: [finding("FORBIDDEN_STRUCTURE", "")] };
   const findings: Finding[] = [];
   const entries: AcceptanceEntry[] = [];
   const seen = new Set<string>();

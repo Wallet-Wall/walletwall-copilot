@@ -91,7 +91,7 @@ export const CHECKPOINT_LIMITATIONS = ["CHECKPOINT_UNANCHORED", "LEDGER_EXTENDED
 
 /** What a valid checkpoint establishes, stated with its precondition and nothing about truth. */
 export const CHECKPOINT_ESTABLISHES =
-  "The holder of the private key for the stated governance public key signed exactly this statement: one signing-key registry head and one acceptance-ledger head, committed together, under the checkpoint purpose.";
+  "Only when the signature is VALID and the signer is AUTHORIZED: the holder of the private key for the stated governance public key signed exactly this statement, one signing-key registry head and one acceptance-ledger head committed together, under the checkpoint purpose. Otherwise this checkpoint establishes nothing.";
 
 /** What no checkpoint, in any state, establishes. */
 export const CHECKPOINT_DOES_NOT_ESTABLISH: readonly string[] = Object.freeze([

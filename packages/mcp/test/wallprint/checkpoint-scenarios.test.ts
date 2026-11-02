@@ -185,7 +185,7 @@ describe("registry and ledger evolution: later state needs a later checkpoint, a
       trustRoot: PRIMARY_ROOT,
       keyRegistry: registry,
       acceptanceLedger: w.ledger.slice(0, 15),
-      anchor: earlier.committed,
+      anchor: checkpointAnchors(earlier)?.committed,
     });
     assert.equal(later.signature.status, "VALID");
     assert.equal(later.anchor.status, "ADVANCES_ANCHOR");
@@ -201,7 +201,7 @@ describe("registry and ledger evolution: later state needs a later checkpoint, a
       trustRoot: PRIMARY_ROOT,
       keyRegistry: registry,
       acceptanceLedger: w.ledger.slice(0, 15),
-      anchor: beforeCompromise.committed,
+      anchor: checkpointAnchors(beforeCompromise)?.committed,
     });
     assert.equal(later.crossBinding.status, "CONSISTENT");
     const forgedUnder = judge(w, later, w.forged[0] as ReturnType<typeof attest>, "reviewer-y-review-f0");
@@ -215,7 +215,7 @@ describe("registry and ledger evolution: later state needs a later checkpoint, a
     for (const [r, l] of states) {
       const cp = verifyCheckpoint(checkpointFor(registry.slice(0, r), w.ledger.slice(0, l)), { trustRoot: PRIMARY_ROOT, keyRegistry: registry.slice(0, r), acceptanceLedger: w.ledger.slice(0, l), ...(held === null ? {} : { anchor: held }) });
       if (held !== null) assert.ok(["AT_ANCHOR", "ADVANCES_ANCHOR", "FORKED_FROM_ANCHOR"].includes(cp.anchor.status), `${r}/${l}: ${cp.anchor.status}`);
-      held = cp.committed;
+      held = checkpointAnchors(cp)?.committed ?? held;
     }
     const old = verifyCheckpoint(checkpointFor(registry.slice(0, 4), w.ledger.slice(0, 9)), { trustRoot: PRIMARY_ROOT, keyRegistry: registry.slice(0, 4), acceptanceLedger: w.ledger.slice(0, 9), anchor: held });
     assert.equal(old.anchor.status, "BEHIND_ANCHOR");

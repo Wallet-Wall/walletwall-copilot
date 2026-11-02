@@ -50,4 +50,11 @@ describe("acceptance ledger: append-only, hash-chained, bound to attestation dig
     (relinked[1] as { previousEntryDigest: string | null }).previousEntryDigest = null;
     assert.ok(codes(rehashed(relinked)).includes("PREVIOUS_MISMATCH"));
   });
+
+  test("the structure guard is applied entry by entry, so a ledger of several thousand entries is read, and one hostile entry among them still refuses the whole ledger", () => {
+    const many = ledgerOf(Array.from({ length: 3000 }, (_, i) => ({ digest: (i + 1).toString(16).padStart(64, "0"), pin: pinOf(chain, 1 + Math.min(3, Math.floor(i / 750))) })));
+    assert.equal(verifyAcceptanceLedger(many).ok, true, "more entries than one value-wide guard of 20,000 nodes can hold");
+    assert.deepEqual(codes([...many.slice(0, 1500), JSON.parse('{"__proto__":{}}'), ...many.slice(1500)]), ["FORBIDDEN_STRUCTURE"]);
+    assert.deepEqual(codes([...many.slice(0, 5), { ...many[5], extra: 1 }, ...many.slice(6)]), ["PREVIOUS_MISMATCH", "SHAPE"], "an entry that is not an entry is a shape finding and breaks the chain after it");
+  });
 });

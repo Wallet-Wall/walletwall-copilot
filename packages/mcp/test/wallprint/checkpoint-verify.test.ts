@@ -275,7 +275,10 @@ describe("checkpoint verification: the supplied registry and ledger must be the 
     assert.equal(r.acceptanceLedger.state, "EXTENDED");
     assert.equal(r.acceptanceLedger.uncovered, "2");
     assert.deepEqual([...r.limitations], ["CHECKPOINT_UNANCHORED", "LEDGER_EXTENDED_BEYOND_CHECKPOINT", "REGISTRY_EXTENDED_BEYOND_CHECKPOINT"]);
-    assert.deepEqual(checkpointAnchors(r), { trustAnchor: { version: "5", digest: R[4]?.digest }, acceptanceAnchor: { seq: "12", digest: L[11]?.entryDigest } }, "the anchors stay the committed R5 and L12, not the supplied R6 and L14");
+    const anchors = checkpointAnchors(r);
+    assert.deepEqual({ trustAnchor: anchors?.trustAnchor, acceptanceAnchor: anchors?.acceptanceAnchor }, { trustAnchor: { version: "5", digest: R[4]?.digest }, acceptanceAnchor: { seq: "12", digest: L[11]?.entryDigest } }, "the anchors stay the committed R5 and L12, not the supplied R6 and L14");
+    assert.deepEqual(anchors?.uncovered, { registryVersions: "1", ledgerEntries: "2" }, "and what lies past them travels with them");
+    assert.deepEqual([...(anchors?.limitations ?? [])], [...r.limitations]);
     const diverged = run(c5_12, { keyRegistry: divergedRegistry(6), allowExtension: true });
     assert.deepEqual(diverged.registry.reasons, ["REGISTRY_HEAD_MISMATCH"], "extension is allowed only past the committed head, not instead of it");
   });
@@ -474,12 +477,21 @@ describe("checkpoint verification: rollback is judged against an anchor the call
     }
   });
 
-  test("a previous result's committed state is a usable anchor: hold it, and a later verification is judged against it", () => {
-    const first = run(c5_12);
+  test("a previous result's authenticated state is a usable anchor: hold it, and a later verification is judged against it", () => {
+    const first = checkpointAnchors(run(c5_12))?.committed;
     const honest = honestLedger();
-    const later = verifyCheckpoint(checkpointFor(R, honest), { trustRoot: PRIMARY_ROOT, keyRegistry: R, acceptanceLedger: honest, anchor: first.committed });
+    const later = verifyCheckpoint(checkpointFor(R, honest), { trustRoot: PRIMARY_ROOT, keyRegistry: R, acceptanceLedger: honest, anchor: first });
     assert.equal(later.anchor.status, "ADVANCES_ANCHOR");
-    assert.equal(run(c5_12, { anchor: later.committed }).anchor.status, "BEHIND_ANCHOR", "and the earlier checkpoint is now behind what the caller holds");
+    const next = checkpointAnchors(later)?.committed;
+    assert.equal(run(c5_12, { anchor: next }).anchor.status, "BEHIND_ANCHOR", "and the earlier checkpoint is now behind what the caller holds");
+  });
+
+  test("an unauthenticated result's `committed` is only what its statement says: holding it as an anchor would make the genuine checkpoint look like a rollback, and the helper refuses to hand it out", () => {
+    const rogue = run(checkpointFor(R.slice(0, 6), L.slice(0, 14), GOV.rogue), { keyRegistry: R.slice(0, 6), acceptanceLedger: L.slice(0, 14) });
+    assert.notEqual(rogue.committed, null, "the statement parsed, so it says something");
+    assert.equal(checkpointAnchors(rogue), null, "and nothing authenticates it");
+    const poisoned = run(c5_12, { anchor: rogue.committed });
+    assert.equal(poisoned.anchor.status, "BEHIND_ANCHOR", "this is what holding it would do");
   });
 
   test("an old checkpoint that is cryptographically valid keeps saying exactly what it committed, and nothing about what came after", () => {
@@ -513,7 +525,7 @@ describe("checkpoint verification: the identifier a checkpoint is published unde
 describe("checkpoint anchors: a prefix is authenticated, not an attestation", () => {
   test("the anchors come from the signed statement, in the shapes the attestation verifier takes, and it accepts them", () => {
     const anchors = checkpointAnchors(run(c5_12));
-    assert.deepEqual(anchors, { trustAnchor: { version: "5", digest: R[4]?.digest }, acceptanceAnchor: { seq: "12", digest: L[11]?.entryDigest } });
+    assert.deepEqual({ trustAnchor: anchors?.trustAnchor, acceptanceAnchor: anchors?.acceptanceAnchor }, { trustAnchor: { version: "5", digest: R[4]?.digest }, acceptanceAnchor: { seq: "12", digest: L[11]?.entryDigest } });
     const genuine = scenario().genuine;
     const r = verifyAttestation(genuine, { record: goldenRecord(), keyRegistry: R, ...(anchors === null ? {} : { trustAnchor: anchors.trustAnchor }), acceptance: { ledger: L, anchor: anchors?.acceptanceAnchor ?? null } });
     assert.equal(r.limitations.includes("ACCEPTANCE_ANCHOR_MISMATCH"), false);
@@ -557,5 +569,114 @@ describe("checkpoint anchors: a prefix is authenticated, not an attestation", ()
     const withRecord = under(genuine);
     assert.equal(withRecord.target.status, "MATCHED");
     assert.equal(verifyUnderCheckpoint(genuine, null, cp, { keyRegistry: R.slice(0, 5), ledger }).target.status, "NOT_COMPARED", "and the checkpoint does not stand in for the record");
+  });
+});
+
+describe("checkpoint verification: the boundary the independent review found", () => {
+  const c4_9 = checkpointFor(R.slice(0, 4), L.slice(0, 9));
+
+  test("verifyCheckpoint never throws on its own arguments: a null, undefined, primitive or array context, and input that cannot even be read", () => {
+    for (const context of [null, undefined, 0, "x", true, [], [[]], () => 1]) {
+      const r = verifyCheckpoint(c5_12, context as CheckpointContext | null);
+      assert.equal(r.parse, "PARSED", String(context));
+      assert.equal(r.signer.authorization, "NOT_EVALUATED", "no root was supplied");
+      assert.equal(anchored(r), false);
+    }
+    const revoked = Proxy.revocable({}, {});
+    revoked.revoke();
+    const boom = (): never => {
+      throw new Error("boom");
+    };
+    const getters = [
+      { get trustRoot(): never { return boom(); } },
+      { get keyRegistry(): never { return boom(); } },
+      { get acceptanceLedger(): never { return boom(); } },
+      { get anchor(): never { return boom(); } },
+      { get expectedDigest(): never { return boom(); } },
+      { get allowExtension(): never { return boom(); } },
+      revoked.proxy,
+    ];
+    for (const context of getters) {
+      let r: CheckpointVerification | undefined;
+      assert.doesNotThrow(() => {
+        r = verifyCheckpoint(c5_12, context);
+      });
+      assert.equal(r !== undefined && anchored(r), false);
+    }
+    for (const field of ["trustRoot", "keyRegistry", "acceptanceLedger", "anchor"] as const) {
+      assert.doesNotThrow(() => verifyCheckpoint(c5_12, { ...base(), [field]: revoked.proxy }), field);
+      assert.equal(anchored(verifyCheckpoint(c5_12, { ...base(), [field]: revoked.proxy })), false, field);
+    }
+    for (const input of [revoked.proxy, { get statement(): never { return boom(); } }, { ...c5_12, get signature(): never { return boom(); } }]) {
+      const r = verifyCheckpoint(input, base());
+      assert.equal(r.parse, "MALFORMED");
+      assert.equal(anchored(r), false);
+    }
+  });
+
+  test("checkpointAnchors accepts only a result verifyCheckpoint itself returned: a fabricated, copied or revived result mints no anchors", () => {
+    const real = run(c5_12);
+    assert.notEqual(checkpointAnchors(real), null);
+    assert.equal(checkpointAnchors(structuredClone(real)), null, "a copy is not the verifier's result");
+    assert.equal(checkpointAnchors({ ...real }), null);
+    assert.equal(checkpointAnchors(JSON.parse(JSON.stringify(real))), null, "nor is one revived from JSON that crossed a boundary");
+    const junks: unknown[] = [null, undefined, 0, "x", [], {}];
+    for (const junk of junks) assert.equal(checkpointAnchors(junk as CheckpointVerification), null);
+    const fabricated: CheckpointVerification = { ...real, committed: { registry: { headVersion: "6", headDigest: R[5]?.digest ?? "" }, acceptanceLedger: { entryCount: "13", headDigest: L[12]?.entryDigest ?? null } } };
+    assert.equal(checkpointAnchors(fabricated), null, "every dimension says it passed, for a state governance never signed");
+    const forgedAnchors = verifyUnderCheckpoint(scenario().backdated, goldenRecord({ policy: "reviewer-y-review-b" }), fabricated, { keyRegistry: R, ledger: L });
+    assert.equal(forgedAnchors.current.standing, "WITHDRAWN", "so the back-dated entry gets no covered standing from it");
+    assert.equal(forgedAnchors.origin, "KEY_ONLY");
+  });
+
+  test("the anchors say what a consumer must not forget: whether the caller held an anchor, what lies past the committed state, the limitations and the state to hold next", () => {
+    const none = checkpointAnchors(run(c5_12));
+    assert.equal(none?.currentness, "NO_ANCHOR");
+    assert.deepEqual(none?.uncovered, { registryVersions: "0", ledgerEntries: "0" });
+    assert.deepEqual([...(none?.limitations ?? [])], ["CHECKPOINT_UNANCHORED"]);
+    assert.deepEqual(none?.committed, committed(c5_12));
+    assert.ok(Object.isFrozen(none));
+    const at = checkpointAnchors(run(c5_12, { anchor: committed(c5_12) }));
+    assert.equal(at?.currentness, "AT_ANCHOR");
+    assert.deepEqual([...(at?.limitations ?? [])], []);
+    const honest = honestLedger();
+    const advanced = checkpointAnchors(verifyCheckpoint(checkpointFor(R, honest), { trustRoot: PRIMARY_ROOT, keyRegistry: R, acceptanceLedger: honest, anchor: committed(c5_12) }));
+    assert.equal(advanced?.currentness, "ADVANCES_ANCHOR");
+    const extended = checkpointAnchors(run(c5_12, { keyRegistry: R, acceptanceLedger: L, allowExtension: true }));
+    assert.deepEqual(extended?.uncovered, { registryVersions: "1", ledgerEntries: "2" });
+    const rolledBack = checkpointAnchors(verifyCheckpoint(c4_9, { trustRoot: PRIMARY_ROOT, keyRegistry: R.slice(0, 4), acceptanceLedger: L.slice(0, 9) }));
+    assert.equal(rolledBack?.currentness, "NO_ANCHOR", "an unanchored older checkpoint is authentic and says it is unanchored: nothing in the anchors says it is current");
+    assert.deepEqual([...(rolledBack?.limitations ?? [])], ["CHECKPOINT_UNANCHORED"]);
+  });
+
+  test("the fixed statement of what a checkpoint establishes carries its precondition, whatever the result: nothing is established unless the signature is valid and the signer authorized", () => {
+    assert.ok(CHECKPOINT_ESTABLISHES.startsWith("Only when the signature is VALID and the signer is AUTHORIZED:"));
+    assert.ok(CHECKPOINT_ESTABLISHES.endsWith("Otherwise this checkpoint establishes nothing."));
+    for (const r of [run({ ...c5_12, signature: flipLast(c5_12.signature) }), run("not json"), run(c5_12, { trustRoot: null })]) assert.equal(r.establishes, CHECKPOINT_ESTABLISHES);
+  });
+
+  test("a ledger fork whose registry history does contain the anchor is a fork: continuity is checked on the ledger too, at the anchored position", () => {
+    const forkedLedger = ledgerOfSlots(14, R, { 11: { digest: fillerDigest(500), version: 4 }, 12: { digest: fillerDigest(12), version: 5 }, 13: { digest: fillerDigest(13), version: 6 } });
+    const r = verifyCheckpoint(checkpointFor(R, forkedLedger), { trustRoot: PRIMARY_ROOT, keyRegistry: R, acceptanceLedger: forkedLedger, anchor: committed(c5_12) });
+    assert.equal(r.registry.state, "MATCHED");
+    assert.deepEqual(r.anchor, { status: "FORKED_FROM_ANCHOR", reasons: ["CHECKPOINT_FORKS_FROM_ANCHOR"] });
+    assert.equal(anchored(r), false);
+  });
+
+  test("the since-the-anchor rule never reads the uncovered tail: a tail entry naming an older registry head is not covered, and not a reason to refuse the checkpoint", () => {
+    const r = verifyCheckpoint(checkpointFor(R, L.slice(0, 12)), { trustRoot: PRIMARY_ROOT, keyRegistry: R, acceptanceLedger: L.slice(0, 14), allowExtension: true, anchor: committed(c5_12) });
+    assert.equal(r.anchor.status, "ADVANCES_ANCHOR", "the registry is ahead and the ledger is at the anchor");
+    assert.equal(r.acceptanceLedger.uncovered, "2");
+    assert.deepEqual(r.crossBinding, { status: "CONSISTENT", reasons: [] });
+    assert.notEqual(checkpointAnchors(r), null);
+  });
+
+  test("a checkpoint over a ledger of several thousand entries is read and authenticated: the structure guard does not cap the ledger below the committed count", () => {
+    const big = ledgerOfSlots(3000, R);
+    const cp = checkpointFor(R, big);
+    const r = verifyCheckpoint(cp, { trustRoot: PRIMARY_ROOT, keyRegistry: R, acceptanceLedger: big });
+    assert.equal(r.acceptanceLedger.chain, "VALID");
+    assert.equal(r.acceptanceLedger.state, "MATCHED");
+    assert.equal(checkpointAnchors(r)?.acceptanceAnchor?.seq, "3000");
   });
 });

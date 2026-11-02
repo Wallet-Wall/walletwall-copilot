@@ -1,23 +1,25 @@
 import { spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
  * Mutation check for the signed registry/ledger checkpoint. Each mutant is one realistic broken implementation, applied to
- * the real source by an exact, unique, single-line text patch; the checkpoint, vector, scenario, attestation and isolation suites
+ * the real source by an exact, unique, single-line text patch; the checkpoint, vector, scenario, attestation, ledger and isolation suites
  * must fail for it (it is KILLED), run one file at a time so the report says which suites noticed. The sources are restored
  * afterwards, whatever happens. A mutant that survives is a hole in the tests, and fails the run.
  *
  *   npm run test:wallprint-checkpoint-mutation
  *
  * It rewrites files in the working tree while it runs, so it is a developer / review tool, not part of `npm test` (it is not a
- * `*.test.ts` file, and lives under the test tree so that no script, canvas or plugin file refers to the verifier).
+ * `*.test.ts` file, and lives under the test tree so that no script, canvas or plugin file refers to the verifier). RUN IT ALONE:
+ * nothing else (a test run, an editor, another agent, a second copy of this script) may read or write the tree while it runs, or the
+ * mutants leak into that work and a restore can capture a mutant as the "original".
  */
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 const SRC = "packages/mcp/src/wallprint";
 const TEST = "packages/mcp/test/wallprint";
-const SUITES = ["checkpoint", "checkpoint-verify", "checkpoint-scenarios", "checkpoint-vectors", "attestation-isolation", "attestation-ed25519", "attestation", "attestation-verify"].map((name) => `${TEST}/${name}.test.ts`);
+const SUITES = ["checkpoint", "checkpoint-verify", "checkpoint-scenarios", "checkpoint-vectors", "attestation-isolation", "attestation-ed25519", "attestation", "attestation-verify", "acceptance-ledger"].map((name) => `${TEST}/${name}.test.ts`);
 
 interface Mutant {
   id: number;
@@ -79,6 +81,17 @@ const MUTANTS: readonly Mutant[] = [
   M(37, "the result gains a generic `verified` flag", "checkpoint-verify.ts", '    parse: "PARSED",', '    verified: signature.status === "VALID" && signer.authorization === "AUTHORIZED",\n    parse: "PARSED",'),
   M(38, "the fixed denial no longer says a checkpoint does not establish truth of an attestation", "checkpoint-vocabulary.ts", '  "factual truth of any WallPrint record, claim or attestation",', ""),
   M(39, "a covered acceptance keeps its standing whatever the registry retained (checkpoint validity read as key standing)", "attestation-verify.ts", 'else if (key.retainedBefore !== null && Number(acceptance.version) >= Number(key.addedIn) && Number(acceptance.version) < Number(key.retainedBefore)) standing = "HELD";', 'else if (true) standing = "HELD";'),
+  // found by the independent review
+  M(40, "checkpointAnchors accepts a fabricated or revived result (any object of the right shape)", "checkpoint-verify.ts", 'if (typeof v !== "object" || v === null || !issued.has(v)) return null;', 'if (typeof v !== "object" || v === null) return null;'),
+  M(41, "a null, primitive or array context is not normalised", "checkpoint-verify.ts", 'const contextOf = (raw: unknown): CheckpointContext => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as CheckpointContext) : {});', "const contextOf = (raw: unknown): CheckpointContext => raw as CheckpointContext;"),
+  M(42, "input that cannot be read throws instead of being refused", "checkpoint-verify.ts", '    return issue(deepFreeze(emptyResult("MALFORMED", "SHAPE")));', '    throw new Error("unreadable");'),
+  M(43, "the anchors do not say whether the caller held an anchor", "checkpoint-verify.ts", "    currentness,", '    currentness: "AT_ANCHOR",'),
+  M(44, "the anchors do not say what lies past the committed state", "checkpoint-verify.ts", 'uncovered: { registryVersions: v.registry.uncovered ?? "0", ledgerEntries: v.acceptanceLedger.uncovered ?? "0" },', 'uncovered: { registryVersions: "0", ledgerEntries: "0" },'),
+  M(45, "an anchored ledger is not checked for continuity (a ledger fork is an advance)", "checkpoint-verify.ts", "const ledgerHeld = ledgerHeadAt(ledger.items, Number(anchor.acceptanceLedger.entryCount)) === anchor.acceptanceLedger.headDigest;", "const ledgerHeld = true;"),
+  M(46, "an anchored registry is not checked for continuity (a registry fork is an advance)", "checkpoint-verify.ts", "const registryHeld = registryHeadAt(registry.items, Number(anchor.registry.headVersion)) === anchor.registry.headDigest;", "const registryHeld = true;"),
+  M(47, "the since-the-anchor rule reads the uncovered tail as well as the committed prefix", "checkpoint-verify.ts", "for (const entry of ledger.items.slice(Number(anchored.anchor.acceptanceLedger.entryCount), ledgerCount)) {", "for (const entry of ledger.items.slice(Number(anchored.anchor.acceptanceLedger.entryCount))) {"),
+  M(48, "what a checkpoint establishes loses its precondition", "checkpoint-vocabulary.ts", '"Only when the signature is VALID and the signer is AUTHORIZED: the holder of the private key', '"The holder of the private key'),
+  M(49, "the ledger structure guard is applied to the whole array again (a ledger of a few thousand entries is refused)", "acceptance-ledger.ts", "if (raw.some((item: unknown) => hasForbiddenStructure(item)))", "if (hasForbiddenStructure(raw))"),
 ];
 
 function run(file: string): Promise<{ file: string; ok: boolean }> {
@@ -96,45 +109,54 @@ async function suites(): Promise<{ file: string; ok: boolean }[]> {
 }
 
 const original = new Map<string, string>();
+const lock = join(root, "node_modules", ".wallprint-checkpoint-mutation.lock");
 const restore = (): void => {
   for (const [file, text] of original) writeFileSync(join(root, file), text);
+  rmSync(lock, { force: true });
 };
 process.on("SIGINT", () => {
   restore();
   process.exit(130);
 });
 
+if (existsSync(lock)) {
+  console.error(`another mutation run holds ${lock}. Run this alone. Delete the file only if no run is active and \`git status\` shows the sources clean.`);
+  process.exit(3);
+}
+writeFileSync(lock, String(process.pid));
+
 try {
   const baseline = await suites();
   const red = baseline.filter((r) => !r.ok);
   if (red.length > 0) {
     console.error(`baseline is not green: ${red.map((r) => r.file).join(", ")}`);
-    process.exit(2);
-  }
-  console.log(`baseline green: ${SUITES.length} suites, ${MUTANTS.length} mutants`);
+    process.exitCode = 2;
+  } else {
+    console.log(`baseline green: ${SUITES.length} suites, ${MUTANTS.length} mutants`);
 
-  let survivors = 0;
-  for (const m of MUTANTS) {
-    const path = join(root, m.file);
-    const text = original.get(m.file) ?? readFileSync(path, "utf8");
-    original.set(m.file, text);
-    const at = text.indexOf(m.find);
-    if (at < 0 || text.indexOf(m.find, at + 1) >= 0) {
-      console.error(`mutant ${m.id}: the patch text is not unique in ${m.file}`);
-      survivors++;
-      continue;
+    let survivors = 0;
+    for (const m of MUTANTS) {
+      const path = join(root, m.file);
+      const text = original.get(m.file) ?? readFileSync(path, "utf8");
+      original.set(m.file, text);
+      const at = text.indexOf(m.find);
+      if (at < 0 || text.indexOf(m.find, at + 1) >= 0) {
+        console.error(`mutant ${m.id}: the patch text is not unique in ${m.file}`);
+        survivors++;
+        continue;
+      }
+      writeFileSync(path, text.slice(0, at) + m.replace + text.slice(at + m.find.length));
+      try {
+        const killers = (await suites()).filter((r) => !r.ok).map((r) => r.file.replace(`${TEST}/`, "").replace(".test.ts", ""));
+        if (killers.length === 0) survivors++;
+        console.log(`${killers.length > 0 ? "KILLED  " : "SURVIVED"} #${m.id} ${m.name}${killers.length > 0 ? `  <- ${killers.join(", ")}` : ""}`);
+      } finally {
+        writeFileSync(path, text);
+      }
     }
-    writeFileSync(path, text.slice(0, at) + m.replace + text.slice(at + m.find.length));
-    try {
-      const killers = (await suites()).filter((r) => !r.ok).map((r) => r.file.replace(`${TEST}/`, "").replace(".test.ts", ""));
-      if (killers.length === 0) survivors++;
-      console.log(`${killers.length > 0 ? "KILLED  " : "SURVIVED"} #${m.id} ${m.name}${killers.length > 0 ? `  <- ${killers.join(", ")}` : ""}`);
-    } finally {
-      writeFileSync(path, text);
-    }
+    console.log(`${MUTANTS.length - survivors} of ${MUTANTS.length} mutants killed`);
+    if (survivors > 0) process.exitCode = 1;
   }
-  console.log(`${MUTANTS.length - survivors} of ${MUTANTS.length} mutants killed`);
-  if (survivors > 0) process.exitCode = 1;
 } finally {
   restore();
 }

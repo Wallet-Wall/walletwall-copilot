@@ -5,6 +5,7 @@ import {
   ANCHOR_REASONS,
   ANCHOR_STATUSES,
   CHECKPOINT_DOMAIN_TAGS,
+  CHECKPOINT_ESTABLISHES,
   CHECKPOINT_INVARIANTS,
   CHECKPOINT_LIMITATIONS,
   CHECKPOINT_PURPOSES,
@@ -92,7 +93,14 @@ describe("WallPrint attestations specification, section 23: signed trust checkpo
       "No new SHA-256 computation site is created",
       "no database, endpoint, remote fetch or hosted compute is added",
       "This repository contains no governance private key",
+      "It accepts only a result `verifyCheckpoint` itself returned",
+      "**Integrator rule.**",
+      "**The cost of the rule, stated.**",
+      "**Changes to existing #29 code, all of them listed.**",
+      "an acceptor judges under the registry head",
+      "never throws, for any argument",
     ]) assert.ok(flat.includes(s), s);
+    assert.ok(CHECKPOINT_ESTABLISHES.startsWith("Only when the signature is VALID and the signer is AUTHORIZED:"));
     assert.ok(/every ledger position is covered|at every position/.test(flat));
   });
 
@@ -102,8 +110,8 @@ describe("WallPrint attestations specification, section 23: signed trust checkpo
   });
 
   test("records the decisions and threats the lane added, and the follow-ups it leaves", () => {
-    for (let n = 19; n <= 28; n++) assert.ok(doc.includes(`| D${n} |`), `D${n}`);
-    for (let n = 26; n <= 36; n++) assert.ok(doc.includes(`| T${n} |`), `T${n}`);
+    for (let n = 19; n <= 29; n++) assert.ok(doc.includes(`| D${n} |`), `D${n}`);
+    for (let n = 26; n <= 37; n++) assert.ok(doc.includes(`| T${n} |`), `T${n}`);
     for (const f of ["11. **The governance key ceremony.**", "12. **Checkpoint publication tooling.**", "13. **Resolver and browser binding for checkpoints.**", "14. **Equivocation.**", "15. **Checkpoint cadence.**"]) assert.ok(doc.includes(f), f);
     assert.ok(doc.includes("*Addressed in section 23*"));
   });

@@ -71,7 +71,10 @@ export interface CheckpointVerification {
   purpose: CheckpointPurpose | null;
   signerKeyId: string | null;
   algorithm: string | null;
-  /** What the (parsed) statement commits. Hold this as the anchor for later verifications. */
+  /**
+   * What the parsed statement SAYS it commits, for any checkpoint that parsed, including one whose signature or signer failed. It is
+   * authenticated only if `checkpointAnchors(result)` is non-null; hold `checkpointAnchors(result).committed`, never this field alone, as an anchor.
+   */
   committed: CommittedState | null;
   identity: { status: "MATCHED" | "MISMATCHED" | "NOT_COMPARED"; reasons: string[] };
   signature: { status: SignatureStatus; reasons: SignatureReason[] };
@@ -310,11 +313,29 @@ function verifyParsed(envelope: CheckpointEnvelope, context: CheckpointContext):
 }
 
 /** Verify one checkpoint. See the module comment for the dimensions; spec/WALLPRINT_ATTESTATIONS.md, section 23, for their meaning. */
-export function verifyCheckpoint(input: unknown, context: CheckpointContext = {}): CheckpointVerification {
-  const parsed = parseCheckpoint(input);
-  if (!parsed.ok) return deepFreeze(emptyResult(parsed.unsupportedVersion ? "UNSUPPORTED_VERSION" : "MALFORMED", parsed.problem));
-  return verifyParsed(parsed.envelope, context);
+export function verifyCheckpoint(input: unknown, context?: CheckpointContext | null): CheckpointVerification {
+  try {
+    const parsed = parseCheckpoint(input);
+    if (!parsed.ok) return issue(deepFreeze(emptyResult(parsed.unsupportedVersion ? "UNSUPPORTED_VERSION" : "MALFORMED", parsed.problem)));
+    return issue(verifyParsed(parsed.envelope, contextOf(context)));
+  } catch {
+    // Input that cannot even be read (a throwing getter, a revoked proxy) is refused, never evaluated and never an exception.
+    return issue(deepFreeze(emptyResult("MALFORMED", "SHAPE")));
+  }
 }
+
+const contextOf = (raw: unknown): CheckpointContext => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {});
+
+/**
+ * A capability, not state: the results this module itself returned. `checkpointAnchors` accepts only those, so a plain object that merely
+ * has the right shape (built by hand, or revived from JSON that crossed a boundary) mints no anchors. It is never read by the verifier,
+ * so it cannot change what `verifyCheckpoint` returns for any input.
+ */
+const issued = new WeakSet<object>();
+const issue = (result: CheckpointVerification): CheckpointVerification => {
+  issued.add(result);
+  return result;
+};
 
 /**
  * The anchors a checkpoint authenticates, in the shapes `verifyAttestation` takes: the registry head (`trustAnchor`) and the last
@@ -322,22 +343,37 @@ export function verifyCheckpoint(input: unknown, context: CheckpointContext = {}
  * logs, and only when every dimension holds: the signature is valid, the signer is authorized by the supplied root, both logs are
  * valid and are the committed state (or extend it), the ordering rule is met, and the checkpoint is not older than, or a fork of, an
  * anchor the caller holds. Otherwise null. This is not a verdict about any attestation: it only says which prefix is authenticated.
+ *
+ * What travels with the anchors, so a consumer cannot mistake them for more than they are: `currentness` says whether the caller held an
+ * anchor at all (`NO_ANCHOR`: nothing says this is not an older checkpoint); `uncovered` and `limitations` say how much of the supplied
+ * registry and ledger lies past the committed state, which this checkpoint does not authenticate; `committed` is the state to hold as
+ * the caller's next anchor (the only authenticated way to obtain one).
  */
 export interface CheckpointAnchors {
   trustAnchor: { version: string; digest: string };
   acceptanceAnchor: { seq: string; digest: string } | null;
+  committed: CommittedState;
+  currentness: "NO_ANCHOR" | "AT_ANCHOR" | "ADVANCES_ANCHOR";
+  uncovered: { registryVersions: string; ledgerEntries: string };
+  limitations: readonly string[];
 }
 
 export function checkpointAnchors(verification: CheckpointVerification): CheckpointAnchors | null {
   const v = verification;
+  if (typeof v !== "object" || v === null || !issued.has(v)) return null;
   if (v.parse !== "PARSED" || v.committed === null) return null;
   if (v.signature.status !== "VALID" || v.signer.authorization !== "AUTHORIZED") return null;
   if (v.identity.status === "MISMATCHED") return null;
   if (!usable(v.registry) || !usable(v.acceptanceLedger) || v.crossBinding.status !== "CONSISTENT") return null;
-  if (v.anchor.status !== "NO_ANCHOR" && v.anchor.status !== "AT_ANCHOR" && v.anchor.status !== "ADVANCES_ANCHOR") return null;
+  const currentness = v.anchor.status;
+  if (currentness !== "NO_ANCHOR" && currentness !== "AT_ANCHOR" && currentness !== "ADVANCES_ANCHOR") return null;
   const { registry, acceptanceLedger } = v.committed;
-  return {
+  return deepFreeze({
     trustAnchor: { version: registry.headVersion, digest: registry.headDigest },
     acceptanceAnchor: acceptanceLedger.headDigest === null ? null : { seq: acceptanceLedger.entryCount, digest: acceptanceLedger.headDigest },
-  };
+    committed: v.committed,
+    currentness,
+    uncovered: { registryVersions: v.registry.uncovered ?? "0", ledgerEntries: v.acceptanceLedger.uncovered ?? "0" },
+    limitations: [...v.limitations],
+  });
 }

@@ -27,7 +27,8 @@ import { parseStrictJson } from "./strict-json.ts";
  * ledger prefix were committed as one governance statement. It certifies no claim, no attestation and no assessor.
  *
  * A checkpoint is detached from the WallPrint record and from every attestation: no record, receipt, reference, digest or
- * attestation byte changes. Every field of the statement is signed; the envelope has no unsigned metadata but the signature.
+ * attestation byte changes. Every field of the statement is signed; the envelope's other fields are a fixed `type` literal and a
+ * version selector that must equal its signed twin, so there is no unsigned metadata but the signature itself.
  * The signer's key is never trusted because the checkpoint names it: authorization comes only from a governance trust root the
  * verifier is handed explicitly (checkpoint-verify.ts). This lane ships no root and no production key.
  *

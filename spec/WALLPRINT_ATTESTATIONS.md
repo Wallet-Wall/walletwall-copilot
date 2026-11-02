@@ -675,6 +675,7 @@ it); the signer's remedy is a new attestation by a registered key, since an iden
 | T34 | A compromised governance key | the key is removed from the root the verifier supplies | checkpoints it signed before removal still verify under a root that still lists it; the root has no history or lifecycle in this lane (section 23.4) |
 | T35 | A checkpoint read as certification of the records, attestations or assessors in the logs | no `verified` flag; fixed `doesNotEstablish`; the verifier changes no attestation's origin; a covered acceptance still earns only what its own dimensions earn | a reader can still misread; UX must keep the rows apart |
 | T36 | Unsigned metadata, labels, timestamps or links riding on a checkpoint | a closed schema; an unknown field is refused, never dropped; no timestamp, no status | none |
+| T37 | A fabricated or revived verification result used to mint anchors | `checkpointAnchors` accepts only a result the verifier itself returned; a copy, a hand-built object or JSON that crossed a boundary yields `null` (section 23.6) | a consumer that trusts a result without calling the verifier is trusting whoever supplied it |
 
 ## 18. Versioning
 
@@ -782,6 +783,7 @@ Recommended implementation order: (1) publisher gate and the static store layout
 | D26 | The checkpoint's identity is the engine's existing digest of its envelope | A new digest construction or a new SHA-256 site (integrity policy, D14) |
 | D27 | The trust root carries no status, history or validity interval | A lifecycle for governance keys without a custody and ceremony design to ground it; it is the next lane |
 | D28 | `STANDING_HEAD` is a reserved key scope only | Implementing a second signed object now; leaving no way to scope a governance key by purpose |
+| D29 | `checkpointAnchors` accepts only results the verifier returned, and carries `currentness`, `uncovered`, `limitations` and the state to hold next | A projection of any object of the right shape (a fabricated result mints anchors; found by review); returning bare anchors (an unanchored or extended result is indistinguishable from an anchored, exact one downstream); re-verifying on every call (cost, for a caller that already holds the result) |
 
 ## 23. Signed trust checkpoints
 
@@ -828,7 +830,7 @@ comment, status, identifier or link.
 | `registry.headDigest` | signed: the head snapshot's own digest, which commits the whole chain behind it |
 | `acceptanceLedger.entryCount` | signed: the length of the committed prefix; the cut |
 | `acceptanceLedger.headDigest` | signed: the last committed entry's digest, which commits the whole prefix; `null` exactly when the count is `0` |
-| `signature` | the only unsigned field of the envelope |
+| `signature` | the signature itself: the one envelope field that is neither part of the signed statement, nor a fixed literal (`type`), nor a parse selector with a signed twin (`checkpointVersion`) |
 
 The ledger has no `version` field of its own: `checkpointVersion` fixes the entry construction the head is read under, exactly as `attestationVersion` fixes the
 statement's. A checkpoint is detached from every WallPrint record and attestation; no record, receipt, reference, digest or attestation byte changes, and WallPrint stays `0.2`.
@@ -908,8 +910,8 @@ checkpoint signer != self-declared signer
 
 ### 23.6 The verification result
 
-`verifyCheckpoint(checkpoint, { trustRoot, keyRegistry, acceptanceLedger, allowExtension, anchor, expectedDigest })` never throws, reads no clock, file, network or environment, and returns separate
-dimensions. There is no `verified` flag, no top-level boolean, no score and no count.
+`verifyCheckpoint(checkpoint, { trustRoot, keyRegistry, acceptanceLedger, allowExtension, anchor, expectedDigest })` never throws, for any argument (a null, primitive or array context is treated as none, and input that cannot even be read, such as a throwing getter, is refused as `MALFORMED`),
+reads no clock, file, network or environment, and returns separate dimensions. There is no `verified` flag, no top-level boolean, no score and no tally of checkpoints or signatures; the per-log counts are the committed and supplied lengths.
 
 | Dimension | Values | Needs |
 | --- | --- | --- |
@@ -934,15 +936,24 @@ matches its target or was rightly accepted; that a registry binding names the ri
 entries after the committed heads; when the checkpoint was signed or when any entry was accepted; that the supplied governance trust root is WalletWall's production key set; safety, solvency, regulatory compliance or investment merit.
 
 **`checkpointAnchors(result)`** returns the committed registry head and ledger entry in the shapes `verifyAttestation` takes (`trustAnchor` and `acceptance.anchor`), or `null`. It returns them only when the signature is valid, the signer is
-authorized, the identifier does not mismatch, both logs are valid and are the committed state (or extend it), the ordering rule holds, and the checkpoint is not behind or a fork of an anchor the caller holds. The anchors come from the *signed statement*,
-never from the supplied logs. It is not a verdict about any attestation: it says which prefix is authenticated, and the attestation verifier is unchanged.
+authorized, the identifier does not mismatch, both logs are valid and are the committed state (or extend it), the ordering rule holds, and the checkpoint is not behind or a fork of an anchor the caller holds; `null` also for an invalid anchor, an anchor
+continuity that could not be checked and anything that did not parse. The anchors come from the *signed statement*, never from the supplied logs. **It accepts only a result `verifyCheckpoint` itself returned** (a module-private capability that the verifier never reads):
+a plain object of the right shape, a copy, or a result revived from JSON that crossed a boundary yields `null`, so a fabricated "everything passed" result mints no anchors; re-derive it by calling `verifyCheckpoint` again. It is not a verdict about any attestation: it says
+which prefix is authenticated, and the attestation verifier is unchanged.
+
+What travels with the anchors, so a consumer cannot mistake them for more than they are: `currentness` (`NO_ANCHOR`, `AT_ANCHOR` or `ADVANCES_ANCHOR`; with `NO_ANCHOR` nothing says this is not an older checkpoint), `uncovered` (how many registry versions and ledger entries
+of what was supplied lie past the committed state), `limitations`, and `committed`, the state to hold as the caller's next anchor. A result's own `committed` field is only what its statement says, for any checkpoint that parsed; it is authenticated only if `checkpointAnchors` returns non-null for that result, and holding an
+unauthenticated one as an anchor would make the genuine checkpoint look like a rollback.
+
+**Integrator rule.** The registry versions and ledger entries past the committed state are not authenticated, yet `verifyAttestation` decides a key's *current* status from the head of the registry it is given. When the question is what is true now, judge against exactly the committed state
+(the default exact mode), or read `uncovered` and treat what lies past it as the channel's word. Anchors from an unanchored checkpoint are authentic for the prefix they name and say nothing about whether newer state exists.
 
 ### 23.7 Rollback, currentness and old checkpoints
 
 Cryptographic validity and currentness are separate dimensions. An old checkpoint is **not invalid**: it is authentic, authorized and silent about everything after its heads. Whether it is *current* is a statement relative to
 an anchor the caller holds, so the verifier makes no global "latest" claim and does no lookup.
 
-The caller may supply the committed state of a checkpoint it already relies upon (a previous result's `committed`). Counts decide order, and the supplied logs prove continuity:
+The caller may supply the committed state of a checkpoint it already relies upon: the `committed` field of a `checkpointAnchors` result, the only authenticated way to obtain one (23.6). Counts decide order, and the supplied logs prove continuity:
 
 | Status | When |
 | --- | --- |
@@ -960,10 +971,16 @@ A verifier that has trusted checkpoint C10 and is shown C7 as current reports `B
 
 A checkpoint is signed over the registry and the ledger **exactly as they stand**; it never commits a lagging prefix of a ledger that is longer when it is signed. That is a publication convention
 the verifier cannot enforce (section 21, item 15). Given it, and given that the registry only grows, an entry appended *after* an anchored checkpoint was accepted when the registry head was at least the anchored head.
+That inference rests on three premises, and the third is a rule about acceptors, not about governance: the checkpoint covers the whole ledger as it stood; the registry only grows; and **an acceptor judges under the registry head, at least as new as the last checkpointed head, when it appends**. A publication gate (section 21,
+item 12) is where the third is enforced; nothing in a verifier can.
 
 So, when a checkpoint advances an anchor, **every entry appended since the anchored prefix must name a registry version at or after the anchored registry head**, or the combination is `INCONSISTENT`
 (`LEDGER_ENTRY_PREDATES_ANCHORED_REGISTRY_HEAD`) and yields no anchors. An entry that names an older version, appended after a checkpoint that already showed the newer one, is what a back-dated acceptance
 looks like. The rule needs the caller's anchor; it cannot see a back-dated entry that names a version at or after the anchored head, and an entry's version is still the store's claim.
+
+**The cost of the rule, stated.** Because the ledger only appends, one entry appended after the anchor that names a version older than the anchored head makes every later checkpoint `INCONSISTENT` for a verifier holding that anchor, and it stays so. A stale acceptor, or a store controller, can cause that without any governance key.
+It fails closed (no anchors, so nothing new is covered), and it is the intended outcome for a back-dated entry, but it is a liveness cost. Recovery is a deliberate, out-of-band act: governance publishes a checkpoint over the ledger as it stands, and the verifier resets its anchor knowingly, accepting that the entry stays in the ledger and that, with no anchor, the
+checkpoint is `NO_ANCHOR` again (23.7). Nothing recovers silently.
 
 ### 23.9 Checkpoint chaining: decided against
 
@@ -1017,6 +1034,9 @@ no database, endpoint, remote fetch or hosted compute is added; the resolver fea
 
 Also unchanged: the six MCP tools, the eleven resources, `plugin/server/walletwall-mcp.mjs`, the tool manifest, the MCPB and the Claude Directory payload; no dependency is added and no second crypto library or algorithm is introduced.
 
+**Changes to existing #29 code, all of them listed.** (1) `attestation.ts` factors the signed-bytes construction into `domainSeparatedPreimage`; `attestationPreimage` returns the same bytes (the section 19 vectors regenerate byte for byte). (2) `acceptance-ledger.ts` applies its structure guard to each entry instead of to the whole array: the guard caps one value at 20,000 nodes, which limited a ledger to about 2,500 entries
+against an advertised 100,000, and a checkpoint over a longer ledger could never produce anchors. The findings, the entry bytes and the chain rules are unchanged, and a hostile entry anywhere still refuses the ledger.
+
 ### 23.14 The prototype, the vectors and the mutation coverage
 
 Modules: `checkpoint-vocabulary.ts`, `checkpoint.ts`, `checkpoint-verify.ts` (and the shared `domainSeparatedPreimage` in `attestation.ts`, whose output for attestations is byte-identical to before). Tests: `checkpoint-gap.test.ts`,
@@ -1049,4 +1069,4 @@ fork, an unsigned or unauthorized checkpoint; accepted malformed Ed25519 key, R 
 ### 23.15 Limitations
 
 A checkpoint authenticates what governance committed together, not that any of it is right. It carries no time. It is only as relied upon as the governance trust root the verifier was handed, which this lane cannot establish. It does not detect equivocation. It leaves
-registry versions and ledger entries after the newest checkpoint on the strength of the channel. Its since-the-anchor ordering rule depends on a publication convention it cannot enforce and on an anchor the caller holds. The window between a compromise and the first checkpoint that records it remains.
+registry versions and ledger entries after the newest checkpoint on the strength of the channel. Its since-the-anchor ordering rule depends on a publication convention it cannot enforce, on an anchor the caller holds and on acceptors judging under a current registry head (23.8), and a single stale entry can wedge it until the anchor is reset deliberately. The window between a compromise and the first checkpoint that records it remains.
