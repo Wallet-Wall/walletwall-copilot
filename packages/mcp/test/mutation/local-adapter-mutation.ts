@@ -68,6 +68,7 @@ const MUTANTS: readonly Mutant[] = [
   E("an unknown payload key changes the corroboration count", "evaluate.ts", "evidenceDigest(pick(o.payload, policy.valueKeys))", "evidenceDigest(o.payload)"),
   E("an unknown value key changes the assertion-to-observation comparison", "evaluate.ts", "if (!sameCanonical(pick(a.value, policy.valueKeys), pick(first.payload, policy.valueKeys))) {", "if (!sameCanonical(a.value, first.payload)) {"),
   E("the balance subject, unknown keys included, is forwarded into the suggested assertion", "readiness.ts", "const subjectBase = readinessSubject(balA);", "const subjectBase = balA?.subject ?? {};"),
+  E("a malformed contract subject value is forwarded into the suggested assertion", "readiness.ts", 'if (typeof value === "string" && (SUBJECT_KEY_RULES[key]?.accepts(value) ?? false)) subject[key] = value;', 'if (typeof value === "string") subject[key] = value;'),
   E("a prototype-targeting key is no longer refused", "schemas.ts", "if (FORBIDDEN_KEYS.has(k)) return true;", "if (false) return true;"),
   E("the prototype key is dropped from the forbidden list", "schemas.ts", '["__proto__", "constructor", "prototype"]', '["__proto__", "constructor"]'),
   E("an open map may hold 64 entries", "schemas.ts", "recordEntries: 16,", "recordEntries: 64,"),
