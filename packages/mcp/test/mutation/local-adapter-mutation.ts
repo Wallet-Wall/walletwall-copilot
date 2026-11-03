@@ -112,6 +112,12 @@ process.on("SIGINT", () => {
   restore();
   process.exit(130);
 });
+for (const signal of ["SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    restore();
+    process.exit(143);
+  });
+}
 
 try {
   const all = [...new Set([...BRIDGE_SUITES, ...ENGINE_SUITES, ...DOC_SUITES])];

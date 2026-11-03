@@ -1,5 +1,6 @@
 import type { Bundle, Assertion, LimitationCode, SupportState } from "./schemas.ts";
 import { evidenceDigest } from "./canonical.ts";
+import { SUBJECT_KEY_RULES } from "./claims.ts";
 import { RULES_VERSION, getPolicy } from "./registry.ts";
 import { evaluateBundle, weakest, type AssertionEvaluation, type Evaluation } from "./evaluate.ts";
 
@@ -61,16 +62,17 @@ function find(evalById: Map<string, AssertionEvaluation>, id: string): Assertion
 }
 
 /**
- * The suggested readiness assertion carries only the subject keys of its own claim type. The balance assertion's
- * subject is an open map: any other key it holds is caller-supplied and stays behind, so it is never forwarded into a
- * result that a host may place in a new bundle.
+ * The suggested readiness assertion carries only the subject keys of its own claim type, and only values that are valid
+ * for that key. The balance assertion's subject is an open map caller-supplied text can ride in: a key outside the
+ * contract stays behind, and so does a contract key whose value is malformed, so nothing a caller typed is forwarded into
+ * a result that a host may place in a new bundle.
  */
 function readinessSubject(balance: Assertion | undefined): Assertion["subject"] {
   const subject: Assertion["subject"] = {};
   if (balance === undefined) return subject;
   for (const key of getPolicy("VAULT_TECHNICAL_READINESS")?.subjectKeys ?? []) {
     const value = Object.hasOwn(balance.subject, key) ? balance.subject[key] : undefined;
-    if (value !== undefined) subject[key] = value;
+    if (typeof value === "string" && (SUBJECT_KEY_RULES[key]?.accepts(value) ?? false)) subject[key] = value;
   }
   return subject;
 }

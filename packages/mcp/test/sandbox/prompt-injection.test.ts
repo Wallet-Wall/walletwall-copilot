@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { describe, test } from "node:test";
 import { SAFE_TEXT_RE, parseBundleStrict, type Bundle } from "../../src/schemas.ts";
 import { callTool } from "../../src/tools.ts";
-import { EVALUATED_AT, USDC, clone, golden } from "../support/builders.ts";
+import { EVALUATED_AT, USDC, clone, golden, withUsdValue } from "../support/builders.ts";
 import { ENTRIES, ROOT, runRaw } from "../support/harness.ts";
 import { loadCorpus } from "../support/runner.ts";
 
@@ -112,7 +112,7 @@ function vocabulary(tool: keyof typeof GOLD_ARGS): Set<string> {
 }
 const unknownFields = (tool: keyof typeof GOLD_ARGS, out: Json): string[] => [...keyNames(out)].filter((k) => !vocabulary(tool).has(k));
 
-/** The one place caller free text is carried: the transport label, as a named attribute of the provenance graph. */
+/** The only places caller free text is carried: named provenance attributes (the source's transport label and a derivation's rules version). */
 const ECHO_ALLOWED: Record<string, { tool: string; key: string }> = {
   "source.transport.retrievedVia": { tool: "trace_provenance", key: "ww:retrievedVia" },
 };
@@ -129,6 +129,15 @@ const TEXT_PLACES: Place[] = [
   { name: "identity payload symbol", apply: (b, t) => void (b.observations[0] && (b.observations[0].payload = { ...b.observations[0].payload, symbol: t })) },
   { name: "identity value symbol", apply: (b, t) => void (b.assertions[0]?.value && (b.assertions[0].value = { ...b.assertions[0].value, symbol: t })) },
   { name: "identity issuerAuthorityId", apply: (b, t) => void (b.assertions[0]?.value && (b.assertions[0].value = { ...b.assertions[0].value, issuerAuthorityId: t })) },
+  ...(["holder", "token", "blockNumber", "chainId", "blockHash"] as const).map(
+    (key): Place => ({
+      name: `balance subject ${key} (a contract key holding invalid text)`,
+      apply: (b, t) => {
+        const a = b.assertions.find((x) => x.id === "a-balance");
+        if (a !== undefined) a.subject = { ...a.subject, [key]: t };
+      },
+    }),
+  ),
 ];
 
 describe("prompt injection: instruction-like text that the schema accepts is carried as inert data", () => {
@@ -149,6 +158,34 @@ describe("prompt injection: instruction-like text that the schema accepts is car
       });
     }
   }
+
+  test("a derivation's rules version is carried only as the named provenance attribute ww:rulesVersion", () => {
+    for (const text of PLAIN) {
+      const bundle = withUsdValue(golden());
+      const derivation = bundle.derivations[0];
+      assert.ok(derivation, "the derived bundle has a derivation");
+      derivation.rulesVersion = text;
+      assert.match(text, SAFE_TEXT_RE);
+      for (const tool of BUNDLE_TOOLS) {
+        const args = tool === "trace_provenance" ? { bundle, assertionId: "a-usd" } : GOLD_ARGS[tool](bundle);
+        const out = ok(tool, args);
+        assert.deepEqual(unknownFields(tool, out), [], tool);
+        for (const path of occurrences(out, text.slice(0, 12))) assert.ok(tool === "trace_provenance" && path[path.length - 1] === "ww:rulesVersion", `${JSON.stringify(text)} is echoed at ${tool}:${path.join(".")}`);
+      }
+    }
+  });
+
+  test("an invalid contract subject value is not forwarded into the suggested readiness assertion", () => {
+    for (const text of PLAIN) {
+      const bundle = clone(golden());
+      const balance = bundle.assertions.find((x) => x.id === "a-balance");
+      assert.ok(balance);
+      balance.subject = { ...balance.subject, holder: text, token: text };
+      const out = ok("assess_vault_readiness", GOLD_ARGS.assess_vault_readiness(bundle)) as { suggestedAssertion: { subject: Record<string, unknown> } };
+      assert.deepEqual(Object.keys(out.suggestedAssertion.subject).sort(), ["blockHash", "blockNumber", "chainId"]);
+      assert.deepEqual(occurrences(out, text.slice(0, 12)), []);
+    }
+  });
 
   test("an identifier chosen by the caller comes back only in identifier fields, never as a field name or free text", () => {
     for (const text of PLAIN) {

@@ -24801,7 +24801,7 @@ function readinessSubject(balance) {
   if (balance === void 0) return subject;
   for (const key of getPolicy("VAULT_TECHNICAL_READINESS")?.subjectKeys ?? []) {
     const value = Object.hasOwn(balance.subject, key) ? balance.subject[key] : void 0;
-    if (value !== void 0) subject[key] = value;
+    if (typeof value === "string" && (SUBJECT_KEY_RULES[key]?.accepts(value) ?? false)) subject[key] = value;
   }
   return subject;
 }

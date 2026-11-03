@@ -9,8 +9,8 @@ import { createServer as createMcpServer } from "../packages/mcp/src/server.ts";
  * It is off unless `--enable` is passed, binds only to a loopback address (there is no external-bind mode), and
  * requires a per-process bearer token on every request. The token is generated from the operating system's CSPRNG
  * when the process starts, is never read from the environment or a file, is never written to disk, and is shown once
- * on the operator's terminal (stderr). It dies with the process. Host, Origin, method, path, content-type and body-size
- * checks all still apply after authentication.
+ * on the operator's terminal (stderr). It dies with the process. Every request is checked in this order: request-target length,
+ * Host, Origin, token, then route, method, content type and body size, so a caller without the token learns nothing about routes.
  */
 
 const DEFAULT_PORT = 8787;
