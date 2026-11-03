@@ -626,6 +626,56 @@ base(
   );
 }
 
+{
+  // A reused source, observation or derivation id names no record either: three kinds, both record orders, and byte-identical records.
+  const refusedBy = (code: string, cited: string, limitation: LimitationCode): Expectation => ({
+    assertions: {
+      "a-identity": { supportState: "NOT_ESTABLISHED" },
+      "a-balance": { supportState: "NOT_ESTABLISHED" },
+      "a-price": { supportState: "NOT_ESTABLISHED" },
+      [cited]: { supportState: "NOT_ESTABLISHED", limitationsInclude: [limitation] },
+    },
+    violations: { include: [{ invariant: "INV-00", code }] },
+    readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-balance", classification: "NOT_ESTABLISHED" },
+  });
+
+  const rivalSource: Source = { id: "src-chain", kind: "PROVIDER_ENDPOINT", independenceGroup: "grp-chain" };
+  const sourceRefused = refusedBy("DUPLICATE_SOURCE_ID", "a-balance", "DANGLING_REFERENCE");
+  const sourceAfter = golden();
+  sourceAfter.sources.push(clone(rivalSource));
+  base("CNF-017", "conflict", "conflict", "A reused source id is structurally ambiguous: no record wins, the bundle is refused and readiness is not established, with the record that would make the balance established first.", sourceAfter, sourceRefused);
+  const sourceBefore = golden();
+  sourceBefore.sources.unshift(clone(rivalSource));
+  base("CNF-018", "conflict", "conflict", "The same reused source id with the records in the other order gives the same refusal.", sourceBefore, sourceRefused);
+  const sourceIdentical = golden();
+  sourceIdentical.sources.push(S("chain"));
+  base("CNF-019", "conflict", "conflict", "A reused source id is refused even when both records are byte-identical.", sourceIdentical, sourceRefused);
+
+  const rivalReading = balanceObservation({ payload: { balanceAtomic: "999", decimals: "6" } });
+  const readingRefused = refusedBy("DUPLICATE_OBSERVATION_ID", "a-balance", "DANGLING_REFERENCE");
+  const readingAfter = golden();
+  readingAfter.observations.push(clone(rivalReading));
+  base("CNF-020", "conflict", "conflict", "A reused observation id is structurally ambiguous: no record wins, the bundle is refused and readiness is not established, with the reading that agrees with the balance first.", readingAfter, readingRefused);
+  const readingBefore = golden();
+  readingBefore.observations.unshift(clone(rivalReading));
+  base("CNF-021", "conflict", "conflict", "The same reused observation id with the records in the other order gives the same refusal.", readingBefore, readingRefused);
+  const readingIdentical = golden();
+  readingIdentical.observations.push(balanceObservation());
+  base("CNF-022", "conflict", "conflict", "A reused observation id is refused even when both records are byte-identical.", readingIdentical, readingRefused);
+
+  const rivalDerivation = { id: "d-usd", ruleId: "wwdr.usd-value", rulesVersion: "0.1.0-draft", inputAssertionIds: ["a-balance"], outputAssertionId: "a-usd" };
+  const derivationRefused = refusedBy("DUPLICATE_DERIVATION_ID", "a-usd", "DERIVATION_MISSING");
+  const derivationAfter = withUsdValue(golden());
+  derivationAfter.derivations.push(clone(rivalDerivation));
+  base("CNF-023", "conflict", "conflict", "A reused derivation id is structurally ambiguous: no record wins, the bundle is refused and readiness is not established, with the record naming both required inputs first.", derivationAfter, derivationRefused);
+  const derivationBefore = withUsdValue(golden());
+  derivationBefore.derivations.unshift(clone(rivalDerivation));
+  base("CNF-024", "conflict", "conflict", "The same reused derivation id with the records in the other order gives the same refusal.", derivationBefore, derivationRefused);
+  const derivationIdentical = withUsdValue(golden());
+  derivationIdentical.derivations.push(clone(derivationIdentical.derivations[0] as Bundle["derivations"][number]));
+  base("CNF-025", "conflict", "conflict", "A reused derivation id is refused even when both records are byte-identical.", derivationIdentical, derivationRefused);
+}
+
 // --------------------------------------------------------------- authority
 base("AUT-001", "authority", "authority", "retrievedVia = Alchemy does not make Alchemy the authority for chain state: authority is canonical chain state; transport is metadata.", golden(), {
   assertions: { "a-balance": { supportState: "ESTABLISHED", authoritySatisfied: true } },
