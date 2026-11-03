@@ -96,7 +96,7 @@ The local Claude path remains:
 - free of WalletWall-hosted inference or MCP execution;
 - unable to sign, custody, broadcast, trade, or mutate a wallet.
 
-The optional Streamable HTTP / Cloud Run transport is a separate deployment surface. It is not required for Claude Code or Cowork local-plugin use and must not be silently substituted for the local stdio path.
+The optional local Streamable HTTP adapter (`docs/CLAUDE_MANAGED_AGENT.md`) is a separate, user-run surface: off unless started with `--enable`, loopback-only, per-process bearer token. It is not required for Claude Code or Cowork local-plugin use, is in no Claude artifact, and must not be silently substituted for the local stdio path.
 
 ## Release and Directory gates
 
@@ -159,4 +159,4 @@ That repository's CI allows only a fixed set of root entries. A generator change
 
 ## Future hosted Guardian
 
-Claude Managed Agent / hosted Guardian access is a separate lane. It may use the hardened Streamable HTTP transport only after MCP authentication, quotas, production ingress, and the narrow Vault read plane are independently reviewed. Local Claude distribution does not depend on that work.
+Hosted Guardian access is a separate lane and has no code in this repository. The earlier Cloud Run deployment of the HTTP adapter, which required an external bind, is withdrawn. A remotely reachable MCP endpoint needs its own architecture and security review first: a hosted authentication model, quotas, production ingress and the narrow Vault read plane. The local adapter's loopback-only, ephemeral-token design does not extend to a remote listener. Local Claude distribution does not depend on that work.

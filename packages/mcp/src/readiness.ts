@@ -1,6 +1,6 @@
 import type { Bundle, Assertion, LimitationCode, SupportState } from "./schemas.ts";
 import { evidenceDigest } from "./canonical.ts";
-import { RULES_VERSION } from "./registry.ts";
+import { RULES_VERSION, getPolicy } from "./registry.ts";
 import { evaluateBundle, weakest, type AssertionEvaluation, type Evaluation } from "./evaluate.ts";
 
 export const READINESS_RULE_ID = "wwvr.vault-technical-readiness";
@@ -58,6 +58,21 @@ const DESCRIPTIONS = {
 
 function find(evalById: Map<string, AssertionEvaluation>, id: string): AssertionEvaluation | undefined {
   return evalById.get(id);
+}
+
+/**
+ * The suggested readiness assertion carries only the subject keys of its own claim type. The balance assertion's
+ * subject is an open map: any other key it holds is caller-supplied and stays behind, so it is never forwarded into a
+ * result that a host may place in a new bundle.
+ */
+function readinessSubject(balance: Assertion | undefined): Assertion["subject"] {
+  const subject: Assertion["subject"] = {};
+  if (balance === undefined) return subject;
+  for (const key of getPolicy("VAULT_TECHNICAL_READINESS")?.subjectKeys ?? []) {
+    const value = Object.hasOwn(balance.subject, key) ? balance.subject[key] : undefined;
+    if (value !== undefined) subject[key] = value;
+  }
+  return subject;
 }
 
 /**
@@ -127,7 +142,7 @@ export function assessReadiness(
   const limitations = new Set<LimitationCode>(["WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY"]);
   for (const e of [idEval, balEval]) if (e) for (const l of e.limitations) limitations.add(l);
 
-  const subjectBase = balA?.subject ?? {};
+  const subjectBase = readinessSubject(balA);
   const outputId = "readiness-result";
   const derivationId = "readiness-derivation";
   const balancePinned = balEval?.temporality === "PINNED";
