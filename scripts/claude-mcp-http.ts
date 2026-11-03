@@ -16,6 +16,8 @@ import { createServer as createMcpServer } from "../packages/mcp/src/server.ts";
 const DEFAULT_PORT = 8787;
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_URL_LENGTH = 256;
+/** Node enforces the headers and request timeouts only when this sweep runs; its default of 30 seconds would make them 30-second timeouts. */
+const CONNECTIONS_CHECKING_INTERVAL_MS = 1_000;
 /** 32 random bytes = 256 bits, encoded as 43 base64url characters without padding. */
 const TOKEN_BYTES = 32;
 const BEARER_RE = /^Bearer ([A-Za-z0-9_-]{43})$/i;
@@ -262,7 +264,7 @@ function start(): void {
   const tokenBytes = Buffer.from(token, "utf8");
 
   let boundPort = options.port;
-  const httpServer = createHttpServer((req, res) => {
+  const httpServer = createHttpServer({ connectionsCheckingInterval: CONNECTIONS_CHECKING_INTERVAL_MS }, (req, res) => {
     void handleRequest(req, res, requestedHost, boundPort, tokenBytes).catch((error: unknown) => {
       if (res.headersSent) {
         res.destroy();
@@ -277,8 +279,21 @@ function start(): void {
   httpServer.headersTimeout = 5_000;
   httpServer.keepAliveTimeout = 5_000;
   httpServer.maxRequestsPerSocket = 100;
-  httpServer.on("clientError", (_error, socket) => {
-    if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+  // A clientError listener owns closing the socket. A connection that timed out is destroyed once its response is written, or at once
+  // if that write cannot finish because the client has stopped reading: ending it alone leaves a peer that never closes its side
+  // attached to the parser, so the rest of the request could still arrive and run, and the connection would hold its descriptor and
+  // block shutdown. A malformed request is only ended: its sender may still be sending, and destroying a socket with unread bytes
+  // resets the connection, which can lose the response.
+  httpServer.on("clientError", (error: NodeJS.ErrnoException, socket) => {
+    const timedOut = error.code === "ERR_HTTP_REQUEST_TIMEOUT";
+    if (socket.writable) {
+      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n", () => {
+        if (timedOut) socket.destroy();
+      });
+      if (timedOut && socket.writableLength > 0) socket.destroy();
+    } else if (timedOut) {
+      socket.destroy();
+    }
   });
   httpServer.on("error", fatal);
   process.on("uncaughtException", fatal);

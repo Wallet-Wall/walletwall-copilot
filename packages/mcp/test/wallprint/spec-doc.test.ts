@@ -38,7 +38,7 @@ describe("WallPrint specification document", () => {
     assert.ok(flat.includes("UNREPLAYABLE is not INCORRECT"));
   });
 
-  test("reports the address-case behaviour as inherited and unchanged, and names the one module that owns identity", () => {
+  test("reports the address-case behaviour of WallPrint identity as unchanged, and names the one module that owns it", () => {
     assert.ok(flat.includes("packages/mcp/src/wallprint/identity.ts"));
     assert.ok(/does not normalise case/.test(flat));
     assert.ok(/EVIDENCE_PROFILE\.md.*section 11/.test(flat));

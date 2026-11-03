@@ -573,11 +573,11 @@ base(
     readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-balance", classification: "NOT_ESTABLISHED" },
   } satisfies Expectation;
   const holderCase = golden();
-  const lowerHolder = "0xabcdef7890123456789012345678901234567890";
+  const lowerHolder = `0x${"a".repeat(40)}`;
   holderCase.observations = holderCase.observations.map((o) => (o.id === "obs-balance" ? { ...o, subject: { ...o.subject, holder: lowerHolder } } : o));
   holderCase.assertions = holderCase.assertions.map((a) => (a.id === "a-balance" ? { ...a, subject: { ...a.subject, holder: lowerHolder } } : a));
   holderCase.sources.push(chain2());
-  const mixedSubject = { chainId: "1", token: USDC, holder: "0xABCDEF7890123456789012345678901234567890", blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH };
+  const mixedSubject = { chainId: "1", token: USDC, holder: `0x${"A".repeat(40)}`, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH };
   holderCase.observations.push(bal2({ subject: mixedSubject, payload: { balanceAtomic: "999", decimals: "6" } }));
   holderCase.assertions.push(balanceAssertion({ id: "a-balance-2", subject: mixedSubject, value: { balanceAtomic: "999", decimals: "6" }, observationIds: ["obs-balance-2"] }));
   base("CNF-010", "conflict", "conflict", "Address identity is case-insensitive: the same holder spelled in another hex case with a different balance is a conflict.", holderCase, conflicted);

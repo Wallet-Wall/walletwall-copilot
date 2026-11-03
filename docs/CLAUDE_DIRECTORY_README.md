@@ -109,6 +109,10 @@ WalletWall preserves uncertainty rather than smoothing it away.
 - Stale and conflicting evidence remains visible.
 - Source count is not independent corroboration.
 - Transport is not authority.
+- A derived claim gets no support from dependencies about another subject.
+- Hex case does not change an address's identity, so it cannot hide a conflict. Records keep the spelling supplied.
+- A reused assertion ID names no record: no assertion in the bundle is established and readiness is not met, whichever record comes first.
+- `PINNED` does not excuse an observation dated after the evaluation time.
 
 Vault technical readiness is reported exactly as one of:
 

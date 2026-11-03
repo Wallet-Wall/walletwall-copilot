@@ -2,19 +2,21 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { evaluateBundle } from "../../src/evaluate.ts";
 import { checkInvariants } from "../../src/invariants.ts";
-import { sameSubjectIdentity, subjectIdentity, subjectIdentityKeys } from "../../src/wallprint/identity.ts";
-import { EVALUATED_AT, OBSERVED_AT, USDC, clone, golden, identityAssertion } from "../support/builders.ts";
+import { importExternalAssessments } from "../../src/wallprint/assessor-import.ts";
+import { sameSubjectIdentity, subjectIdentity, subjectIdentityKeys, supersessionIdentity } from "../../src/wallprint/identity.ts";
+import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings } from "../../src/wallprint/record.ts";
+import { WALLPRINT_VERSIONS } from "../../src/wallprint/vocabulary.ts";
+import { EVALUATED_AT, OBSERVED_AT, USDC, balanceAssertion, clone, golden, identityAssertion } from "../support/builders.ts";
 
 /**
- * WallPrint subject identity is computed in exactly one place (src/wallprint/identity.ts) and it REPRODUCES the
- * engine's current behaviour: conflict grouping (evaluate.ts) and supersession identity (invariants.ts) compare the
- * exact subject strings, while observation-to-assertion matching folds case for address-like keys (claims.ts).
- * This lane records that behaviour; it does not change it. Case normalisation is a later, explicit semantic decision
- * and must be made here and nowhere else.
+ * WallPrint subject identity is computed in exactly one place (src/wallprint/identity.ts) and compares the exact subject
+ * strings, because a record commits to the spelling it holds. The evidence engine is a different seam: it compares
+ * address-like keys case-insensitively everywhere (src/subject.ts). Normalising case in WallPrint is a later, explicit
+ * semantic decision and must be made here and nowhere else.
  */
 const UPPER_USDC = USDC.toUpperCase().replace("0X", "0x");
 
-describe("WallPrint subject identity: one module, current engine behaviour, no silent case change", () => {
+describe("WallPrint subject identity: one module, exact strings, no silent case change", () => {
   test("the identity key is the policy's subject keys in canonical form, independent of insertion order", () => {
     const a = subjectIdentity("ASSET_IDENTITY", { chainId: "1", address: USDC });
     const b = subjectIdentity("ASSET_IDENTITY", { address: USDC, chainId: "1" });
@@ -39,7 +41,7 @@ describe("WallPrint subject identity: one module, current engine behaviour, no s
     assert.equal(sameSubjectIdentity("ASSET_IDENTITY", { chainId: "1", address: USDC }, { chainId: "1", address: UPPER_USDC }), false);
   });
 
-  test("REGRESSION (address case): the engine does not group case-variant assertions as a conflict, and WallPrint identity agrees", () => {
+  test("the seams differ on purpose: the engine groups case-variant assertions as a conflict, WallPrint identity keeps them apart", () => {
     const b = clone(golden());
     // Same claim, same temporality, same chain; the address differs only by case; the values disagree.
     b.assertions.push(identityAssertion({ id: "a-identity-upper", subject: { chainId: "1", address: UPPER_USDC }, value: { symbol: "USDX", decimals: "6", issuerAuthorityId: "issuer:circle" }, observationIds: ["obs-identity"] }));
@@ -47,22 +49,23 @@ describe("WallPrint subject identity: one module, current engine behaviour, no s
     const lower = ev.assertions.find((e) => e.assertionId === "a-identity");
     const upper = ev.assertions.find((e) => e.assertionId === "a-identity-upper");
     assert.ok(lower && upper);
-    assert.deepEqual(lower.conflictsWith, [], "exact-string grouping: no conflict detected across a case difference");
-    assert.deepEqual(upper.conflictsWith, []);
-    assert.notEqual(upper.supportState, "CONFLICTING");
+    assert.deepEqual(lower.conflictsWith, ["a-identity-upper"], "the engine compares addresses case-insensitively");
+    assert.deepEqual(upper.conflictsWith, ["a-identity"]);
+    assert.equal(upper.supportState, "CONFLICTING");
     assert.equal(sameSubjectIdentity("ASSET_IDENTITY", { chainId: "1", address: USDC }, { chainId: "1", address: UPPER_USDC }), false);
   });
 
-  test("REGRESSION (address case): a supersession across a case difference is reported as an identity mismatch by INV-12", () => {
+  test("the seams differ on purpose: the engine accepts a supersession across a case difference, WallPrint's supersession identity stays exact", () => {
     const b = clone(golden());
     b.assertions.push(identityAssertion({ id: "a-identity-upper", subject: { chainId: "1", address: UPPER_USDC }, assertedAt: EVALUATED_AT }));
     b.supersessions = [{ id: "s-1", supersededAssertionId: "a-identity", supersedingAssertionId: "a-identity-upper", effectiveAt: EVALUATED_AT, reason: "CORRECTED" }];
     const ev = evaluateBundle(b, EVALUATED_AT);
     const violations = checkInvariants(b, ev);
-    assert.ok(violations.some((v) => v.invariant === "INV-12" && v.code === "SUPERSESSION_CLAIM_IDENTITY_MISMATCH"), JSON.stringify(violations));
+    assert.ok(!violations.some((v) => v.code === "SUPERSESSION_CLAIM_IDENTITY_MISMATCH"), JSON.stringify(violations));
+    assert.notEqual(supersessionIdentity("ASSET_IDENTITY", { chainId: "1", address: USDC }), supersessionIdentity("ASSET_IDENTITY", { chainId: "1", address: UPPER_USDC }));
   });
 
-  test("REGRESSION (address case): observation-to-assertion matching DOES fold case (the engine's one case-insensitive seam)", () => {
+  test("REGRESSION (address case): observation-to-assertion matching folds case", () => {
     const b = clone(golden());
     b.assertions = b.assertions.map((a) => (a.id === "a-identity" ? { ...a, subject: { chainId: "1", address: UPPER_USDC } } : a));
     const ev = evaluateBundle(b, EVALUATED_AT);
@@ -70,5 +73,49 @@ describe("WallPrint subject identity: one module, current engine behaviour, no s
     assert.ok(e);
     assert.ok(!e.limitations.includes("SUBJECT_MISMATCH"), "the observation still supports the assertion despite the case difference");
     assert.equal(OBSERVED_AT < EVALUATED_AT, true);
+  });
+});
+
+describe("WallPrint admission does not move with the evidence engine's refusal of a reused assertion id", () => {
+  /**
+   * The engine takes a reused assertion id out of its evidence index. WallPrint's versioned admission rules read the plain
+   * index, because a correction to evaluation must not change what a historical version admits: unique ids remain the
+   * builder's precondition (spec/WALLPRINT.md), so the importer accepts this context and the builder refuses the bundle.
+   */
+  const reused = () => {
+    const b = clone(golden());
+    b.assertions.push(balanceAssertion({ value: { balanceAtomic: "1", decimals: "6" } }));
+    return b;
+  };
+  const envelope = (evidenceRefs: string[]): string =>
+    JSON.stringify({ assessmentImportVersion: "0.1", externalAssessment: { assessor: "acme-labs", assessorRole: "INDEPENDENT_REVIEWER", assessment: "REVIEWED", policy: "acme/review-policy", policyVersion: "1", assessedAt: EVALUATED_AT, evidenceRefs } });
+
+  for (const wallprintVersion of WALLPRINT_VERSIONS) {
+    test(`the importer still accepts a reused id as the focal assertion and as an evidence reference (${wallprintVersion})`, () => {
+      assert.equal(importExternalAssessments([], { bundle: reused(), focalAssertionId: "a-balance", wallprintVersion }).status, "IMPORTED");
+      assert.equal(importExternalAssessments([envelope(["obs-balance"])], { bundle: reused(), focalAssertionId: "a-balance", wallprintVersion }).status, "IMPORTED");
+      assert.equal(importExternalAssessments([envelope(["a-balance"])], { bundle: reused(), focalAssertionId: "a-identity", wallprintVersion }).status, "IMPORTED");
+    });
+
+    test(`the admission rules find nothing new in a reused id (${wallprintVersion})`, () => {
+      const assessment = { assessor: "acme-labs", assessorRole: "INDEPENDENT_REVIEWER", assessment: "REVIEWED", policy: "acme/review-policy", policyVersion: "1", assessedAt: EVALUATED_AT, evidenceRefs: ["a-balance"] } as const;
+      assert.deepEqual(externalAssessmentAdmissionFindings([{ ...assessment, evidenceRefs: [...assessment.evidenceRefs] }], reused(), "a-identity", wallprintVersion), []);
+      assert.deepEqual(externalAssessmentAdmissionFindings([], reused(), "a-balance", wallprintVersion), []);
+    });
+  }
+
+  test("the builder still refuses the bundle for the reason it always has: the ids in its evidence items are not unique", () => {
+    for (const focalAssertionId of ["a-balance", "a-identity"]) {
+      assert.throws(
+        () => buildWallPrintSnapshot({ id: "rec-reused", bundle: reused(), evaluatedAt: EVALUATED_AT, focalAssertionId }),
+        (e: unknown) => {
+          const findings = (e as { findings?: { code: string; path: string }[] }).findings ?? [];
+          assert.ok(findings.some((f) => f.code === "NOT_CANONICAL_ORDER" && f.path === "evidence.items"), JSON.stringify(findings));
+          assert.ok(!findings.some((f) => f.code === "UNKNOWN_FOCAL_ASSERTION"), JSON.stringify(findings));
+          return true;
+        },
+        focalAssertionId,
+      );
+    }
   });
 });

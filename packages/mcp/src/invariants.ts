@@ -3,13 +3,14 @@ import { parseAtomic, parseDecimals, parsePriceScaled18, usdValueScaled18 } from
 import { getPolicy } from "./registry.ts";
 import { assessReadiness, READINESS_RULE_ID } from "./readiness.ts";
 import type { Assertion, Bundle } from "./schemas.ts";
+import { subjectIdentityKey, subjectKeyEqual } from "./subject.ts";
 import {
   ORIGIN_SOURCE_KINDS,
   SUPPORT_RANK,
   evaluateBundle,
-  indexBundle,
-  pick,
+  indexEvidence,
   type AssertionEvaluation,
+  type EvidenceIndex,
   type Evaluation,
   type Violation,
 } from "./evaluate.ts";
@@ -42,7 +43,7 @@ function declaredSupportAtLeast(a: Assertion, rank: number): boolean {
 
 export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violation[] {
   const out: Violation[] = [...evaluation.violations];
-  const idx = indexBundle(bundle);
+  const idx = indexEvidence(bundle);
   const evalById = new Map<string, AssertionEvaluation>(evaluation.assertions.map((e) => [e.assertionId, e]));
   const push = (invariant: Violation["invariant"], code: string, assertionId: string | null): void => {
     out.push({ invariant, code, assertionId });
@@ -121,7 +122,7 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
       if (a.claimType === "TOKEN_USD_VALUE" && !deps.some((dep) => dep.claimType === "TOKEN_USD_PRICE")) {
         push("INV-11", "USD_VALUE_WITHOUT_PRICE_EVIDENCE", a.id);
       }
-      if (d !== undefined && policy?.ruleId === d.ruleId) recompute(bundle, evaluation, a, d.inputAssertionIds, push);
+      if (d !== undefined && policy?.ruleId === d.ruleId) recompute(bundle, idx, evaluation, a, d.inputAssertionIds, push);
     }
 
     if (a.claimType !== "TOKEN_USD_PRICE" && a.claimType !== "TOKEN_USD_VALUE" && a.value !== null) {
@@ -159,10 +160,8 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
     if (supersededIds.has(oldA.id)) push("INV-12", "SUPERSEDED_MULTIPLE_TIMES", oldA.id);
     supersededIds.add(oldA.id);
     const pol = getPolicy(oldA.claimType);
-    const sameIdentity =
-      oldA.claimType === newA.claimType &&
-      canonicalize(pol ? pick(oldA.subject, pol.supersessionKeys) : oldA.subject) ===
-        canonicalize(pol ? pick(newA.subject, pol.supersessionKeys) : newA.subject);
+    const identityOf = (a: Assertion): string => (pol ? subjectIdentityKey(a.subject, pol.supersessionKeys) : canonicalize(a.subject));
+    const sameIdentity = oldA.claimType === newA.claimType && identityOf(oldA) === identityOf(newA);
     if (!sameIdentity) push("INV-12", "SUPERSESSION_CLAIM_IDENTITY_MISMATCH", oldA.id);
     if (Date.parse(newA.assertedAt) <= Date.parse(oldA.assertedAt)) push("INV-12", "SUPERSESSION_NOT_FORWARD_IN_TIME", oldA.id);
   }
@@ -197,13 +196,13 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
 
 function recompute(
   bundle: Bundle,
+  idx: EvidenceIndex,
   evaluation: Evaluation,
   a: Assertion,
   inputIds: readonly string[],
   push: (invariant: Violation["invariant"], code: string, assertionId: string | null) => void,
 ): void {
-  const byId = new Map(bundle.assertions.map((x) => [x.id, x]));
-  const inputs = inputIds.map((id) => byId.get(id)).filter((x): x is Assertion => x !== undefined);
+  const inputs = inputIds.map((id) => idx.assertions.get(id)).filter((x): x is Assertion => x !== undefined);
   const mismatch = (): void => push("INV-00", "RECOMPUTATION_MISMATCH", a.id);
 
   if (a.claimType === "TOKEN_USD_VALUE") {
@@ -211,9 +210,7 @@ function recompute(
     const price = inputs.find((x) => x.claimType === "TOKEN_USD_PRICE");
     if (bal === undefined || price === undefined || a.value === null) return;
     try {
-      const sameToken =
-        bal.subject["chainId"] === price.subject["chainId"] &&
-        String(bal.subject["token"]).toLowerCase() === String(price.subject["token"]).toLowerCase();
+      const sameToken = bal.subject["chainId"] === price.subject["chainId"] && subjectKeyEqual("token", String(bal.subject["token"]), String(price.subject["token"]));
       const atomic = parseAtomic(String(bal.value?.["balanceAtomic"]));
       const decimals = parseDecimals(String(bal.value?.["decimals"]));
       const p = parsePriceScaled18(String(price.value?.["priceUsd"]));

@@ -4,17 +4,18 @@ import { getPolicy } from "../registry.ts";
 import type { ClaimType, FlatRecordValue } from "../schemas.ts";
 
 /**
- * Canonical subject identity for WallPrint, computed in this one module.
+ * Canonical subject identity for WallPrint, computed in this one module: the exact subject strings chosen by the
+ * policy's `subjectKeys` / `supersessionKeys`, serialized with RFC 8785.
  *
- * It reproduces the engine's CURRENT behaviour and changes nothing:
- *   - conflict grouping (evaluate.ts) and supersession identity (invariants.ts) compare the exact subject strings
- *     chosen by the policy's `subjectKeys` / `supersessionKeys`, serialized with RFC 8785;
- *   - only observation-to-assertion matching folds case for address-like keys (claims.ts CASE_INSENSITIVE_SUBJECT_KEYS).
- *
- * ADDRESS CASE: two subjects that differ only in hexadecimal address case are therefore DIFFERENT identities here, as
- * they are in the engine today (claims.ts CASE_NOTE: "supply lowercase hex"). Whether to normalise case is an explicit
- * semantic decision that has not been made. When it is made, change it here and nowhere else; the regression tests in
+ * ADDRESS CASE: two subjects that differ only in hexadecimal address case are DIFFERENT identities here, because a record
+ * commits to the spelling it holds. The evidence engine compares them case-insensitively (subject.ts), so this is no
+ * longer the engine's grouping key: it is WallPrint's own, and it fails closed (a successor that re-spells its
+ * predecessor's subject is refused). Whether WallPrint should normalise case is an explicit semantic decision that has
+ * not been made. When it is made, change it here and nowhere else; the regression tests in
  * test/wallprint/identity.test.ts pin the current behaviour until then.
+ *
+ * The admission rules read evaluate.ts `indexBundle`, not the evidence index, for the same reason: a correction to how
+ * evidence is evaluated must not move what a historical WallPrint version admits.
  */
 
 export function subjectIdentityKeys(claimType: ClaimType): readonly string[] {
@@ -47,7 +48,7 @@ export function sameSubjectIdentity(claimType: ClaimType, a: FlatRecordValue | n
   return x !== null && x === subjectIdentity(claimType, b);
 }
 
-/** The engine's conflict-grouping key: claim type, temporality and exact subject identity. */
+/** WallPrint's exact-string group key: claim type, temporality and exact subject identity. The engine groups conflicts with subject.ts. */
 export function claimGroupKey(claimType: ClaimType, temporality: "CURRENT" | "PINNED", subject: FlatRecordValue | null): string | null {
   const id = subjectIdentity(claimType, subject);
   return id === null ? null : `${claimType}|${temporality}|${id}`;

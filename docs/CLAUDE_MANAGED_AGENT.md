@@ -19,6 +19,7 @@ The adapter is deliberately small:
 - **Per-process bearer token.** At start it draws 32 bytes (256 bits) from the operating system's CSPRNG (`randomBytes` from `node:crypto`) and encodes them as 43 base64url characters. The token is never read from the environment, a file or the command line, never written to disk, never put in a URL, response, error or log, and is not reused: a new process has a new token and the old one is dead. It is printed once, on your terminal (stderr), next to the URL.
 - **One way to present it.** `Authorization: Bearer <token>` (the scheme name is case-insensitive). A missing, wrong, shorter, longer or malformed token, another scheme, or the token in a query string, cookie or other header is refused with a fixed `401`. The comparison is constant-time. A well-formed request with a loopback `Host` and no token gets `401` whatever its path or method, so it learns nothing about routes or methods.
 - **Request validation is layered.** In order: request target at most 256 characters (`414`); the `Host` header must name the listener exactly (`127.0.0.1:<port>`, `[::1]:<port>` or `localhost:<port>`); a browser `Origin` must be the listener's own loopback origin; then the token; then one route, `POST /mcp`, JSON only, body at most 512 KiB (checked on the declared length and while streaming). Every other method is `405`, every other path `404`, malformed JSON `400`. No CORS header is sent, so a web page cannot read a response.
+- **Bounded connections.** While the adapter is listening, a request whose headers have not arrived within 5 seconds of its first byte, or which is not complete within 20 seconds of its first byte, is closed within about a second of that limit, whether or not the client closes its side, and what it sends afterwards is not read. A connection that sends nothing is closed at the same 5 seconds, and an idle keep-alive connection after about 5 seconds. Stopping the adapter ends these checks: a client stalled at that moment can hold the process open until it goes away or the same stop signal arrives again.
 - **Stateless and read-only.** Every POST gets a fresh MCP server and transport; no session ID is issued. It adds no outbound network access, no file access, no signing and no state.
 
 What this protects against, and what it does not:
@@ -56,6 +57,12 @@ For tests or ephemeral local allocation, port `0` is also accepted; the selected
 Use the user's own Anthropic MCP tunnel and route it to the local WalletWall endpoint, configured to send `Authorization: Bearer <token>` with the token this process printed. The tunnel must also send a loopback `Host` header (`127.0.0.1:<port>` or `localhost:<port>`); a tunnel that forwards its public host name is refused with `403`. The token passes through the tunnel provider, so treat it as exposed to them and restart the adapter to rotate it. Then attach that tunnel as an MCP server in the user's Managed Agent configuration. Restarting the adapter issues a new token, so the tunnel's header must be updated.
 
 The tunnel and Claude session belong to that user's Anthropic workspace. WalletWall does not host a public MCP endpoint and does not proxy inference.
+
+The adapter's own tests drive it with a strict Node MCP client. That is useful evidence about the adapter and is not the same as Claude Code or a Managed Agent having been verified against it; no such end-to-end run is on record.
+
+## Troubleshooting
+
+Some local Windows security or network-filtering software may interfere selectively with loopback HTTP paths. Requests to `/mcp` then fail in the client, for example with an invalid chunk size or an invalid HTTP response, while the same adapter still answers another path with a clean `404`. Verify with a strict client, and compare another local path or WSL, before attributing the failure to WalletWall. The stdio transport used by the plugin is not affected.
 
 ## Compatibility change
 

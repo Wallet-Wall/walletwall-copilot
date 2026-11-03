@@ -23919,7 +23919,8 @@ var SUBJECT_KEY_RULES = {
   address: {
     accepts: (v) => ADDRESS_RE.test(v),
     schema: { type: "string", pattern: ADDRESS_RE.source, description: "Token contract address: 0x followed by 40 hex digits." },
-    caseInsensitive: true
+    caseInsensitive: true,
+    sameAs: "token"
   },
   token: {
     accepts: (v) => ADDRESS_RE.test(v),
@@ -23944,7 +23945,7 @@ var SUBJECT_KEY_RULES = {
 var CASE_INSENSITIVE_SUBJECT_KEYS = new Set(
   Object.entries(SUBJECT_KEY_RULES).filter(([, rule]) => rule.caseInsensitive === true).map(([key]) => key)
 );
-var CASE_NOTE = " Matched case-insensitively between an observation and its assertion; conflict grouping and supersession identity compare the exact string, so supply lowercase hex.";
+var CASE_NOTE = " Compared case-insensitively wherever subject identity is compared: observation to assertion, conflict grouping, supersession identity and derived claim to dependency. Records and digests keep the spelling supplied.";
 var VALUE_KEY_RULES = {
   ASSET_IDENTITY: {
     symbol: safeText("Token symbol as published by the issuer or protocol. For an ESTABLISHED identity it must equal the registry symbol. A symbol is never identity on its own."),
@@ -24107,7 +24108,7 @@ function claimContracts(examplesByClaim) {
       derivation: p.derived ? {
         ruleId: p.ruleId,
         requiredDependencyClaimTypes: p.requiredDependencyClaimTypes,
-        linkage: "assertion.derivationId names a bundle derivation whose outputAssertionId is this assertion's id and whose inputAssertionIds name the dependency assertions; assertion.observationIds is empty and assertion.origin is WALLETWALL_DERIVED."
+        linkage: "assertion.derivationId names a bundle derivation whose outputAssertionId is this assertion's id and whose inputAssertionIds name the dependency assertions; assertion.observationIds is empty and assertion.origin is WALLETWALL_DERIVED. assertion.subject must match every dependency's subject on every subject key the two claim types share (an identity's address compares as the token), otherwise the assertion is NOT_ESTABLISHED with SUBJECT_MISMATCH and check_invariants reports it."
       } : null,
       example: examplesByClaim[p.claimType] ?? null
     };
@@ -24121,6 +24122,10 @@ function claimContracts(examplesByClaim) {
       scalarValues: "string, boolean or null. Every evidence-critical value is a string; JSON numbers are rejected by the bundle schema.",
       textPattern: SAFE_TEXT_RE.source,
       maxEntries: LIMITS.recordEntries
+    },
+    bundleRules: {
+      assertionIds: "An assertion id must be unique within a bundle. A reused id names no record, whichever comes first: every assertion in the bundle is NOT_ESTABLISHED, readiness is NOT_ESTABLISHED and check_invariants reports INV-12 DUPLICATE_ASSERTION_ID.",
+      observationTime: "A reading with a value dated after evaluatedAt is OBSERVATION_FROM_FUTURE with unknown freshness and at most PARTIAL support, whether the claim is CURRENT or PINNED."
     },
     diagnostics: {
       limitations: SHAPE_LIMITATIONS,
@@ -24263,7 +24268,43 @@ var EXAMPLE_BY_CLAIM = {
 };
 
 // packages/mcp/src/generated/content.ts
-var SPEC_WWEP_MD = "# WalletWall Evidence Profile 0.1 (WWEP 0.1) \u2014 DRAFT\n\nStatus: **draft, pre-release**. This is a WalletWall-defined profile. It is **not** an industry standard,\nhas not been reviewed outside WalletWall, and makes no claim of interoperability beyond the W3C PROV alignment\ndescribed in section 9.\n\nKey words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119 / RFC 8174 when in capitals.\n\n## 1. Purpose and non-purpose\n\nWWEP defines a structured record of *what evidence was presented, from where, with what authority, and with what\nlimits*, and a deterministic procedure that classifies how well that evidence supports a claim.\n\nWWEP **does not** establish that upstream evidence is true. Every state defined here describes the *sufficiency of\npresented evidence under a published policy*. A state such as `ESTABLISHED` means \"the presented evidence satisfies\nthe policy for this claim type\", never \"this is verified truth\". WWEP also says nothing about arbitrary natural\nlanguage prose produced later by a language model.\n\n## 2. Versions\n\n| Identifier | Value | Meaning |\n| --- | --- | --- |\n| `EvidenceProfileVersion` | `0.1` | The profile version in every bundle (`wwepVersion`). |\n| `RegistryVersion` | `0.2.0` | Version of the bundled asset and chain registry. Record-level, point-in-time verification (see `DATA_SOURCES.md`). |\n| `RulesVersion` | `0.1.0-draft` | Version of the derivation rules (`wwdr.usd-value`, `wwvr.vault-technical-readiness`). |\n\nA bundle MUST declare `wwepVersion: \"0.1\"`. Any other value MUST be rejected. See `VERSIONING.md`.\n\n## 3. Evidence-origin classes\n\nEvery observation and assertion has exactly one origin class.\n\n| Origin | Meaning |\n| --- | --- |\n| `CHAIN_OBSERVED` | A value read from canonical chain state at an identified block. The transport used to read it (RPC, indexer, local node) is recorded separately and carries no authority. |\n| `AUTHORITY_ATTESTED` | A statement published by the issuer or protocol that is the appropriate authority for the claim. |\n| `PROVIDER_OBSERVED` | A value that a third-party provider reports on its own behalf (price feed, labeling, indexed analytics). |\n| `USER_SUPPLIED` | A value supplied by the person using the tool. |\n| `WALLETWALL_DERIVED` | A value computed by a published WalletWall rule from other assertions. |\n\nEach origin corresponds to a fixed set of source kinds (`CHAIN_OBSERVED`\u2192`CHAIN_STATE`,\n`AUTHORITY_ATTESTED`\u2192`ISSUER_PUBLICATION`, `PROVIDER_OBSERVED`\u2192`PROVIDER_ENDPOINT`, `USER_SUPPLIED`\u2192`USER_INPUT`,\n`WALLETWALL_DERIVED`\u2192`WALLETWALL_RULES`). An observation whose source kind does not match its origin MUST NOT\nqualify as evidence of that origin (limitation `ORIGIN_SOURCE_KIND_MISMATCH`, invariant INV-13).\n\n## 4. Data model\n\nAll evidence-critical values are strings. JSON numbers MUST NOT appear in evidence objects. Quantities are\ncanonical atomic-unit decimal strings (section 7). Every object is closed: unknown properties are rejected.\n\n- **Source** \u2014 `{id, kind, authorityId?, transport?{retrievedVia}, independenceGroup?}`. Where evidence came from.\n  `transport.retrievedVia` is metadata only.\n- **Observation** \u2014 `{id, sourceId, origin, observedAt, finality, result, subject, payload}`. One reading.\n  `result` is `VALUE`, `NO_RESULT` or `ERROR`. `NO_RESULT` and `ERROR` carry no value.\n- **Assertion** \u2014 `{id, claimType, origin, temporality, subject, value|null, observationIds, derivationId?,\n  assertedAt, limitations?, declared?}`. A claim about a subject, backed by observations or by a derivation.\n  `temporality` is `CURRENT` (must be fresh) or `PINNED` (a historical point such as a block).\n  `declared` lets an author state the support, freshness, finality and corroboration they *believe* apply; the\n  engine never trusts it and reports any excess as a violation.\n- **Derivation** \u2014 `{id, ruleId, rulesVersion, inputAssertionIds, outputAssertionId}`. A WalletWall rule applied to\n  assertions. Derivations take assertions only, never raw observations.\n- **EvidenceDependency** \u2014 the directed edge `assertion \u2192 input` induced by a derivation's `inputAssertionIds` (and\n  by an assertion's `observationIds`). Dependencies are computed, not stored separately.\n- **Authority** \u2014 the entity or state that may establish a claim type, e.g. `canonical-chain-state`,\n  `issuer-publication`, `walletwall-rules`.\n- **AuthorityPolicy** \u2014 the per-claim-type rules for authority, corroboration, finality, freshness and required\n  dependencies (`authority-policies/policies.json`, see `AUTHORITY_MODEL.md`).\n- **ClaimContract** \u2014 the per-claim-type subject and value shape (required keys and their formats), the observation\n  origins and source kinds that may establish or corroborate the claim, and the observation-to-assertion linkage. An\n  assertion's `subject` and each supporting observation's `subject` share one shape; an assertion's `value` and each\n  supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.\n- **SupportState**, **FreshnessState**, **FinalityState** \u2014 section 5.\n- **Conflict** \u2014 `{id, assertionIds, reason}` declared by an author, or detected by the engine when two\n  non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.\n- **Limitation** \u2014 a code from a closed enumeration attached to a result that explains why it is weaker than it\n  might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).\n- **Supersession** \u2014 `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion\n  replaces an older one; the older assertion stays in the bundle and is reported `SUPERSEDED`.\n- **RegistryVersion**, **RulesVersion**, **EvidenceProfileVersion** \u2014 section 2.\n\n## 5. States\n\nExact semantics are in `SUPPORT_STATES.md`. Summary:\n\n- Support: `ESTABLISHED`, `SUPPORTED`, `PARTIAL`, `CONFLICTING`, `STALE`, `SUPERSEDED`, `UNKNOWN`, `NOT_ESTABLISHED`.\n- Freshness: `CURRENT`, `STALE`, `PINNED`, `UNKNOWN_FRESHNESS`.\n- Finality: `FINALIZED`, `UNFINALIZED`, `UNKNOWN_FINALITY`; `null` when finality does not apply to the claim type.\n\nWhen states are combined across dependencies the **weakest** member wins, in this order from strongest to weakest:\n`ESTABLISHED > SUPPORTED > PARTIAL > STALE > SUPERSEDED > UNKNOWN > CONFLICTING > NOT_ESTABLISHED`.\n\n## 6. Mandatory evidence invariants\n\nThese are enforced by `check_invariants` and by executable conformance tests. Each has an identifier.\n\n1. **INV-01** `NO_SOURCE \u2192 NO_FACT`. An assertion with no observation and no derivation MUST NOT carry a value or be\n   presented as `PARTIAL` or stronger.\n2. **INV-02** `STALE` MUST NOT satisfy `CURRENT`.\n3. **INV-03** `CONFLICTING` MUST NOT satisfy `ESTABLISHED`.\n4. **INV-04** `NO_RESULT` MUST NOT become `ZERO`.\n5. **INV-05** `UNKNOWN` MUST NOT become `FALSE`.\n6. **INV-06** `WALLETWALL_DERIVED` MUST NOT masquerade as upstream authority.\n7. **INV-07** Processing evidence MUST NOT increase the authority of its inputs.\n8. **INV-08** Duplicate evidence MUST NOT increase independent corroboration.\n9. **INV-09** Multiple provider endpoints MUST NOT automatically imply independent authority.\n10. **INV-10** Derived results retain the limitations of their dependencies.\n11. **INV-11** Token quantity MUST NOT silently become USD value without explicit price evidence.\n12. **INV-12** Historical assertions are superseded, never silently rewritten.\n13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply\n    `authority = Alchemy` for Ethereum state.\n\n**INV-00** (engine rule) \u2014 declared states MUST NOT exceed states computed by the published rules.\n\n## 7. Canonicalization and digests\n\nEvidence objects are serialized with the **RFC 8785 JSON Canonicalization Scheme** and hashed with **SHA-256**.\n`JSON.stringify` output MUST NOT be hashed. The implementation additionally rejects lone surrogates (I-JSON),\nnon-plain objects and every JSON number in evidence objects.\n\nEvidence-critical quantities are canonical atomic-unit decimal strings matching `^(0|[1-9][0-9]{0,77})$` and not\nexceeding `2^256 \u2212 1`. Decimals are strings matching `^(0|[1-9][0-9]?)$` and at most 36. Arithmetic uses `BigInt`.\nDecimal renderings are exact and unrounded. JavaScript `Number` MUST NOT hold a token balance.\n\nTwo digests are defined for an observation: the **evidence digest** (canonical form of the whole observation) and the\n**content digest** (canonical form of `{result, subject, payload}`), used to detect duplicate evidence.\n\n## 8. Evaluation\n\nEvaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rules)`. The evaluation time is an\nexplicit input; the engine never reads a clock. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and\n`SUPPORT_STATES.md`. In outline:\n\n1. Reject any bundle that fails the closed schema.\n2. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.\n3. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively).\n4. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations.\n5. Independently check the invariants and report violations without mutating results.\n\nA shape failure is an evaluation state, not a schema rejection: an assertion whose subject or value, or whose supporting\nobservation's subject or payload, does not meet the claim contract is reported `NOT_ESTABLISHED` with the limitation\n`INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`. Each such limitation carries a structured\n`diagnostics` entry naming the record checked, the required keys and the missing, invalid, unexpected or mismatched keys.\nDiagnostics are deterministic and bounded (one entry per distinct observation), never include record values (only\nobservation ids already present in the evaluation), and report key names outside the contract vocabulary as `*`. The\nlimitation codes are the stable machine-facing reason; diagnostics only explain them.\n\n## 9. Provenance alignment\n\n`trace_provenance` emits a graph shaped like W3C PROV-JSON: observations and assertions are `entity`, derivations are\n`activity`, sources and the WalletWall rule engine are `agent`; relations use `wasDerivedFrom`, `wasAttributedTo`,\n`wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full\nimplementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced.\n\n## 10. Readiness terminology\n\nWWEP defines `VAULT_TECHNICAL_READINESS`, never a generic `READY`. Its values are `CRITERIA_MET`,\n`CRITERIA_NOT_MET` and `NOT_ESTABLISHED`. It does **not** establish investment merit, solvency, creditworthiness,\nlegal status, regulatory compliance, absence of fraud, or future performance.\n\n## 11. Known limitations of 0.1\n\n- Evidence is evaluated as presented. The engine cannot verify that a `CHAIN_OBSERVED` reading was faithfully\n  retrieved (`TRANSPORT_FIDELITY_NOT_VERIFIED` is always attached).\n- Registry content is verified only at a point in time (`REGISTRY_VERIFIED_POINT_IN_TIME`); later changes to a contract are not observed.\n- Address checksums (EIP-55) are not verified; addresses are compared case-insensitively.\n- No live providers exist; all evidence is supplied by the caller.\n- Only five claim types are defined: `ASSET_IDENTITY`, `TOKEN_BALANCE_AT_BLOCK`, `TOKEN_USD_PRICE`,\n  `TOKEN_USD_VALUE`, `VAULT_TECHNICAL_READINESS`.\n";
+var SPEC_WWEP_MD = "# WalletWall Evidence Profile 0.1 (WWEP 0.1) \u2014 DRAFT\n\nStatus: **draft, pre-release**. This is a WalletWall-defined profile. It is **not** an industry standard,\nhas not been reviewed outside WalletWall, and makes no claim of interoperability beyond the W3C PROV alignment\ndescribed in section 9.\n\nKey words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119 / RFC 8174 when in capitals.\n\n## 1. Purpose and non-purpose\n\nWWEP defines a structured record of *what evidence was presented, from where, with what authority, and with what\nlimits*, and a deterministic procedure that classifies how well that evidence supports a claim.\n\nWWEP **does not** establish that upstream evidence is true. Every state defined here describes the *sufficiency of\npresented evidence under a published policy*. A state such as `ESTABLISHED` means \"the presented evidence satisfies\nthe policy for this claim type\", never \"this is verified truth\". WWEP also says nothing about arbitrary natural\nlanguage prose produced later by a language model.\n\n## 2. Versions\n\n| Identifier | Value | Meaning |\n| --- | --- | --- |\n| `EvidenceProfileVersion` | `0.1` | The profile version in every bundle (`wwepVersion`). |\n| `RegistryVersion` | `0.2.0` | Version of the bundled asset and chain registry. Record-level, point-in-time verification (see `DATA_SOURCES.md`). |\n| `RulesVersion` | `0.1.0-draft` | Version of the derivation rules (`wwdr.usd-value`, `wwvr.vault-technical-readiness`). |\n\nA bundle MUST declare `wwepVersion: \"0.1\"`. Any other value MUST be rejected. See `VERSIONING.md`.\n\n## 3. Evidence-origin classes\n\nEvery observation and assertion has exactly one origin class.\n\n| Origin | Meaning |\n| --- | --- |\n| `CHAIN_OBSERVED` | A value read from canonical chain state at an identified block. The transport used to read it (RPC, indexer, local node) is recorded separately and carries no authority. |\n| `AUTHORITY_ATTESTED` | A statement published by the issuer or protocol that is the appropriate authority for the claim. |\n| `PROVIDER_OBSERVED` | A value that a third-party provider reports on its own behalf (price feed, labeling, indexed analytics). |\n| `USER_SUPPLIED` | A value supplied by the person using the tool. |\n| `WALLETWALL_DERIVED` | A value computed by a published WalletWall rule from other assertions. |\n\nEach origin corresponds to a fixed set of source kinds (`CHAIN_OBSERVED`\u2192`CHAIN_STATE`,\n`AUTHORITY_ATTESTED`\u2192`ISSUER_PUBLICATION`, `PROVIDER_OBSERVED`\u2192`PROVIDER_ENDPOINT`, `USER_SUPPLIED`\u2192`USER_INPUT`,\n`WALLETWALL_DERIVED`\u2192`WALLETWALL_RULES`). An observation whose source kind does not match its origin MUST NOT\nqualify as evidence of that origin (limitation `ORIGIN_SOURCE_KIND_MISMATCH`, invariant INV-13).\n\n## 4. Data model\n\nAll evidence-critical values are strings. JSON numbers MUST NOT appear in evidence objects. Quantities are\ncanonical atomic-unit decimal strings (section 7). Every object is closed: unknown properties are rejected. The one\nexception is the bounded open maps `subject`, `value` and `payload`, which accept keys outside the claim contract and\nkeep them in the record's digest; the claim contract says how they are treated.\n\n- **Source** \u2014 `{id, kind, authorityId?, transport?{retrievedVia}, independenceGroup?}`. Where evidence came from.\n  `transport.retrievedVia` is metadata only.\n- **Observation** \u2014 `{id, sourceId, origin, observedAt, finality, result, subject, payload}`. One reading.\n  `result` is `VALUE`, `NO_RESULT` or `ERROR`. `NO_RESULT` and `ERROR` carry no value.\n- **Assertion** \u2014 `{id, claimType, origin, temporality, subject, value|null, observationIds, derivationId?,\n  assertedAt, limitations?, declared?}`. A claim about a subject, backed by observations or by a derivation.\n  `temporality` is `CURRENT` (must be fresh) or `PINNED` (a historical point such as a block).\n  `declared` lets an author state the support, freshness, finality and corroboration they *believe* apply; the\n  engine never trusts it and reports any excess as a violation. An assertion id MUST be unique within a bundle\n  (section 8).\n- **Derivation** \u2014 `{id, ruleId, rulesVersion, inputAssertionIds, outputAssertionId}`. A WalletWall rule applied to\n  assertions. Derivations take assertions only, never raw observations. A derived assertion is about what its inputs\n  are about: its `subject` MUST match every input's `subject` on the subject keys their claim types share, where an\n  identity's `address` compares as the `token`.\n- **EvidenceDependency** \u2014 the directed edge `assertion \u2192 input` induced by a derivation's `inputAssertionIds` (and\n  by an assertion's `observationIds`). Dependencies are computed, not stored separately.\n- **Authority** \u2014 the entity or state that may establish a claim type, e.g. `canonical-chain-state`,\n  `issuer-publication`, `walletwall-rules`.\n- **AuthorityPolicy** \u2014 the per-claim-type rules for authority, corroboration, finality, freshness and required\n  dependencies (`authority-policies/policies.json`, see `AUTHORITY_MODEL.md`).\n- **ClaimContract** \u2014 the per-claim-type subject and value shape (required keys and their formats), the observation\n  origins and source kinds that may establish or corroborate the claim, and the observation-to-assertion linkage. An\n  assertion's `subject` and each supporting observation's `subject` share one shape; an assertion's `value` and each\n  supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.\n- **SupportState**, **FreshnessState**, **FinalityState** \u2014 section 5.\n- **Conflict** \u2014 `{id, assertionIds, reason}` declared by an author, or detected by the engine when two\n  non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.\n- **Limitation** \u2014 a code from a closed enumeration attached to a result that explains why it is weaker than it\n  might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).\n- **Supersession** \u2014 `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion\n  replaces an older one; the older assertion stays in the bundle and is reported `SUPERSEDED`.\n- **RegistryVersion**, **RulesVersion**, **EvidenceProfileVersion** \u2014 section 2.\n\n## 5. States\n\nExact semantics are in `SUPPORT_STATES.md`. Summary:\n\n- Support: `ESTABLISHED`, `SUPPORTED`, `PARTIAL`, `CONFLICTING`, `STALE`, `SUPERSEDED`, `UNKNOWN`, `NOT_ESTABLISHED`.\n- Freshness: `CURRENT`, `STALE`, `PINNED`, `UNKNOWN_FRESHNESS`.\n- Finality: `FINALIZED`, `UNFINALIZED`, `UNKNOWN_FINALITY`; `null` when finality does not apply to the claim type.\n\nWhen states are combined across dependencies the **weakest** member wins, in this order from strongest to weakest:\n`ESTABLISHED > SUPPORTED > PARTIAL > STALE > SUPERSEDED > UNKNOWN > CONFLICTING > NOT_ESTABLISHED`.\n\n## 6. Mandatory evidence invariants\n\nThese are enforced by `check_invariants` and by executable conformance tests. Each has an identifier.\n\n1. **INV-01** `NO_SOURCE \u2192 NO_FACT`. An assertion with no observation and no derivation MUST NOT carry a value or be\n   presented as `PARTIAL` or stronger.\n2. **INV-02** `STALE` MUST NOT satisfy `CURRENT`.\n3. **INV-03** `CONFLICTING` MUST NOT satisfy `ESTABLISHED`.\n4. **INV-04** `NO_RESULT` MUST NOT become `ZERO`.\n5. **INV-05** `UNKNOWN` MUST NOT become `FALSE`.\n6. **INV-06** `WALLETWALL_DERIVED` MUST NOT masquerade as upstream authority.\n7. **INV-07** Processing evidence MUST NOT increase the authority of its inputs.\n8. **INV-08** Duplicate evidence MUST NOT increase independent corroboration.\n9. **INV-09** Multiple provider endpoints MUST NOT automatically imply independent authority.\n10. **INV-10** Derived results retain the limitations of their dependencies.\n11. **INV-11** Token quantity MUST NOT silently become USD value without explicit price evidence.\n12. **INV-12** Historical assertions are superseded, never silently rewritten. A reused assertion id is reported here\n    as `DUPLICATE_ASSERTION_ID`.\n13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply\n    `authority = Alchemy` for Ethereum state.\n\n**INV-00** (engine rule) \u2014 declared states MUST NOT exceed states computed by the published rules. A derived assertion\nwhose subject differs from its inputs is reported here as `SUBJECT_MISMATCH`, and one whose subject fails the claim\ncontract as `INVALID_SUBJECT`.\n\n## 7. Canonicalization and digests\n\nEvidence objects are serialized with the **RFC 8785 JSON Canonicalization Scheme** and hashed with **SHA-256**.\n`JSON.stringify` output MUST NOT be hashed. The implementation additionally rejects lone surrogates (I-JSON),\nnon-plain objects and every JSON number in evidence objects.\n\nEvidence-critical quantities are canonical atomic-unit decimal strings matching `^(0|[1-9][0-9]{0,77})$` and not\nexceeding `2^256 \u2212 1`. Decimals are strings matching `^(0|[1-9][0-9]?)$` and at most 36. Arithmetic uses `BigInt`.\nDecimal renderings are exact and unrounded. JavaScript `Number` MUST NOT hold a token balance.\n\nTwo digests are defined for an observation: the **evidence digest** (canonical form of the whole observation) and the\n**content digest** (canonical form of `{result, subject, payload}`), used to detect duplicate evidence.\n\n## 8. Evaluation\n\nEvaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rules)`. The evaluation time is an\nexplicit input; the engine never reads a clock. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and\n`SUPPORT_STATES.md`. In outline:\n\n1. Reject any bundle that fails the closed schema.\n2. Refuse structural ambiguity. A reused assertion id names no record, whichever record comes first, so nothing depends\n   on record order: every assertion in the bundle is `NOT_ESTABLISHED`, the reused id itself with `NO_SOURCE`; a reference\n   to it resolves to nothing; every readiness criterion is `INDETERMINATE` (`DUPLICATE_ASSERTION_ID`), so readiness is\n   `NOT_ESTABLISHED`; `trace_provenance` finds no such target; `check_invariants` reports INV-12.\n3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.\n4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived\n   assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject\n   differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`.\n5. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations. A reading with a\n   value dated after `evaluatedAt` is `OBSERVATION_FROM_FUTURE` with `UNKNOWN_FRESHNESS` and at most `PARTIAL` support,\n   whether the claim is `CURRENT` or `PINNED`. A claim derived from it inherits the limitation and the cap, and a `PINNED`\n   one reports `UNKNOWN_FRESHNESS`: `PINNED` means a historical point, not a reading from after the evaluation time. An\n   assertion already refused on its subject or value, or whose readings disagree, keeps that state and does not reach this check.\n6. Independently check the invariants and report violations without mutating results.\n\nA shape failure is an evaluation state, not a schema rejection: an assertion whose subject or value, or whose supporting\nobservation's subject or payload, does not meet the claim contract is reported `NOT_ESTABLISHED` with the limitation\n`INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`. Each such limitation carries a structured\n`diagnostics` entry naming the record checked, the required keys and the missing, invalid, unexpected or mismatched keys.\nDiagnostics are deterministic and bounded (one entry per distinct observation), never include record values (only\nobservation ids already present in the evaluation), and report key names outside the contract vocabulary as `*`. The\nlimitation codes are the stable machine-facing reason; diagnostics only explain them.\n\n## 9. Provenance alignment\n\n`trace_provenance` emits a graph shaped like W3C PROV-JSON: observations and assertions are `entity`, derivations are\n`activity`, sources and the WalletWall rule engine are `agent`; relations use `wasDerivedFrom`, `wasAttributedTo`,\n`wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full\nimplementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced.\n\n## 10. Readiness terminology\n\nWWEP defines `VAULT_TECHNICAL_READINESS`, never a generic `READY`. Its values are `CRITERIA_MET`,\n`CRITERIA_NOT_MET` and `NOT_ESTABLISHED`. It does **not** establish investment merit, solvency, creditworthiness,\nlegal status, regulatory compliance, absence of fraud, or future performance.\n\n## 11. Known limitations of 0.1\n\n- Evidence is evaluated as presented. The engine cannot verify that a `CHAIN_OBSERVED` reading was faithfully\n  retrieved (`TRANSPORT_FIDELITY_NOT_VERIFIED` is always attached).\n- Registry content is verified only at a point in time (`REGISTRY_VERIFIED_POINT_IN_TIME`); later changes to a contract are not observed.\n- Address checksums (EIP-55) are not verified. Addresses and block hashes are compared case-insensitively wherever\n  subject identity is compared: observation to assertion, conflict grouping, supersession identity, derived claim to\n  input, and the readiness and USD rules. Comparison is not rewriting: records, digests and suggested assertions keep the\n  spelling supplied, and values are never folded.\n- `blockHash` is part of a balance claim's subject, so two readings at one height with different hashes are two\n  fork-specific claims, not a conflict. Whether WWEP should model state at canonical height N or state in exact block H\n  is an open authority and finality decision.\n- No live providers exist; all evidence is supplied by the caller.\n- Only five claim types are defined: `ASSET_IDENTITY`, `TOKEN_BALANCE_AT_BLOCK`, `TOKEN_USD_PRICE`,\n  `TOKEN_USD_VALUE`, `VAULT_TECHNICAL_READINESS`.\n";
+
+// packages/mcp/src/subject.ts
+var comparisonForm = (key, value) => typeof value === "string" && CASE_INSENSITIVE_SUBJECT_KEYS.has(key) ? value.toLowerCase() : value;
+function subjectKeyEqual(key, a, b) {
+  return comparisonForm(key, a) === comparisonForm(key, b);
+}
+function subjectMatches(a, b, keys) {
+  for (const k of keys) {
+    const x = a[k];
+    const y = b[k];
+    if (typeof x !== "string" || typeof y !== "string") return false;
+    if (!subjectKeyEqual(k, x, y)) return false;
+  }
+  return true;
+}
+function subjectIdentityKey(subject, keys) {
+  const form = {};
+  for (const k of keys) {
+    const v = subject[k];
+    if (v === void 0) return canonicalize(null);
+    form[k] = comparisonForm(k, v);
+  }
+  return canonicalize(form);
+}
+var subjectRole = (key) => SUBJECT_KEY_RULES[key]?.sameAs ?? key;
+function dependencySubjectMismatches(derived2, derivedKeys, dependency, dependencyKeys) {
+  const mismatched = [];
+  for (const key of derivedKeys) {
+    const dependencyKey = dependencyKeys.find((k) => subjectRole(k) === subjectRole(key));
+    if (dependencyKey === void 0) continue;
+    const a = derived2[key];
+    const b = dependency[dependencyKey];
+    if (typeof a !== "string" || typeof b !== "string" || !subjectKeyEqual(key, a, b)) mismatched.push(key);
+  }
+  return mismatched;
+}
 
 // packages/mcp/src/evaluate.ts
 var SUPPORT_RANK = {
@@ -24311,6 +24352,14 @@ function indexBundle(bundle) {
     duplicateIds
   };
 }
+function indexEvidence(bundle) {
+  const index = indexBundle(bundle);
+  const byId = /* @__PURE__ */ new Map();
+  for (const a of bundle.assertions) byId.set(a.id, [...byId.get(a.id) ?? [], a]);
+  const ambiguousAssertions = new Map([...byId].filter(([, records]) => records.length > 1));
+  for (const id of ambiguousAssertions.keys()) index.assertions.delete(id);
+  return { ...index, ambiguousAssertions };
+}
 function pick2(rec, keys) {
   if (rec === null) return null;
   const out = {};
@@ -24323,18 +24372,6 @@ function pick2(rec, keys) {
 }
 function sameCanonical(a, b) {
   return canonicalize(a) === canonicalize(b);
-}
-function subjectKeyEqual(key, a, b) {
-  return CASE_INSENSITIVE_SUBJECT_KEYS.has(key) ? a.toLowerCase() === b.toLowerCase() : a === b;
-}
-function subjectMatches(obsSubject, assertionSubject, keys) {
-  for (const k of keys) {
-    const a = obsSubject[k];
-    const b = assertionSubject[k];
-    if (typeof a !== "string" || typeof b !== "string") return false;
-    if (!subjectKeyEqual(k, a, b)) return false;
-  }
-  return true;
 }
 function subjectMismatchDiagnostic(o, a, keys) {
   const mismatchedKeys = [];
@@ -24368,7 +24405,7 @@ function emptyCore(policy) {
   };
 }
 function evaluateBundle(bundle, evaluatedAt) {
-  const idx = indexBundle(bundle);
+  const idx = indexEvidence(bundle);
   const evalMs = Date.parse(evaluatedAt);
   const violations = [...idx.duplicateIds];
   const supersededBy = /* @__PURE__ */ new Map();
@@ -24393,7 +24430,7 @@ function evaluateBundle(bundle, evaluatedAt) {
   for (const a of idx.assertions.values()) {
     if (supersededBy.has(a.id)) continue;
     const policy = getPolicy(a.claimType);
-    const subjectKey = canonicalize(policy ? pick2(a.subject, policy.subjectKeys) : a.subject);
+    const subjectKey = policy ? subjectIdentityKey(a.subject, policy.subjectKeys) : canonicalize(a.subject);
     const key = `${a.claimType}|${a.temporality}|${subjectKey}`;
     const arr = groups.get(key) ?? [];
     arr.push(a);
@@ -24449,6 +24486,7 @@ function evaluateBundle(bundle, evaluatedAt) {
       support = "CONFLICTING";
       limitations.add(conflictCause.get(a.id) ?? "CONFLICT_DETECTED");
     }
+    if (idx.ambiguousAssertions.size > 0) support = "NOT_ESTABLISHED";
     const result = {
       assertionId: a.id,
       claimType: a.claimType,
@@ -24666,26 +24704,24 @@ function evaluateBundle(bundle, evaluatedAt) {
     }
     if (a.claimType === "TOKEN_USD_PRICE") lim.add("PRICE_IS_PROVIDER_OBSERVATION");
     support = weakest([support, cap]);
-    if (a.temporality === "PINNED") {
+    let newest = Number.NEGATIVE_INFINITY;
+    for (const o of valueObs) newest = Math.max(newest, Date.parse(o.observedAt));
+    if (newest > evalMs) {
+      core.freshness = "UNKNOWN_FRESHNESS";
+      lim.add("OBSERVATION_FROM_FUTURE");
+    } else if (a.temporality === "PINNED") {
       core.freshness = "PINNED";
+    } else if (policy.maxAgeSeconds === null) {
+      core.freshness = "UNKNOWN_FRESHNESS";
+      lim.add("FRESHNESS_UNKNOWN");
+    } else if ((evalMs - newest) / 1e3 > policy.maxAgeSeconds) {
+      core.freshness = "STALE";
+      lim.add("STALE_EVIDENCE");
     } else {
-      let newest = Number.NEGATIVE_INFINITY;
-      for (const o of valueObs) newest = Math.max(newest, Date.parse(o.observedAt));
-      if (newest > evalMs) {
-        core.freshness = "UNKNOWN_FRESHNESS";
-        lim.add("OBSERVATION_FROM_FUTURE");
-      } else if (policy.maxAgeSeconds === null) {
-        core.freshness = "UNKNOWN_FRESHNESS";
-        lim.add("FRESHNESS_UNKNOWN");
-      } else if ((evalMs - newest) / 1e3 > policy.maxAgeSeconds) {
-        core.freshness = "STALE";
-        lim.add("STALE_EVIDENCE");
-      } else {
-        core.freshness = "CURRENT";
-      }
-      if (core.freshness === "STALE") support = weakest([support, "STALE"]);
-      if (core.freshness === "UNKNOWN_FRESHNESS") support = weakest([support, "PARTIAL"]);
+      core.freshness = "CURRENT";
     }
+    if (core.freshness === "STALE") support = weakest([support, "STALE"]);
+    if (core.freshness === "UNKNOWN_FRESHNESS") support = weakest([support, "PARTIAL"]);
     core.support = support;
     return core;
   };
@@ -24703,6 +24739,7 @@ function evaluateBundle(bundle, evaluatedAt) {
       return core;
     }
     const deps = [];
+    const mismatchedKeys = /* @__PURE__ */ new Set();
     for (const id of d.inputAssertionIds) {
       const dep = idx.assertions.get(id);
       if (dep === void 0) {
@@ -24710,6 +24747,7 @@ function evaluateBundle(bundle, evaluatedAt) {
         violations.push({ invariant: "INV-00", code: "DANGLING_REFERENCE", assertionId: a.id });
         continue;
       }
+      for (const k of dependencySubjectMismatches(a.subject, policy.subjectKeys, dep.subject, getPolicy(dep.claimType)?.subjectKeys ?? [])) mismatchedKeys.add(k);
       deps.push(evalAssertion(dep));
     }
     core.assertionIds = deps.map((x) => x.assertionId);
@@ -24724,6 +24762,30 @@ function evaluateBundle(bundle, evaluatedAt) {
         lim.add("MISSING_REQUIRED_DEPENDENCY");
         return core;
       }
+    }
+    if (!subjectValid(a.subject, policy.subjectKeys)) {
+      lim.add("INVALID_SUBJECT");
+      core.diagnostics.push({
+        limitation: "INVALID_SUBJECT",
+        record: "ASSERTION_SUBJECT",
+        observationId: null,
+        ...diagnoseRecord(a.subject, SUBJECT_KEY_RULES, policy.subjectKeys),
+        mismatchedKeys: []
+      });
+      violations.push({ invariant: "INV-00", code: "INVALID_SUBJECT", assertionId: a.id });
+      return core;
+    }
+    if (mismatchedKeys.size > 0) {
+      lim.add("SUBJECT_MISMATCH");
+      core.diagnostics.push({
+        limitation: "SUBJECT_MISMATCH",
+        record: "ASSERTION_SUBJECT",
+        observationId: null,
+        ...diagnoseRecord(a.subject, SUBJECT_KEY_RULES, policy.subjectKeys),
+        mismatchedKeys: policy.subjectKeys.filter((k) => mismatchedKeys.has(k))
+      });
+      violations.push({ invariant: "INV-00", code: "SUBJECT_MISMATCH", assertionId: a.id });
+      return core;
     }
     const supports = [];
     let anyStale = false;
@@ -24745,7 +24807,10 @@ function evaluateBundle(bundle, evaluatedAt) {
     core.finality = finalities.length > 0 ? weakestFinality(finalities) : null;
     core.authoritySatisfied = true;
     const depFresh = deps.map((x) => x.freshnessState);
-    if (a.temporality === "PINNED") {
+    if (a.temporality === "PINNED" && deps.some((x) => x.limitations.includes("OBSERVATION_FROM_FUTURE"))) {
+      core.freshness = "UNKNOWN_FRESHNESS";
+      support = weakest([support, "PARTIAL"]);
+    } else if (a.temporality === "PINNED") {
       core.freshness = "PINNED";
     } else if (anyStale || depFresh.includes("STALE")) {
       core.freshness = "STALE";
@@ -24763,7 +24828,18 @@ function evaluateBundle(bundle, evaluatedAt) {
     core.support = support;
     return core;
   };
-  const results = [...idx.assertions.values()].map(evalAssertion).sort((x, y) => x.assertionId < y.assertionId ? -1 : 1);
+  const evalAmbiguous = (records) => {
+    const ordered = [...records].sort((x, y) => {
+      const [cx, cy] = [canonicalize(x), canonicalize(y)];
+      return cx < cy ? -1 : cx > cy ? 1 : 0;
+    });
+    const label = ordered[0];
+    const policy = getPolicy(label.claimType);
+    const core = emptyCore(policy);
+    core.limitations.add("NO_SOURCE");
+    return { ...finish(label, policy, core, true), digest: evidenceDigest(ordered) };
+  };
+  const results = [...[...idx.assertions.values()].map(evalAssertion), ...[...idx.ambiguousAssertions.values()].map(evalAmbiguous)].sort((x, y) => x.assertionId < y.assertionId ? -1 : 1);
   return {
     evaluatedAt,
     bundleDigest: evidenceDigest(bundle),
@@ -24807,7 +24883,7 @@ function readinessSubject(balance) {
 }
 function assessReadiness(bundle, evaluation, identityAssertionId, balanceAssertionId) {
   const evalById = new Map(evaluation.assertions.map((e) => [e.assertionId, e]));
-  const aById = new Map(bundle.assertions.map((a) => [a.id, a]));
+  const { assertions: aById, ambiguousAssertions } = indexEvidence(bundle);
   const idEval = find(evalById, identityAssertionId);
   const balEval = find(evalById, balanceAssertionId);
   const idA = aById.get(identityAssertionId);
@@ -24817,7 +24893,9 @@ function assessReadiness(bundle, evaluation, identityAssertionId, balanceAsserti
   const add = (id, outcome, reason) => {
     criteria.push({ id, description: DESCRIPTIONS[id], outcome, reason });
   };
-  if (!typed || !idA || !balA || !idEval || !balEval) {
+  if (ambiguousAssertions.size > 0) {
+    for (const id of Object.keys(DESCRIPTIONS)) add(id, "INDETERMINATE", "DUPLICATE_ASSERTION_ID");
+  } else if (!typed || !idA || !balA || !idEval || !balEval) {
     for (const id of Object.keys(DESCRIPTIONS)) {
       add(id, "INDETERMINATE", "REQUIRED_INPUT_ASSERTION_MISSING_OR_WRONG_CLAIM_TYPE");
     }
@@ -24831,7 +24909,7 @@ function assessReadiness(bundle, evaluation, identityAssertionId, balanceAsserti
     const sameChain = idA.subject["chainId"] === balA.subject["chainId"];
     const idAddr = idA.subject["address"];
     const balToken = balA.subject["token"];
-    const sameToken = typeof idAddr === "string" && typeof balToken === "string" && idAddr.toLowerCase() === balToken.toLowerCase();
+    const sameToken = typeof idAddr === "string" && typeof balToken === "string" && subjectKeyEqual("token", idAddr, balToken);
     add("C3", sameChain && sameToken ? "MET" : "NOT_MET", sameChain && sameToken ? "SUBJECT_CONSISTENT" : "SUBJECT_INCONSISTENT");
     const idDec = idA.value?.["decimals"];
     const balDec = balA.value?.["decimals"];
@@ -24839,7 +24917,7 @@ function assessReadiness(bundle, evaluation, identityAssertionId, balanceAsserti
     else add("C4", idDec === balDec ? "MET" : "NOT_MET", idDec === balDec ? "DECIMALS_CONSISTENT" : "DECIMALS_INCONSISTENT");
     const bad2 = (e) => e.supportState === "CONFLICTING" || e.supportState === "SUPERSEDED" || e.conflictsWith.length > 0;
     add("C5", bad2(idEval) || bad2(balEval) ? "INDETERMINATE" : "MET", bad2(idEval) || bad2(balEval) ? "CONFLICT_OR_SUPERSESSION" : "NO_CONFLICT");
-    const freshOk = (e) => e.temporality === "PINNED" || e.freshnessState === "CURRENT";
+    const freshOk = (e) => !e.limitations.includes("OBSERVATION_FROM_FUTURE") && (e.temporality === "PINNED" || e.freshnessState === "CURRENT");
     add("C6", freshOk(idEval) && freshOk(balEval) ? "MET" : "INDETERMINATE", freshOk(idEval) && freshOk(balEval) ? "FRESH_OR_PINNED" : "NOT_CURRENT");
   }
   const classification = criteria.some((c) => c.outcome === "NOT_MET") ? "CRITERIA_NOT_MET" : criteria.some((c) => c.outcome === "INDETERMINATE") ? "NOT_ESTABLISHED" : "CRITERIA_MET";
@@ -24917,7 +24995,7 @@ function declaredSupportAtLeast(a, rank) {
 }
 function checkInvariants(bundle, evaluation) {
   const out = [...evaluation.violations];
-  const idx = indexBundle(bundle);
+  const idx = indexEvidence(bundle);
   const evalById = new Map(evaluation.assertions.map((e) => [e.assertionId, e]));
   const push = (invariant, code, assertionId) => {
     out.push({ invariant, code, assertionId });
@@ -24986,7 +25064,7 @@ function checkInvariants(bundle, evaluation) {
       if (a.claimType === "TOKEN_USD_VALUE" && !deps.some((dep) => dep.claimType === "TOKEN_USD_PRICE")) {
         push("INV-11", "USD_VALUE_WITHOUT_PRICE_EVIDENCE", a.id);
       }
-      if (d !== void 0 && policy?.ruleId === d.ruleId) recompute(bundle, evaluation, a, d.inputAssertionIds, push);
+      if (d !== void 0 && policy?.ruleId === d.ruleId) recompute(bundle, idx, evaluation, a, d.inputAssertionIds, push);
     }
     if (a.claimType !== "TOKEN_USD_PRICE" && a.claimType !== "TOKEN_USD_VALUE" && a.value !== null) {
       if (Object.keys(a.value).some((k) => /usd/i.test(k))) push("INV-11", "QUANTITY_CLAIM_CARRIES_USD", a.id);
@@ -25020,7 +25098,8 @@ function checkInvariants(bundle, evaluation) {
     if (supersededIds.has(oldA.id)) push("INV-12", "SUPERSEDED_MULTIPLE_TIMES", oldA.id);
     supersededIds.add(oldA.id);
     const pol = getPolicy(oldA.claimType);
-    const sameIdentity = oldA.claimType === newA.claimType && canonicalize(pol ? pick2(oldA.subject, pol.supersessionKeys) : oldA.subject) === canonicalize(pol ? pick2(newA.subject, pol.supersessionKeys) : newA.subject);
+    const identityOf = (a) => pol ? subjectIdentityKey(a.subject, pol.supersessionKeys) : canonicalize(a.subject);
+    const sameIdentity = oldA.claimType === newA.claimType && identityOf(oldA) === identityOf(newA);
     if (!sameIdentity) push("INV-12", "SUPERSESSION_CLAIM_IDENTITY_MISMATCH", oldA.id);
     if (Date.parse(newA.assertedAt) <= Date.parse(oldA.assertedAt)) push("INV-12", "SUPERSESSION_NOT_FORWARD_IN_TIME", oldA.id);
   }
@@ -25049,16 +25128,15 @@ function checkInvariants(bundle, evaluation) {
     return kx < ky ? -1 : kx > ky ? 1 : 0;
   });
 }
-function recompute(bundle, evaluation, a, inputIds, push) {
-  const byId = new Map(bundle.assertions.map((x) => [x.id, x]));
-  const inputs = inputIds.map((id) => byId.get(id)).filter((x) => x !== void 0);
+function recompute(bundle, idx, evaluation, a, inputIds, push) {
+  const inputs = inputIds.map((id) => idx.assertions.get(id)).filter((x) => x !== void 0);
   const mismatch = () => push("INV-00", "RECOMPUTATION_MISMATCH", a.id);
   if (a.claimType === "TOKEN_USD_VALUE") {
     const bal = inputs.find((x) => x.claimType === "TOKEN_BALANCE_AT_BLOCK");
     const price = inputs.find((x) => x.claimType === "TOKEN_USD_PRICE");
     if (bal === void 0 || price === void 0 || a.value === null) return;
     try {
-      const sameToken = bal.subject["chainId"] === price.subject["chainId"] && String(bal.subject["token"]).toLowerCase() === String(price.subject["token"]).toLowerCase();
+      const sameToken = bal.subject["chainId"] === price.subject["chainId"] && subjectKeyEqual("token", String(bal.subject["token"]), String(price.subject["token"]));
       const atomic = parseAtomic(String(bal.value?.["balanceAtomic"]));
       const decimals = parseDecimals(String(bal.value?.["decimals"]));
       const p = parsePriceScaled18(String(price.value?.["priceUsd"]));
@@ -25121,7 +25199,7 @@ function normalizeObservation(draft) {
 var NS = "ww";
 var PROV_NAMESPACE = "urn:walletwall:wwep:0.1:";
 function traceProvenance(bundle, assertionId) {
-  const idx = indexBundle(bundle);
+  const idx = indexEvidence(bundle);
   const prov = {
     prefix: { [NS]: PROV_NAMESPACE },
     entity: {},

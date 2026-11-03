@@ -56,6 +56,7 @@
     "test:wallprint-checkpoint-mutation": "node packages/mcp/test/mutation/wallprint-checkpoint-mutation.ts",
     "test:wallprint-governance-mutation": "node packages/mcp/test/mutation/wallprint-governance-mutation.ts",
     "test:local-adapter-mutation": "node packages/mcp/test/mutation/local-adapter-mutation.ts",
+    "test:evidence-identity-mutation": "node packages/mcp/test/mutation/evidence-identity-mutation.ts",
     "rehearse:wallprint-governance-ceremony": "node scripts/rehearse-wallprint-governance-ceremony.ts",
     "test": "node --test --test-reporter=spec \"packages/mcp/test/**/*.test.ts\" \"packages/wallprint-web/test/**/*.test.ts\"",
     "eval:agent": "node evals/run-agent-evals.ts",

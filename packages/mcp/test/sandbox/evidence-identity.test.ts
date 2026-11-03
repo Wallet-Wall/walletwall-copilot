@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import { evaluateBundle } from "../../src/evaluate.ts";
 import { assessReadiness } from "../../src/readiness.ts";
 import { BundleSchema, type Assertion, type Bundle } from "../../src/schemas.ts";
+import { subjectIdentityKey, subjectKeyEqual } from "../../src/subject.ts";
 import { callTool } from "../../src/tools.ts";
 import { BLOCK_HASH, BLOCK_NUMBER, EVALUATED_AT, HOLDER, USDC, balanceAssertion, balanceObservation, clone, golden, identityAssertion, identityObservation, replaceAssertion, replaceObservation, withUsdValue } from "../support/builders.ts";
 
@@ -77,14 +78,14 @@ const hasViolation = (c: Checked, invariant: string, code: string, assertionId?:
   c.violations.some((v) => v.invariant === invariant && v.code === code && (assertionId === undefined || v.assertionId === assertionId));
 const NOT_POSITIVE = (state: string): boolean => state !== "ESTABLISHED" && state !== "SUPPORTED";
 
-const OTHER_HOLDER = `0x${"99".repeat(20)}`;
+const OTHER_HOLDER = `0x${"ca".repeat(20)}`;
 const OTHER_TOKEN = `0x${"ee".repeat(20)}`;
 const OTHER_HASH = `0x${"cd".repeat(32)}`;
 /** The EIP-55 spelling of the USDC contract, exactly as issuers and explorers publish it. */
 const USDC_CHECKSUM = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 /** USDC on Base: a second registered deployment of the same issuer, so its identity is ESTABLISHED on its own. */
 const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
-const MIXED_HOLDER = "0xAbCdEf7890123456789012345678901234567890";
+const MIXED_HOLDER = `0x${"aA".repeat(20)}`;
 const LOWER_HOLDER = MIXED_HOLDER.toLowerCase();
 const UPPER_HASH = `0x${"AB".repeat(32)}`;
 
@@ -203,13 +204,32 @@ describe("BUG 1: a derived claim only gets support from dependencies about its o
     assert.equal(byId(inspect(b), "a-balance-2").supportState, "ESTABLISHED", "a genuinely different holder is its own valid claim");
   });
 
-  test("a derived subject missing a required key is a mismatch, reported by key name and never by value", () => {
+  test("a derived subject missing a required key fails the claim contract, reported by key name and never by value", () => {
     const b = withDerivedReadiness(golden(), { subject: { chainId: "1", token: USDC, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH } });
     const e = byId(inspect(b), "readiness-result");
     assert.equal(e.supportState, "NOT_ESTABLISHED");
-    const d = e.diagnostics.find((x) => x.limitation === "SUBJECT_MISMATCH");
+    const d = e.diagnostics.find((x) => x.limitation === "INVALID_SUBJECT");
     assert.deepEqual(d?.missingKeys, ["holder"]);
     assert.ok(!JSON.stringify(e.diagnostics).includes(USDC), "record values are never echoed");
+    assert.ok(hasViolation(invariants(b), "INV-00", "INVALID_SUBJECT", "readiness-result"));
+  });
+
+  test("a derived subject that a direct assertion could not carry fails the same contract, even when it folds to the input's", () => {
+    const upperPrefix = `0X${USDC.slice(2).toUpperCase()}`;
+    const b = withDerivedReadiness(golden(), { subject: balanceSubject({ token: upperPrefix }) });
+    const e = byId(inspect(b), "readiness-result");
+    assert.equal(e.supportState, "NOT_ESTABLISHED");
+    assert.ok(e.limitations.includes("INVALID_SUBJECT"), e.limitations.join());
+    const direct = replaceObservation(replaceAssertion(golden(), "a-balance", { subject: balanceSubject({ token: upperPrefix }) }), "obs-balance", { subject: balanceSubject({ token: upperPrefix }) });
+    assert.ok(byId(inspect(direct), "a-balance").limitations.includes("INVALID_SUBJECT"), "CONTROL: the direct path already refuses it");
+  });
+
+  test("an input missing a shared key is a mismatch: a dependency cannot escape the comparison by omitting it", () => {
+    const b = withUsdValue(golden());
+    b.assertions = b.assertions.map((a) => (a.id === "a-price" ? { ...a, subject: { chainId: "1" } } : a));
+    const e = byId(inspect(b), "a-usd");
+    assert.equal(e.supportState, "NOT_ESTABLISHED");
+    assert.deepEqual(e.diagnostics.find((x) => x.limitation === "SUBJECT_MISMATCH")?.mismatchedKeys, ["token"]);
   });
 
   test("a case-only spelling difference is not a mismatch: the comparison follows the claim vocabulary", () => {
@@ -243,6 +263,15 @@ describe("BUG 1: a derived claim only gets support from dependencies about its o
 });
 
 describe("BUG 2: address identity is case-insensitive everywhere the claim vocabulary says so", () => {
+  test("the shared comparison folds exactly the keys the vocabulary marks", () => {
+    for (const key of ["address", "token", "holder", "blockHash"]) assert.equal(subjectKeyEqual(key, "0xAB", "0xab"), true, key);
+    for (const key of ["chainId", "blockNumber", "symbol", "note"]) assert.equal(subjectKeyEqual(key, "0xAB", "0xab"), false, key);
+    assert.equal(subjectKeyEqual("holder", "0xab", "0xac"), false);
+    assert.equal(subjectIdentityKey({ holder: "0xAB", note: "ignored" }, ["holder"]), subjectIdentityKey({ holder: "0xab" }, ["holder"]));
+    assert.equal(subjectIdentityKey({ chainId: "1" }, ["chainId", "holder"]), "null", "a subject missing a key has no partial identity");
+    assert.notEqual(subjectIdentityKey({ chainId: "1", holder: null }, ["chainId", "holder"]), "null", "a null value is a value, as it has always been, not a missing key");
+  });
+
   const conflicting: [string, Record<string, string>, Record<string, string>][] = [
     ["holder", balanceSubject({ holder: LOWER_HOLDER }), balanceSubject({ holder: MIXED_HOLDER })],
     ["token contract", balanceSubject(), balanceSubject({ token: USDC_CHECKSUM })],
@@ -339,6 +368,13 @@ describe("BUG 2: address identity is case-insensitive everywhere the claim vocab
     assert.equal(r.criteria.find((c) => c.id === "C3")?.reason, "SUBJECT_CONSISTENT");
   });
 
+  test("readiness still tells two chains apart when the address is the same (C3 compares the chain exactly)", () => {
+    const subject = balanceSubject({ chainId: "8453" });
+    const b = replaceObservation(replaceAssertion(golden(), "a-balance", { subject }), "obs-balance", { subject });
+    const c3 = readiness(b).criteria.find((c) => c.id === "C3");
+    assert.deepEqual([c3?.outcome, c3?.reason], ["NOT_MET", "SUBJECT_INCONSISTENT"]);
+  });
+
   test("comparison is not rewriting: every record, digest and suggestion keeps the spelling that was supplied", () => {
     const subject = balanceSubject({ token: USDC_CHECKSUM, holder: MIXED_HOLDER, blockHash: UPPER_HASH });
     const b = replaceObservation(replaceAssertion(golden(), "a-balance", { subject }), "obs-balance", { subject });
@@ -355,7 +391,10 @@ describe("BUG 2: address identity is case-insensitive everywhere the claim vocab
     const superseded = withSecondBalance(golden(), balanceSubject({ blockNumber: "21000001", blockHash: OTHER_HASH }), "1400000");
     superseded.assertions = superseded.assertions.map((a) => (a.id === "a-balance-2" ? { ...a, assertedAt: EVALUATED_AT } : a));
     superseded.supersessions = [{ id: "s-1", supersededAssertionId: "a-balance", supersedingAssertionId: "a-balance-2", effectiveAt: EVALUATED_AT, reason: "NEWER_OBSERVATION" }];
-    const bases: [string, Bundle][] = [["golden", golden()], ["derived readiness", withDerivedReadiness(golden())], ["derived USD", withUsdValue(golden())], ["conflict", conflict], ["supersession", superseded]];
+    // The golden holder is all digits, so it has no case to flip: these two make the holder a key the re-spelling can reach.
+    const letteredHolder = balanceSubject({ holder: LOWER_HOLDER });
+    const lettered = replaceObservation(replaceAssertion(golden(), "a-balance", { subject: letteredHolder }), "obs-balance", { subject: letteredHolder });
+    const bases: [string, Bundle][] = [["golden", golden()], ["derived readiness", withDerivedReadiness(golden())], ["derived USD", withUsdValue(golden())], ["conflict", conflict], ["supersession", superseded], ["lettered holder", lettered], ["lettered holder in conflict", withSecondBalance(lettered, letteredHolder, "999")]];
     const rand = mulberry32(0x5eed1234);
     for (const [label, base] of bases) {
       const lowered = inspect(base);
@@ -456,6 +495,31 @@ describe("BUG 3: a reused assertion id is refused, whichever record comes first"
     }
   });
 
+  test("the dependency is simply unresolved: no record of a reused id reaches recomputation, in either order", () => {
+    const honest = withDerivedReadiness(golden());
+    const b = clone(honest);
+    b.assertions.push(balanceAssertion({ value: { balanceAtomic: "999", decimals: "6" }, observationIds: [] }));
+    for (const ordered of orderings(b, "a-balance")) {
+      const codes = invariants(ordered).violations.map((v) => v.code);
+      assert.ok(codes.includes("DUPLICATE_ASSERTION_ID") && codes.includes("DANGLING_REFERENCE"), codes.join());
+      assert.ok(!codes.includes("RECOMPUTATION_MISMATCH"), `recomputation read a record of the reused id: ${codes.join()}`);
+    }
+  });
+
+  test("a reused id overrides every lifecycle state: nothing is left SUPERSEDED or CONFLICTING to look like a verdict about one record", () => {
+    const conflict = withSecondBalance(golden(), balanceSubject(), "999");
+    conflict.assertions.push({ ...balanceAssertion(), id: "a-unrelated" }, { ...balanceAssertion({ value: { balanceAtomic: "1", decimals: "6" } }), id: "a-unrelated" });
+    const conflicted = inspect(conflict);
+    assert.deepEqual(byId(conflicted, "a-balance").conflictsWith, ["a-balance-2"], "the conflict is still shown");
+    assert.ok(conflicted.assertions.every((e) => e.supportState === "NOT_ESTABLISHED"), JSON.stringify(conflicted.assertions.map((e) => [e.assertionId, e.supportState])));
+
+    const superseded = withSecondBalance(golden(), balanceSubject({ blockNumber: "21000001", blockHash: OTHER_HASH }), "1400000");
+    superseded.assertions = superseded.assertions.map((a) => (a.id === "a-balance-2" ? { ...a, assertedAt: EVALUATED_AT } : a));
+    superseded.supersessions = [{ id: "s-1", supersededAssertionId: "a-balance", supersedingAssertionId: "a-balance-2", effectiveAt: EVALUATED_AT, reason: "NEWER_OBSERVATION" }];
+    superseded.assertions.push({ ...balanceAssertion(), id: "a-unrelated" }, { ...balanceAssertion(), id: "a-unrelated" });
+    assert.ok(inspect(superseded).assertions.every((e) => e.supportState === "NOT_ESTABLISHED"));
+  });
+
   test("a derived claim whose own id is reused is refused", () => {
     const honest = withDerivedReadiness(golden());
     const copy = honest.assertions.find((a) => a.id === "readiness-result") as Assertion;
@@ -538,19 +602,54 @@ describe("BUG 4: PINNED does not excuse an observation dated after the evaluatio
     assert.ok(byId(inspect(b), "a-balance").limitations.includes("OBSERVATION_FROM_FUTURE"));
   });
 
-  test("a derived claim over a future-dated PINNED input cannot be stronger than its input and inherits the limitation", () => {
+  test("a derived claim over a future-dated PINNED input cannot be stronger than its input, inherits the limitation and reports no freshness", () => {
     const b = withDerivedReadiness(atBalance("2031-01-01T00:00:00Z"));
     const e = byId(inspect(b), "readiness-result");
     assert.ok(NOT_POSITIVE(e.supportState), e.supportState);
     assert.ok(e.limitations.includes("OBSERVATION_FROM_FUTURE"));
+    assert.equal(e.freshnessState, "UNKNOWN_FRESHNESS", "the derived claim agrees with its input");
+    const usd = replaceObservation(withUsdValue(golden()), "obs-balance", { observedAt: "2031-01-01T00:00:00Z" });
+    assert.equal(byId(inspect(usd), "a-usd").freshnessState, "UNKNOWN_FRESHNESS");
   });
 
-  test("a future identity reading stays non-established", () => {
-    const b = replaceObservation(golden(), "obs-identity", { observedAt: "2031-01-01T00:00:00Z" });
-    const e = byId(inspect(b), "a-identity");
-    assert.equal(e.supportState, "PARTIAL");
-    assert.ok(e.limitations.includes("OBSERVATION_FROM_FUTURE"));
-    assert.equal(readiness(b).classification, "NOT_ESTABLISHED");
+  test("a CURRENT derived claim keeps its own freshness rule: a stale input beside a future one is still stale", () => {
+    const b = replaceAssertion(
+      replaceObservation(replaceAssertion(withUsdValue(golden()), "a-balance", { temporality: "CURRENT" }), "obs-balance", { observedAt: "2031-01-01T00:00:00Z" }),
+      "a-usd",
+      { temporality: "CURRENT" },
+    );
+    const staleAt = "2026-10-24T12:00:00Z";
+    assert.equal(byId(inspect(b, staleAt), "a-price").freshnessState, "STALE", "the price input is past its limit at this time");
+    const e = byId(inspect(b, staleAt), "a-usd");
+    assert.equal(e.freshnessState, "STALE");
+    assert.equal(e.supportState, "STALE");
+    assert.ok(e.limitations.includes("STALE_EVIDENCE"));
+    assert.ok(e.limitations.includes("OBSERVATION_FROM_FUTURE"), "the input's limitation is inherited all the same");
+  });
+
+  test("CONTROL: a derived claim over old PINNED input stays PINNED", () => {
+    const e = byId(inspect(withDerivedReadiness(atBalance("2021-10-23T12:00:00Z"))), "readiness-result");
+    assert.equal(e.freshnessState, "PINNED");
+    assert.equal(e.supportState, "ESTABLISHED");
+  });
+
+  for (const temporality of ["CURRENT", "PINNED"] as const) {
+    test(`a future identity reading stays non-established when the identity is ${temporality}`, () => {
+      const b = replaceAssertion(replaceObservation(golden(), "obs-identity", { observedAt: "2031-01-01T00:00:00Z" }), "a-identity", { temporality });
+      const e = byId(inspect(b), "a-identity");
+      assert.equal(e.supportState, "PARTIAL");
+      assert.equal(e.freshnessState, "UNKNOWN_FRESHNESS");
+      assert.ok(e.limitations.includes("OBSERVATION_FROM_FUTURE"));
+      assert.equal(readiness(b).classification, "NOT_ESTABLISHED");
+    });
+  }
+
+  test("the check covers every reading with a value, not only the authoritative ones", () => {
+    const b = clone(golden());
+    b.sources.push({ id: "src-prov-c", kind: "PROVIDER_ENDPOINT", independenceGroup: "grp-c" });
+    b.observations.push(balanceObservation({ id: "obs-provider", sourceId: "src-prov-c", origin: "PROVIDER_OBSERVED", observedAt: "2031-01-01T00:00:00Z" }));
+    b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, observationIds: ["obs-balance", "obs-provider"] } : a));
+    assert.ok(byId(inspect(b), "a-balance").limitations.includes("OBSERVATION_FROM_FUTURE"));
   });
 
   test("timestamps with an offset, impossible dates and an empty fraction keep failing the schema; no machine clock is involved", () => {
