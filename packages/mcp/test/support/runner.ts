@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { evaluateBundle } from "../../src/evaluate.ts";
 import { checkInvariants } from "../../src/invariants.ts";
+import { assessReadiness } from "../../src/readiness.ts";
 import { parseBundleStrict } from "../../src/schemas.ts";
 import type { ConformanceCase } from "./cases.ts";
 
@@ -63,6 +64,11 @@ export function runCase(c: ConformanceCase): string[] {
     if (!violations.some((v) => v.invariant === want.invariant && v.code === want.code)) {
       failures.push(`missing violation ${want.invariant}:${want.code} (have ${violations.map((v) => `${v.invariant}:${v.code}`).join(",")})`);
     }
+  }
+  if (c.expect.readiness !== undefined) {
+    const { identityAssertionId, balanceAssertionId, classification } = c.expect.readiness;
+    const got = assessReadiness(parsed.data, evaluation, identityAssertionId, balanceAssertionId).classification;
+    if (got !== classification) failures.push(`readiness: expected ${classification} got ${got}`);
   }
   return failures;
 }
