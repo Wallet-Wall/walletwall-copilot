@@ -39,6 +39,12 @@ interface Reply {
 
 const bearer = (token: string): string => `Bearer ${token}`;
 
+/** Every bridge this file starts. Whatever fails, none may outlive the file: a live child would keep the runner alive. */
+const live = new Set<ChildProcessWithoutNullStreams>();
+after(() => {
+  for (const child of live) child.kill();
+});
+
 function startBridge(args: readonly string[] = ["--enable", "--port", "0"], env: NodeJS.ProcessEnv = {}, cwd: string = ROOT): Promise<Bridge> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [`${ROOT}${ADAPTER}`, ...args], {
@@ -46,6 +52,7 @@ function startBridge(args: readonly string[] = ["--enable", "--port", "0"], env:
       env: { PATH: process.env["PATH"] ?? "", SystemRoot: process.env["SystemRoot"] ?? "", ...env },
       stdio: ["pipe", "pipe", "pipe"],
     });
+    live.add(child);
 
     let stdout = "";
     let stderr = "";
@@ -151,6 +158,7 @@ function send(bridge: Bridge, options: SendOptions = {}): Promise<Reply> {
 
   return new Promise((resolve, reject) => {
     let answered = false;
+    let received = false;
     const req = request(
       {
         host: bridge.host === "[::1]" ? LOOPBACK_V6 : LOOPBACK_V4,
@@ -162,6 +170,7 @@ function send(bridge: Bridge, options: SendOptions = {}): Promise<Reply> {
         agent: false,
       },
       (res) => {
+        received = true;
         const chunks: Buffer[] = [];
         res.on("data", (c: Buffer) => chunks.push(c));
         const done = (): void => {
@@ -175,8 +184,10 @@ function send(bridge: Bridge, options: SendOptions = {}): Promise<Reply> {
         res.on("aborted", done);
       },
     );
+    // A server that refuses a large body and closes may reset the connection while the client is still writing. Once a
+    // response has started, that is expected: the response handlers settle the promise.
     req.on("error", (error) => {
-      if (!answered) reject(error);
+      if (!answered && !received) reject(error);
     });
     const body = options.body;
     if (Array.isArray(body)) {
@@ -620,6 +631,7 @@ describe("optional HTTP adapter: authentication and request validation", () => {
       for (const contentType of ["text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x", "application/jsonx", "application/json-seq", "text/json", "application/xml", ""]) {
         const reply = await send(bridge, { headers: { ...MCP_HEADERS, "content-type": contentType || undefined }, body: INIT_BODY });
         assert.equal(reply.status, 415, JSON.stringify(contentType));
+        assert.deepEqual(JSON.parse(reply.text), { error: "unsupported media type" }, "refused by the adapter's own check, with its fixed body, before the MCP library sees it");
       }
     });
 
@@ -713,9 +725,9 @@ describe("optional HTTP adapter: authentication and request validation", () => {
 });
 
 describe("optional HTTP adapter and stdio serve the same contract", () => {
-  let bridge: Bridge;
-  let http: Client;
-  let stdio: Client;
+  let bridge: Bridge | undefined;
+  let http: Client | undefined;
+  let stdio: Client | undefined;
 
   before(async () => {
     bridge = await startBridge();
@@ -725,10 +737,15 @@ describe("optional HTTP adapter and stdio serve the same contract", () => {
     await stdio.connect(new StdioClientTransport({ command: process.execPath, args: [ENTRIES.bundle], env: { PATH: process.env["PATH"] ?? "", SystemRoot: process.env["SystemRoot"] ?? "" }, stderr: "pipe" }));
   });
   after(async () => {
-    await http.close().catch(() => undefined);
-    await stdio.close().catch(() => undefined);
-    await stopBridge(bridge);
+    await http?.close().catch(() => undefined);
+    await stdio?.close().catch(() => undefined);
+    if (bridge !== undefined) await stopBridge(bridge);
   });
+
+  const both = (): [Client, Client] => {
+    assert.ok(http !== undefined && stdio !== undefined, "both transports connected");
+    return [http, stdio];
+  };
 
   const bundle = golden();
   const calls: { name: string; arguments: Record<string, unknown> }[] = [
@@ -748,18 +765,21 @@ describe("optional HTTP adapter and stdio serve the same contract", () => {
   ];
 
   test("tool and resource listings are identical", async () => {
-    assert.deepEqual(await http.listTools(), await stdio.listTools());
-    assert.deepEqual(await http.listResources(), await stdio.listResources());
+    const [h, s] = both();
+    assert.deepEqual(await h.listTools(), await s.listTools());
+    assert.deepEqual(await h.listResources(), await s.listResources());
   });
 
   for (const call of calls) {
     test(`${call.name} (${Object.keys(call.arguments).join(", ") || "no arguments"}) answers identically over stdio and HTTP`, async () => {
-      assert.deepEqual(await http.callTool(call).catch((e: Error) => e.message), await stdio.callTool(call).catch((e: Error) => e.message));
+      const [h, s] = both();
+      assert.deepEqual(await h.callTool(call).catch((e: Error) => e.message), await s.callTool(call).catch((e: Error) => e.message));
     });
   }
 
   test("every resource reads identically", async () => {
-    for (const { uri } of (await stdio.listResources()).resources) assert.deepEqual(await http.readResource({ uri }), await stdio.readResource({ uri }), uri);
+    const [h, s] = both();
+    for (const { uri } of (await s.listResources()).resources) assert.deepEqual(await h.readResource({ uri }), await s.readResource({ uri }), uri);
   });
 });
 

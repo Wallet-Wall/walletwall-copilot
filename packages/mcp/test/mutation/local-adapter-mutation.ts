@@ -90,9 +90,17 @@ const MUTANTS: readonly Mutant[] = [
 
 function run(file: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["--test", file], { cwd: root, stdio: "ignore" });
-    child.on("close", (code) => resolve(code === 0));
-    child.on("error", () => resolve(false));
+    // A mutant can make a test wait forever (for example for a response that never comes): a test that times out is a failure, so the mutant is killed.
+    const child = spawn(process.execPath, ["--test", "--test-timeout=60000", file], { cwd: root, stdio: "ignore" });
+    const watchdog = setTimeout(() => child.kill(), 420_000);
+    child.on("close", (code) => {
+      clearTimeout(watchdog);
+      resolve(code === 0);
+    });
+    child.on("error", () => {
+      clearTimeout(watchdog);
+      resolve(false);
+    });
   });
 }
 
@@ -116,7 +124,9 @@ try {
   console.log(`baseline green: ${all.length} suites`);
 
   let survivors = 0;
-  for (const m of MUTANTS) {
+  const only = process.argv.find((a) => a.startsWith("--only="))?.slice("--only=".length).split(",").map(Number);
+  const selected = only === undefined ? MUTANTS : MUTANTS.filter((m) => only.includes(m.id));
+  for (const m of selected) {
     const path = join(root, m.file);
     const text = original.get(m.file) ?? readFileSync(path, "utf8");
     original.set(m.file, text);
@@ -141,7 +151,7 @@ try {
       writeFileSync(path, text);
     }
   }
-  console.log(`${MUTANTS.length - survivors} of ${MUTANTS.length} mutants killed`);
+  console.log(`${selected.length - survivors} of ${selected.length} mutants killed`);
   if (survivors > 0) process.exitCode = 1;
 } finally {
   restore();

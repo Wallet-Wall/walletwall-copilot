@@ -160,10 +160,11 @@ describe("open maps: an unknown key is semantically inert", () => {
     for (const c of loadCorpus()) {
       const parsed = parseBundleStrict(c.bundle);
       if (!parsed.success) continue;
-      const before = evaluateBundle(parsed.data, c.evaluatedAt).assertions.map((a) => [a.assertionId, a.supportState]);
+      const baseStates = evaluateBundle(parsed.data, c.evaluatedAt).assertions.map((a) => [a.assertionId, a.supportState]);
       for (const distinct of [false, true]) {
-        const after = evaluateBundle(withUnknown(parsed.data, ALL_PLACES, UNKNOWN, distinct), c.evaluatedAt).assertions.map((a) => [a.assertionId, a.supportState]);
-        assert.deepEqual(after, before, c.id);
+        const widenedBundle = withUnknown(parsed.data, ALL_PLACES, UNKNOWN, distinct);
+        const widenedStates = evaluateBundle(widenedBundle, c.evaluatedAt).assertions.map((a) => [a.assertionId, a.supportState]);
+        assert.deepEqual(widenedStates, baseStates, c.id);
       }
     }
   });

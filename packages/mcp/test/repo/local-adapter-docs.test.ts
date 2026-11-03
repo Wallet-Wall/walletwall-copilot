@@ -33,6 +33,8 @@ describe("local adapter documentation: the four boundaries are described, in pla
       assert.ok(section.includes(actor), actor);
     }
     assert.match(section, /Out of scope: it can already read what the account can read/);
+    assert.match(section, /\| Hostile owner of the machine or account \| Out of scope: /);
+    assert.match(section, /\| Hostile program running as the same account \| Out of scope: /);
   });
 
   test("the threat model keeps the four actors apart and marks the last two out of scope", () => {
@@ -47,7 +49,7 @@ describe("local adapter documentation: the four boundaries are described, in pla
       ...readdirSync(`${ROOT}docs`).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`),
     ];
     const SUBJECT = /hostile (?:local )?owner|same[- ]account|compromised (?:runtime|machine)|controls (?:that|the|this) (?:account|process|machine)/i;
-    const CLAIM = /\b(?:protects?|defends?|prevents?|detects?|resists?|blocks?|mitigates?|stops?|safeguards?)\b/i;
+    const CLAIM = /\b(?:protect|defend|prevent|detect|resist|block|mitigate|stop|safeguard|guard|shield)(?:s|ed|ing|d)?\b/i;
     const DENIAL = /\b(?:not|never|no|cannot|can't|nor|without|out of scope|unable|already|neither)\b|n't\b/i;
     const hits: string[] = [];
     for (const f of docs) {
