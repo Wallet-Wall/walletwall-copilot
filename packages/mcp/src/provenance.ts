@@ -1,5 +1,5 @@
 import type { Bundle } from "./schemas.ts";
-import { indexBundle } from "./evaluate.ts";
+import { indexEvidence } from "./evaluate.ts";
 
 const NS = "ww";
 export const PROV_NAMESPACE = "urn:walletwall:wwep:0.1:";
@@ -30,7 +30,7 @@ export interface ProvenanceTrace {
  * Transport (ww:retrievedVia) is recorded as an attribute and never as an agent or authority.
  */
 export function traceProvenance(bundle: Bundle, assertionId: string): ProvenanceTrace {
-  const idx = indexBundle(bundle);
+  const idx = indexEvidence(bundle);
   const prov: ProvDocument = {
     prefix: { [NS]: PROV_NAMESPACE },
     entity: {},

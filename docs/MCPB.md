@@ -41,8 +41,8 @@ Published to the official MCP Registry on 2026-10-24 (UTC) from the `v0.2.0` tag
 
 The MCPB contains the server bundle, so a bundle change changes the package bytes and both recorded digests. The tree then
 carries the next package version in `mcpb/manifest.json` and `server.json` (currently `0.2.2`, after the suggested readiness
-assertion stopped forwarding caller-supplied subject text and the server instructions gained the data-not-instruction
-sentence; `0.2.1` was the claim-contract and example resources and structured shape diagnostics, and its published asset
+assertion stopped forwarding caller-supplied subject text, the server instructions gained the data-not-instruction
+sentence and the evaluator gained its identity and temporal corrections; `0.2.1` was the claim-contract and example resources and structured shape diagnostics, and its published asset
 must never be replaced). Publishing that version is a release step: build the
 asset from the tagged commit with `pack-mcpb.ts --out --ref`, attach it to the `v<version>` GitHub Release named in
 `server.json`, and re-run `mcp-publisher publish server.json`. Until then the Registry lists the previously published version.

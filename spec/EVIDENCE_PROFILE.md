@@ -46,7 +46,9 @@ qualify as evidence of that origin (limitation `ORIGIN_SOURCE_KIND_MISMATCH`, in
 ## 4. Data model
 
 All evidence-critical values are strings. JSON numbers MUST NOT appear in evidence objects. Quantities are
-canonical atomic-unit decimal strings (section 7). Every object is closed: unknown properties are rejected.
+canonical atomic-unit decimal strings (section 7). Every object is closed: unknown properties are rejected. The one
+exception is the bounded open maps `subject`, `value` and `payload`, which accept keys outside the claim contract and
+keep them in the record's digest; the claim contract says how they are treated.
 
 - **Source** — `{id, kind, authorityId?, transport?{retrievedVia}, independenceGroup?}`. Where evidence came from.
   `transport.retrievedVia` is metadata only.
@@ -56,9 +58,12 @@ canonical atomic-unit decimal strings (section 7). Every object is closed: unkno
   assertedAt, limitations?, declared?}`. A claim about a subject, backed by observations or by a derivation.
   `temporality` is `CURRENT` (must be fresh) or `PINNED` (a historical point such as a block).
   `declared` lets an author state the support, freshness, finality and corroboration they *believe* apply; the
-  engine never trusts it and reports any excess as a violation.
+  engine never trusts it and reports any excess as a violation. An assertion id MUST be unique within a bundle
+  (section 8).
 - **Derivation** — `{id, ruleId, rulesVersion, inputAssertionIds, outputAssertionId}`. A WalletWall rule applied to
-  assertions. Derivations take assertions only, never raw observations.
+  assertions. Derivations take assertions only, never raw observations. A derived assertion is about what its inputs
+  are about: its `subject` MUST match every input's `subject` on the subject keys their claim types share, where an
+  identity's `address` compares as the `token`.
 - **EvidenceDependency** — the directed edge `assertion → input` induced by a derivation's `inputAssertionIds` (and
   by an assertion's `observationIds`). Dependencies are computed, not stored separately.
 - **Authority** — the entity or state that may establish a claim type, e.g. `canonical-chain-state`,
@@ -105,11 +110,14 @@ These are enforced by `check_invariants` and by executable conformance tests. Ea
 9. **INV-09** Multiple provider endpoints MUST NOT automatically imply independent authority.
 10. **INV-10** Derived results retain the limitations of their dependencies.
 11. **INV-11** Token quantity MUST NOT silently become USD value without explicit price evidence.
-12. **INV-12** Historical assertions are superseded, never silently rewritten.
+12. **INV-12** Historical assertions are superseded, never silently rewritten. A reused assertion id is reported here
+    as `DUPLICATE_ASSERTION_ID`.
 13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply
     `authority = Alchemy` for Ethereum state.
 
-**INV-00** (engine rule) — declared states MUST NOT exceed states computed by the published rules.
+**INV-00** (engine rule) — declared states MUST NOT exceed states computed by the published rules. A derived assertion
+whose subject differs from its inputs is reported here as `SUBJECT_MISMATCH`, and one whose subject fails the claim
+contract as `INVALID_SUBJECT`.
 
 ## 7. Canonicalization and digests
 
@@ -131,10 +139,20 @@ explicit input; the engine never reads a clock. Procedure and per-claim policies
 `SUPPORT_STATES.md`. In outline:
 
 1. Reject any bundle that fails the closed schema.
-2. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.
-3. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively).
-4. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations.
-5. Independently check the invariants and report violations without mutating results.
+2. Refuse structural ambiguity. A reused assertion id names no record, whichever record comes first, so nothing depends
+   on record order: every assertion in the bundle is `NOT_ESTABLISHED`, the reused id itself with `NO_SOURCE`; a reference
+   to it resolves to nothing; every readiness criterion is `INDETERMINATE` (`DUPLICATE_ASSERTION_ID`), so readiness is
+   `NOT_ESTABLISHED`; `trace_provenance` finds no such target; `check_invariants` reports INV-12.
+3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.
+4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
+   assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject
+   differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`.
+5. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations. A reading with a
+   value dated after `evaluatedAt` is `OBSERVATION_FROM_FUTURE` with `UNKNOWN_FRESHNESS` and at most `PARTIAL` support,
+   whether the claim is `CURRENT` or `PINNED`. A claim derived from it inherits the limitation and the cap, and a `PINNED`
+   one reports `UNKNOWN_FRESHNESS`: `PINNED` means a historical point, not a reading from after the evaluation time. An
+   assertion already refused on its subject or value, or whose readings disagree, keeps that state and does not reach this check.
+6. Independently check the invariants and report violations without mutating results.
 
 A shape failure is an evaluation state, not a schema rejection: an assertion whose subject or value, or whose supporting
 observation's subject or payload, does not meet the claim contract is reported `NOT_ESTABLISHED` with the limitation
@@ -162,7 +180,13 @@ legal status, regulatory compliance, absence of fraud, or future performance.
 - Evidence is evaluated as presented. The engine cannot verify that a `CHAIN_OBSERVED` reading was faithfully
   retrieved (`TRANSPORT_FIDELITY_NOT_VERIFIED` is always attached).
 - Registry content is verified only at a point in time (`REGISTRY_VERIFIED_POINT_IN_TIME`); later changes to a contract are not observed.
-- Address checksums (EIP-55) are not verified; addresses are compared case-insensitively.
+- Address checksums (EIP-55) are not verified. Addresses and block hashes are compared case-insensitively wherever
+  subject identity is compared: observation to assertion, conflict grouping, supersession identity, derived claim to
+  input, and the readiness and USD rules. Comparison is not rewriting: records, digests and suggested assertions keep the
+  spelling supplied, and values are never folded.
+- `blockHash` is part of a balance claim's subject, so two readings at one height with different hashes are two
+  fork-specific claims, not a conflict. Whether WWEP should model state at canonical height N or state in exact block H
+  is an open authority and finality decision.
 - No live providers exist; all evidence is supplied by the caller.
 - Only five claim types are defined: `ASSET_IDENTITY`, `TOKEN_BALANCE_AT_BLOCK`, `TOKEN_USD_PRICE`,
   `TOKEN_USD_VALUE`, `VAULT_TECHNICAL_READINESS`.

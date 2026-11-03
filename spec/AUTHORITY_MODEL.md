@@ -35,12 +35,15 @@ Corroboration can raise support to at most `SUPPORTED` and never to `ESTABLISHED
 A derived assertion has origin `WALLETWALL_DERIVED`. Its authority is WalletWall's published rule, scoped to the
 derived claim only; it never relabels the authority of its inputs, and always carries
 `WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY`. Its support is the weakest of its dependencies. It inherits every
-dependency limitation.
+dependency limitation. It gets no support from a dependency about another subject: its subject must match every
+dependency's on the subject keys their claim types share, otherwise it is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`.
 
 ## Conflicts
 
 Conflicts are never auto-resolved by ranking sources. They produce `CONFLICTING`, which propagates to dependents as
-`CONFLICTING`, and downstream classifications such as readiness resolve to `NOT_ESTABLISHED`.
+`CONFLICTING`, and downstream classifications such as readiness resolve to `NOT_ESTABLISHED`. Claim identity compares
+address-like subject keys case-insensitively, as the claim contract marks them, so two spellings of one address cannot
+hide a conflict.
 
 ## Registry
 

@@ -348,15 +348,17 @@ digest integrity != factual truth
 
 ## Address identity
 
-Subject identity is computed in one module, `packages/mcp/src/wallprint/identity.ts`, which reproduces the engine's
-current behaviour: conflict grouping (`evaluate.ts`, the canonical key over the policy's `subjectKeys`) and
-supersession identity (`invariants.ts`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH`) compare the exact subject strings,
-while only observation-to-assertion matching folds case for address-like keys (`claims.ts`
-`CASE_INSENSITIVE_SUBJECT_KEYS`). Two subjects differing only in hexadecimal address case are therefore two identities,
-and WallPrint inherits that. `identity.test.ts` pins it. This lane does not normalise case; that remains an explicit
-semantic decision to be made in `identity.ts` and nowhere else. Note that `EVIDENCE_PROFILE.md` section 11 says
-addresses are compared case-insensitively, which describes only the observation-matching seam; it is reported here
-rather than edited, because the spec text is embedded in the generated bundle and its hashes.
+WallPrint's subject identity is computed in one module, `packages/mcp/src/wallprint/identity.ts`, and compares the exact
+subject strings under the policy's `subjectKeys` and `supersessionKeys`. A record commits to the spelling it holds, so two
+subjects differing only in hexadecimal address case are two WallPrint identities, and a successor that re-spells its
+predecessor's subject is refused with `SUBJECT_MISMATCH`, which fails closed. `identity.test.ts` pins it. WallPrint does
+not normalise case; that remains an explicit semantic decision to be made in `identity.ts` and nowhere else.
+
+The evidence engine is a different seam. As `EVIDENCE_PROFILE.md` section 11 says, it compares addresses and block
+hashes case-insensitively wherever subject identity is compared (`packages/mcp/src/subject.ts`, `claims.ts`
+`CASE_INSENSITIVE_SUBJECT_KEYS`). A record's claims, conflicts and violations come from the engine, so they treat two
+spellings of one address as one subject, while the record's own `subject.identity` keeps the spelling of its focal
+assertion.
 
 ## Replay
 
@@ -374,6 +376,8 @@ own rules version does, and the policies digest pins the rules table. A `MISMATC
 reason per differing top-level section (`SUBJECT_MISMATCH`, `SNAPSHOT_MISMATCH`, `EVIDENCE_MISMATCH`,
 `CLAIM_MISMATCH`, `ASSESSMENT_MISMATCH`, `PROVENANCE_MISMATCH`, `LIMITATION_MISMATCH`, `CONFLICT_MISMATCH`,
 `VIOLATION_MISMATCH`, `POLICY_VERSION_MISMATCH`, `RULE_VERSION_MISMATCH`, `VERSION_MISMATCH`).
+A correction to the engine's evaluation changes what replay recomputes: a record committed earlier over evidence that
+exercises the corrected behaviour replays as `MISMATCH` and says so, rather than being reproduced.
 
 **UNREPLAYABLE is not INCORRECT.** An unreplayable result carries no content-mismatch reason and no recomputed digest.
 

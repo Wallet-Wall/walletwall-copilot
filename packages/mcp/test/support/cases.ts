@@ -49,6 +49,8 @@ export interface Expectation {
   schemaRejected?: true;
   assertions?: Record<string, AssertionExpectation>;
   violations?: { none?: true; include?: { invariant: string; code: string }[] };
+  /** The readiness rule over the same bundle, so a case can require that two surfaces agree. */
+  readiness?: { identityAssertionId: string; balanceAssertionId: string; classification: "CRITERIA_MET" | "CRITERIA_NOT_MET" | "NOT_ESTABLISHED" };
 }
 
 export interface ConformanceCase {
@@ -413,6 +415,34 @@ base(
   });
 }
 
+const READINESS_INPUTS = { identityAssertionId: "a-identity", balanceAssertionId: "a-balance" };
+
+base(
+  "FRS-010",
+  "freshness",
+  "freshness",
+  "PINNED does not excuse the future: a pinned balance dated after the evaluation time is PARTIAL with unknown freshness, and readiness is not met.",
+  replaceObservation(golden(), "obs-balance", { observedAt: T("2031-01-01T00:00:00Z") }),
+  {
+    assertions: { "a-balance": { supportState: "PARTIAL", freshnessState: "UNKNOWN_FRESHNESS", limitationsInclude: ["OBSERVATION_FROM_FUTURE"] } },
+    violations: { none: true },
+    readiness: { ...READINESS_INPUTS, classification: "NOT_ESTABLISHED" },
+  },
+);
+
+base(
+  "FRS-011",
+  "freshness",
+  "freshness",
+  "A PINNED balance observed exactly at the evaluation time is not in the future.",
+  replaceObservation(golden(), "obs-balance", { observedAt: EVALUATED_AT }),
+  {
+    assertions: { "a-balance": { supportState: "ESTABLISHED", freshnessState: "PINNED", limitationsExclude: ["OBSERVATION_FROM_FUTURE"] } },
+    violations: { none: true },
+    readiness: { ...READINESS_INPUTS, classification: "CRITERIA_MET" },
+  },
+);
+
 // ---------------------------------------------------------------- conflict
 {
   const b = golden();
@@ -522,6 +552,78 @@ base(
   base("CNF-009", "conflict", "supersession", "Re-using an assertion ID with different content is a silent rewrite (INV-12).", dup, {
     violations: { include: [{ invariant: "INV-12", code: "DUPLICATE_ASSERTION_ID" }] },
   });
+}
+
+{
+  const USDC_CHECKSUM = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const secondBalance = (subjectOver: Record<string, string>, balanceAtomic: string): Bundle => {
+    const b = golden();
+    const subject = { chainId: "1", token: USDC, holder: HOLDER, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH, ...subjectOver };
+    b.sources.push(chain2());
+    b.observations.push(bal2({ subject, payload: { balanceAtomic, decimals: "6" } }));
+    b.assertions.push(balanceAssertion({ id: "a-balance-2", subject, value: { balanceAtomic, decimals: "6" }, observationIds: ["obs-balance-2"] }));
+    return b;
+  };
+  const conflicted = {
+    assertions: {
+      "a-balance": { supportState: "CONFLICTING", conflictsWith: ["a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] },
+      "a-balance-2": { supportState: "CONFLICTING", conflictsWith: ["a-balance"] },
+    },
+    violations: { none: true },
+    readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-balance", classification: "NOT_ESTABLISHED" },
+  } satisfies Expectation;
+  const holderCase = golden();
+  const lowerHolder = `0x${"a".repeat(40)}`;
+  holderCase.observations = holderCase.observations.map((o) => (o.id === "obs-balance" ? { ...o, subject: { ...o.subject, holder: lowerHolder } } : o));
+  holderCase.assertions = holderCase.assertions.map((a) => (a.id === "a-balance" ? { ...a, subject: { ...a.subject, holder: lowerHolder } } : a));
+  holderCase.sources.push(chain2());
+  const mixedSubject = { chainId: "1", token: USDC, holder: `0x${"A".repeat(40)}`, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH };
+  holderCase.observations.push(bal2({ subject: mixedSubject, payload: { balanceAtomic: "999", decimals: "6" } }));
+  holderCase.assertions.push(balanceAssertion({ id: "a-balance-2", subject: mixedSubject, value: { balanceAtomic: "999", decimals: "6" }, observationIds: ["obs-balance-2"] }));
+  base("CNF-010", "conflict", "conflict", "Address identity is case-insensitive: the same holder spelled in another hex case with a different balance is a conflict.", holderCase, conflicted);
+  base("CNF-011", "conflict", "conflict", "Token contract identity is case-insensitive: an EIP-55 spelling of the same contract with a different balance is a conflict.", secondBalance({ token: USDC_CHECKSUM }, "999"), conflicted);
+  base("CNF-012", "conflict", "conflict", "A case-only spelling with the same balance is the same claim and no conflict.", secondBalance({ token: USDC_CHECKSUM }, "1500000"), {
+    assertions: {
+      "a-balance": { supportState: "ESTABLISHED", conflictsWith: [] },
+      "a-balance-2": { supportState: "ESTABLISHED", conflictsWith: [] },
+    },
+    violations: { none: true },
+    readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-balance", classification: "CRITERIA_MET" },
+  });
+
+  const reused = golden();
+  reused.assertions.push(balanceAssertion({ subject: { chainId: "1", token: USDC, holder: `0x${"99".repeat(20)}`, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH }, observationIds: [] }));
+  const refused = {
+    assertions: {
+      "a-balance": { supportState: "NOT_ESTABLISHED", limitationsInclude: ["NO_SOURCE"] },
+      "a-identity": { supportState: "NOT_ESTABLISHED" },
+    },
+    violations: { include: [{ invariant: "INV-12", code: "DUPLICATE_ASSERTION_ID" }] },
+    readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-balance", classification: "NOT_ESTABLISHED" },
+  } satisfies Expectation;
+  base("CNF-013", "conflict", "supersession", "A reused assertion id is structurally ambiguous: no record wins, the bundle is refused and readiness is not met, whichever record comes first.", reused, refused);
+  const reusedOtherOrder = clone(reused);
+  reusedOtherOrder.assertions = [...reusedOtherOrder.assertions].reverse();
+  base("CNF-014", "conflict", "supersession", "The same reused assertion id with the records in the other order gives the same refusal.", reusedOtherOrder, refused);
+  const reusedIdentical = golden();
+  reusedIdentical.assertions.push(balanceAssertion());
+  base("CNF-015", "conflict", "supersession", "A reused assertion id is refused even when both records are byte-identical.", reusedIdentical, refused);
+
+  base(
+    "CNF-016",
+    "conflict",
+    "conflict",
+    "CHARACTERIZATION of current contract behaviour, not a safety claim: blockHash is part of the subject, so two finalized readings at one height with different hashes are two fork-specific claims and no conflict. Canonical-height versus exact-block semantics need a separate authority and finality decision.",
+    secondBalance({ blockHash: `0x${"cd".repeat(32)}` }, "999"),
+    {
+      assertions: {
+        "a-balance": { supportState: "ESTABLISHED", conflictsWith: [] },
+        "a-balance-2": { supportState: "ESTABLISHED", conflictsWith: [] },
+      },
+      violations: { none: true },
+      readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-balance", classification: "CRITERIA_MET" },
+    },
+  );
 }
 
 // --------------------------------------------------------------- authority
@@ -739,3 +841,20 @@ base("ADV-014", "adversarial", "dependency-graph", "A derivation with an unknown
 base("ADV-015", "adversarial", "registry", "A bundle that names a different registry version is evaluated with the engine's registry and flagged.", { ...golden(), registryVersion: "9.9.9" }, {
   assertions: { "a-identity": { limitationsInclude: ["REGISTRY_VERSION_MISMATCH"] } },
 });
+
+{
+  const forgedHolder = { chainId: "1", token: USDC, holder: `0x${"99".repeat(20)}`, blockNumber: BLOCK_NUMBER, blockHash: BLOCK_HASH };
+  base("ADV-016", "adversarial", "dependency-graph", "A derived readiness claim about a holder nobody measured gets no support from inputs about another holder.", withReadiness(golden(), { subject: forgedHolder }), {
+    assertions: {
+      "readiness-result": { supportState: "NOT_ESTABLISHED", limitationsInclude: ["SUBJECT_MISMATCH"] },
+      "a-balance": { supportState: "ESTABLISHED" },
+    },
+    violations: { include: [{ invariant: "INV-00", code: "SUBJECT_MISMATCH" }] },
+  });
+  const usd = withUsdValue(golden());
+  usd.assertions = usd.assertions.map((a) => (a.id === "a-usd" ? { ...a, subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: BLOCK_HASH } } : a));
+  base("ADV-017", "adversarial", "dependency-graph", "A derived USD value about another block gets no support from inputs at this block: every subject key of the policy is bound.", usd, {
+    assertions: { "a-usd": { supportState: "NOT_ESTABLISHED", limitationsInclude: ["SUBJECT_MISMATCH"] } },
+    violations: { include: [{ invariant: "INV-00", code: "SUBJECT_MISMATCH" }] },
+  });
+}

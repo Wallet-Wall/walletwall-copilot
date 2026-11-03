@@ -187,7 +187,8 @@ describe("consumer contract: per-claim shapes are published, not inferred", () =
     assert.match(identity.value.properties["decimals"]?.pattern ?? "", /0-9/);
     assert.ok(identity.observation);
     assert.deepEqual(identity.observation.sourceKindByOrigin["AUTHORITY_ATTESTED"], ["ISSUER_PUBLICATION"]);
-    assert.match(identity.subject.properties["address"]?.description ?? "", /lowercase/i, "the contract says how address case is treated");
+    assert.match(identity.subject.properties["address"]?.description ?? "", /case-insensitively wherever subject identity is compared/i, "the contract says how address case is treated");
+    assert.match(identity.subject.properties["address"]?.description ?? "", /keep the spelling supplied/i, "and that comparison does not rewrite records");
     assert.equal(identity.authority.authorityIdSource, "REGISTRY");
     assert.equal(identity.example, EXAMPLE_RESOURCES.identity);
     await c.close();

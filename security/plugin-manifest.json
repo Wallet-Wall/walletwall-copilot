@@ -31,8 +31,8 @@
     "walletwall-evidence",
     "walletwall-evidence-audit"
   ],
-  "toolManifestSha512": "357b0e2237e9713ea71d2e78929c447e058bf251f7a58d7aefc962dbbd5dc256550ce02e3d3e5472011eba41017b68d81a37569966403d6ba75b927ad550573e",
-  "serverBundleSha512": "ef4a33bb14757ccb7047cfd6c7e1da0b86c90372fe158d20a63f9abcd7fc3430d2eebc99343fb59be9085b3ee3eafaaa441b8b19e18ccfbe90a4b8b57fcc8f53",
+  "toolManifestSha512": "bdafae04a3b6eee9a668df398ba3bca3e322743d323dbd1b63dbdee200f01f3dc30959385dea9da85d7b7ed529be960c4e7f9b4a653c2f85e454ecaf260cd4eb",
+  "serverBundleSha512": "da1645bb95374424a41a103949015d66b9a216977a102b87d7e8fa603e9501eb3ee097890c506bf3db9e5319cf7363f0e9d922870f4f59fa85f1d469e63a6011",
   "files": [
     {
       "path": "plugin/.claude-plugin/plugin.json",
@@ -161,8 +161,8 @@
     },
     {
       "path": "plugin/server/walletwall-mcp.mjs",
-      "sha512": "ef4a33bb14757ccb7047cfd6c7e1da0b86c90372fe158d20a63f9abcd7fc3430d2eebc99343fb59be9085b3ee3eafaaa441b8b19e18ccfbe90a4b8b57fcc8f53",
-      "bytes": 998883
+      "sha512": "da1645bb95374424a41a103949015d66b9a216977a102b87d7e8fa603e9501eb3ee097890c506bf3db9e5319cf7363f0e9d922870f4f59fa85f1d469e63a6011",
+      "bytes": 1005576
     },
     {
       "path": "plugin/skills/vault-readiness/SKILL.md",
@@ -176,8 +176,8 @@
     },
     {
       "path": "plugin/skills/walletwall-evidence/SKILL.md",
-      "sha512": "caa1e4ebdae9904e361d5e2f4ed69dccc21819a9cf5d8ed059d7716fa4c5f22c8773dfb755deb3eeaa6b4ae77ccc9fa381af51c55684ce4b5a96b63a625af1a0",
-      "bytes": 6596
+      "sha512": "a93cd20caed7289fb3ba553fbbfefdbbc52db24f3abfa1ee29231b053880a8db80a02445fa3e29922abb44752597a5225f8c85944c3ca60a01299401dd777bd0",
+      "bytes": 7034
     },
     {
       "path": "plugin/skills/walletwall-evidence-audit/SKILL.md",

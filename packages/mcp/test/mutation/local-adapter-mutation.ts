@@ -63,7 +63,7 @@ const MUTANTS: readonly Mutant[] = [
   B("a refused request logs the presented Authorization header", "    sendFixed(res, 401);\n    return;", "    process.stderr.write(`rejected ${String(req.headers.authorization)}\\n`);\n    sendFixed(res, 401);\n    return;"),
   B("the startup URL carries the token", "${boundPort}/mcp\\n`);", "${boundPort}/mcp?token=${token}\\n`);"),
   // engine: open maps
-  E("an unknown subject key changes conflict grouping", "evaluate.ts", "const subjectKey = canonicalize(policy ? pick(a.subject, policy.subjectKeys) : a.subject);", "const subjectKey = canonicalize(a.subject);"),
+  E("an unknown subject key changes conflict grouping", "evaluate.ts", "const subjectKey = policy ? subjectIdentityKey(a.subject, policy.subjectKeys) : canonicalize(a.subject);", "const subjectKey = canonicalize(a.subject);"),
   E("an unknown payload key changes observation disagreement", "evaluate.ts", "canonicalize(pick(o.payload, policy.valueKeys))", "canonicalize(o.payload)"),
   E("an unknown payload key changes the corroboration count", "evaluate.ts", "evidenceDigest(pick(o.payload, policy.valueKeys))", "evidenceDigest(o.payload)"),
   E("an unknown value key changes the assertion-to-observation comparison", "evaluate.ts", "if (!sameCanonical(pick(a.value, policy.valueKeys), pick(first.payload, policy.valueKeys))) {", "if (!sameCanonical(a.value, first.payload)) {"),

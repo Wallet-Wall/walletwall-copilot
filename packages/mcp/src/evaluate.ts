@@ -1,6 +1,5 @@
 import { canonicalize, evidenceDigest } from "./canonical.ts";
 import {
-  CASE_INSENSITIVE_SUBJECT_KEYS,
   ORIGIN_SOURCE_KINDS,
   SUBJECT_KEY_RULES,
   VALUE_KEY_RULES,
@@ -9,6 +8,7 @@ import {
   valueValid,
   type AssertionDiagnostic,
 } from "./claims.ts";
+import { dependencySubjectMismatches, subjectIdentityKey, subjectKeyEqual, subjectMatches } from "./subject.ts";
 import {
   type Assertion,
   type Bundle,
@@ -115,6 +115,12 @@ export interface BundleIndex {
   duplicateIds: Violation[];
 }
 
+/** What evaluating evidence reads. An assertion id used by more than one record is absent from `assertions`: it names no record. */
+export interface EvidenceIndex extends BundleIndex {
+  /** The records behind each reused assertion id. Any entry stops every evaluation of the bundle. */
+  ambiguousAssertions: Map<string, Assertion[]>;
+}
+
 const FINALITY_ORDER: readonly FinalityState[] = ["UNFINALIZED", "UNKNOWN_FINALITY", "FINALIZED"];
 
 export function weakestFinality(states: readonly FinalityState[]): FinalityState {
@@ -138,6 +144,10 @@ function indexBy<T extends { id: string }>(items: readonly T[], dups: Violation[
   return m;
 }
 
+/**
+ * Records by id, keeping the first record of a reused id. WallPrint's versioned admission rules read this, so how the engine
+ * evaluates evidence cannot move them. Nothing that evaluates evidence may use it: see indexEvidence.
+ */
 export function indexBundle(bundle: Bundle): BundleIndex {
   const duplicateIds: Violation[] = [];
   return {
@@ -147,6 +157,20 @@ export function indexBundle(bundle: Bundle): BundleIndex {
     derivations: indexBy(bundle.derivations, duplicateIds, "DERIVATION"),
     duplicateIds,
   };
+}
+
+/**
+ * The index for evaluating evidence. A reused assertion id does not say which claim it means, and choosing the first or the
+ * last record would only pick which reading wins. So it is taken out of the table, and evaluation, invariants, readiness and
+ * provenance all see the same thing: no such record.
+ */
+export function indexEvidence(bundle: Bundle): EvidenceIndex {
+  const index = indexBundle(bundle);
+  const byId = new Map<string, Assertion[]>();
+  for (const a of bundle.assertions) byId.set(a.id, [...(byId.get(a.id) ?? []), a]);
+  const ambiguousAssertions = new Map([...byId].filter(([, records]) => records.length > 1));
+  for (const id of ambiguousAssertions.keys()) index.assertions.delete(id);
+  return { ...index, ambiguousAssertions };
 }
 
 export function pick(rec: FlatRecordValue | null, keys: readonly string[]): Record<string, string | boolean | null> | null {
@@ -162,20 +186,6 @@ export function pick(rec: FlatRecordValue | null, keys: readonly string[]): Reco
 
 function sameCanonical(a: unknown, b: unknown): boolean {
   return canonicalize(a) === canonicalize(b);
-}
-
-function subjectKeyEqual(key: string, a: string, b: string): boolean {
-  return CASE_INSENSITIVE_SUBJECT_KEYS.has(key) ? a.toLowerCase() === b.toLowerCase() : a === b;
-}
-
-function subjectMatches(obsSubject: FlatRecordValue, assertionSubject: FlatRecordValue, keys: readonly string[]): boolean {
-  for (const k of keys) {
-    const a = obsSubject[k];
-    const b = assertionSubject[k];
-    if (typeof a !== "string" || typeof b !== "string") return false;
-    if (!subjectKeyEqual(k, a, b)) return false;
-  }
-  return true;
 }
 
 /** Explains a SUBJECT_MISMATCH for one observation: which subject keys are absent, malformed or different. */
@@ -226,7 +236,7 @@ function emptyCore(policy: Policy | undefined): Core {
 }
 
 export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation {
-  const idx = indexBundle(bundle);
+  const idx = indexEvidence(bundle);
   const evalMs = Date.parse(evaluatedAt);
   const violations: Violation[] = [...idx.duplicateIds];
 
@@ -253,7 +263,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
   for (const a of idx.assertions.values()) {
     if (supersededBy.has(a.id)) continue;
     const policy = getPolicy(a.claimType);
-    const subjectKey = canonicalize(policy ? pick(a.subject, policy.subjectKeys) : a.subject);
+    const subjectKey = policy ? subjectIdentityKey(a.subject, policy.subjectKeys) : canonicalize(a.subject);
     const key = `${a.claimType}|${a.temporality}|${subjectKey}`;
     const arr = groups.get(key) ?? [];
     arr.push(a);
@@ -312,6 +322,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
       support = "CONFLICTING";
       limitations.add(conflictCause.get(a.id) ?? "CONFLICT_DETECTED");
     }
+    if (idx.ambiguousAssertions.size > 0) support = "NOT_ESTABLISHED";
     const result: AssertionEvaluation = {
       assertionId: a.id,
       claimType: a.claimType,
@@ -552,26 +563,25 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     if (a.claimType === "TOKEN_USD_PRICE") lim.add("PRICE_IS_PROVIDER_OBSERVATION");
     support = weakest([support, cap]);
 
-    if (a.temporality === "PINNED") {
+    // The future is checked before temporality: PINNED means a historical point, not a reading from after evaluatedAt.
+    let newest = Number.NEGATIVE_INFINITY;
+    for (const o of valueObs) newest = Math.max(newest, Date.parse(o.observedAt));
+    if (newest > evalMs) {
+      core.freshness = "UNKNOWN_FRESHNESS";
+      lim.add("OBSERVATION_FROM_FUTURE");
+    } else if (a.temporality === "PINNED") {
       core.freshness = "PINNED";
+    } else if (policy.maxAgeSeconds === null) {
+      core.freshness = "UNKNOWN_FRESHNESS";
+      lim.add("FRESHNESS_UNKNOWN");
+    } else if ((evalMs - newest) / 1000 > policy.maxAgeSeconds) {
+      core.freshness = "STALE";
+      lim.add("STALE_EVIDENCE");
     } else {
-      let newest = Number.NEGATIVE_INFINITY;
-      for (const o of valueObs) newest = Math.max(newest, Date.parse(o.observedAt));
-      if (newest > evalMs) {
-        core.freshness = "UNKNOWN_FRESHNESS";
-        lim.add("OBSERVATION_FROM_FUTURE");
-      } else if (policy.maxAgeSeconds === null) {
-        core.freshness = "UNKNOWN_FRESHNESS";
-        lim.add("FRESHNESS_UNKNOWN");
-      } else if ((evalMs - newest) / 1000 > policy.maxAgeSeconds) {
-        core.freshness = "STALE";
-        lim.add("STALE_EVIDENCE");
-      } else {
-        core.freshness = "CURRENT";
-      }
-      if (core.freshness === "STALE") support = weakest([support, "STALE"]);
-      if (core.freshness === "UNKNOWN_FRESHNESS") support = weakest([support, "PARTIAL"]);
+      core.freshness = "CURRENT";
     }
+    if (core.freshness === "STALE") support = weakest([support, "STALE"]);
+    if (core.freshness === "UNKNOWN_FRESHNESS") support = weakest([support, "PARTIAL"]);
     core.support = support;
     return core;
   };
@@ -590,6 +600,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
       return core;
     }
     const deps: AssertionEvaluation[] = [];
+    const mismatchedKeys = new Set<string>();
     for (const id of d.inputAssertionIds) {
       const dep = idx.assertions.get(id);
       if (dep === undefined) {
@@ -597,6 +608,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
         violations.push({ invariant: "INV-00", code: "DANGLING_REFERENCE", assertionId: a.id });
         continue;
       }
+      for (const k of dependencySubjectMismatches(a.subject, policy.subjectKeys, dep.subject, getPolicy(dep.claimType)?.subjectKeys ?? [])) mismatchedKeys.add(k);
       deps.push(evalAssertion(dep));
     }
     core.assertionIds = deps.map((x) => x.assertionId);
@@ -611,6 +623,31 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
         lim.add("MISSING_REQUIRED_DEPENDENCY");
         return core;
       }
+    }
+    // A derived claim is about what its inputs are about. Support from inputs about another subject is no support.
+    if (!subjectValid(a.subject, policy.subjectKeys)) {
+      lim.add("INVALID_SUBJECT");
+      core.diagnostics.push({
+        limitation: "INVALID_SUBJECT",
+        record: "ASSERTION_SUBJECT",
+        observationId: null,
+        ...diagnoseRecord(a.subject, SUBJECT_KEY_RULES, policy.subjectKeys),
+        mismatchedKeys: [],
+      });
+      violations.push({ invariant: "INV-00", code: "INVALID_SUBJECT", assertionId: a.id });
+      return core;
+    }
+    if (mismatchedKeys.size > 0) {
+      lim.add("SUBJECT_MISMATCH");
+      core.diagnostics.push({
+        limitation: "SUBJECT_MISMATCH",
+        record: "ASSERTION_SUBJECT",
+        observationId: null,
+        ...diagnoseRecord(a.subject, SUBJECT_KEY_RULES, policy.subjectKeys),
+        mismatchedKeys: policy.subjectKeys.filter((k) => mismatchedKeys.has(k)),
+      });
+      violations.push({ invariant: "INV-00", code: "SUBJECT_MISMATCH", assertionId: a.id });
+      return core;
     }
     const supports: SupportState[] = [];
     let anyStale = false;
@@ -634,7 +671,10 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     core.authoritySatisfied = true;
 
     const depFresh = deps.map((x) => x.freshnessState);
-    if (a.temporality === "PINNED") {
+    if (a.temporality === "PINNED" && deps.some((x) => x.limitations.includes("OBSERVATION_FROM_FUTURE"))) {
+      core.freshness = "UNKNOWN_FRESHNESS";
+      support = weakest([support, "PARTIAL"]);
+    } else if (a.temporality === "PINNED") {
       core.freshness = "PINNED";
     } else if (anyStale || depFresh.includes("STALE")) {
       core.freshness = "STALE";
@@ -653,7 +693,20 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     return core;
   };
 
-  const results = [...idx.assertions.values()].map(evalAssertion).sort((x, y) => (x.assertionId < y.assertionId ? -1 : 1));
+  /** A reused id is reported once and described only by what does not depend on record order. No record supplies its support. */
+  const evalAmbiguous = (records: readonly Assertion[]): AssertionEvaluation => {
+    const ordered = [...records].sort((x, y) => {
+      const [cx, cy] = [canonicalize(x), canonicalize(y)];
+      return cx < cy ? -1 : cx > cy ? 1 : 0;
+    });
+    const label = ordered[0] as Assertion;
+    const policy = getPolicy(label.claimType);
+    const core = emptyCore(policy);
+    core.limitations.add("NO_SOURCE");
+    return { ...finish(label, policy, core, true), digest: evidenceDigest(ordered) };
+  };
+
+  const results = [...[...idx.assertions.values()].map(evalAssertion), ...[...idx.ambiguousAssertions.values()].map(evalAmbiguous)].sort((x, y) => (x.assertionId < y.assertionId ? -1 : 1));
 
   return {
     evaluatedAt,

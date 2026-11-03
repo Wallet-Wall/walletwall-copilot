@@ -2,7 +2,8 @@ import type { Bundle, Assertion, LimitationCode, SupportState } from "./schemas.
 import { evidenceDigest } from "./canonical.ts";
 import { SUBJECT_KEY_RULES } from "./claims.ts";
 import { RULES_VERSION, getPolicy } from "./registry.ts";
-import { evaluateBundle, weakest, type AssertionEvaluation, type Evaluation } from "./evaluate.ts";
+import { evaluateBundle, indexEvidence, weakest, type AssertionEvaluation, type Evaluation } from "./evaluate.ts";
+import { subjectKeyEqual } from "./subject.ts";
 
 export const READINESS_RULE_ID = "wwvr.vault-technical-readiness";
 export const READINESS_RULES_VERSION = RULES_VERSION;
@@ -88,7 +89,7 @@ export function assessReadiness(
   balanceAssertionId: string,
 ): ReadinessResult {
   const evalById = new Map(evaluation.assertions.map((e) => [e.assertionId, e]));
-  const aById = new Map(bundle.assertions.map((a) => [a.id, a]));
+  const { assertions: aById, ambiguousAssertions } = indexEvidence(bundle);
   const idEval = find(evalById, identityAssertionId);
   const balEval = find(evalById, balanceAssertionId);
   const idA = aById.get(identityAssertionId);
@@ -99,7 +100,10 @@ export function assessReadiness(
     criteria.push({ id, description: DESCRIPTIONS[id], outcome, reason });
   };
 
-  if (!typed || !idA || !balA || !idEval || !balEval) {
+  if (ambiguousAssertions.size > 0) {
+    // A reused assertion id anywhere in the bundle: the structural ambiguity check_invariants reports stops the rule here.
+    for (const id of Object.keys(DESCRIPTIONS) as (keyof typeof DESCRIPTIONS)[]) add(id, "INDETERMINATE", "DUPLICATE_ASSERTION_ID");
+  } else if (!typed || !idA || !balA || !idEval || !balEval) {
     for (const id of Object.keys(DESCRIPTIONS) as (keyof typeof DESCRIPTIONS)[]) {
       add(id, "INDETERMINATE", "REQUIRED_INPUT_ASSERTION_MISSING_OR_WRONG_CLAIM_TYPE");
     }
@@ -115,8 +119,7 @@ export function assessReadiness(
     const sameChain = idA.subject["chainId"] === balA.subject["chainId"];
     const idAddr = idA.subject["address"];
     const balToken = balA.subject["token"];
-    const sameToken =
-      typeof idAddr === "string" && typeof balToken === "string" && idAddr.toLowerCase() === balToken.toLowerCase();
+    const sameToken = typeof idAddr === "string" && typeof balToken === "string" && subjectKeyEqual("token", idAddr, balToken);
     add("C3", sameChain && sameToken ? "MET" : "NOT_MET", sameChain && sameToken ? "SUBJECT_CONSISTENT" : "SUBJECT_INCONSISTENT");
 
     const idDec = idA.value?.["decimals"];
@@ -128,7 +131,7 @@ export function assessReadiness(
       e.supportState === "CONFLICTING" || e.supportState === "SUPERSEDED" || e.conflictsWith.length > 0;
     add("C5", bad(idEval) || bad(balEval) ? "INDETERMINATE" : "MET", bad(idEval) || bad(balEval) ? "CONFLICT_OR_SUPERSESSION" : "NO_CONFLICT");
 
-    const freshOk = (e: AssertionEvaluation): boolean => e.temporality === "PINNED" || e.freshnessState === "CURRENT";
+    const freshOk = (e: AssertionEvaluation): boolean => !e.limitations.includes("OBSERVATION_FROM_FUTURE") && (e.temporality === "PINNED" || e.freshnessState === "CURRENT");
     add("C6", freshOk(idEval) && freshOk(balEval) ? "MET" : "INDETERMINATE", freshOk(idEval) && freshOk(balEval) ? "FRESH_OR_PINNED" : "NOT_CURRENT");
   }
 

@@ -41,8 +41,10 @@ export interface KeyRule {
   accepts: (value: string) => boolean;
   /** JSON Schema fragment published for this key. */
   schema: KeySchema;
-  /** Observation-to-assertion subject matching folds case for this key (hex addresses and hashes). */
+  /** Subject identity folds case for this key wherever it is compared (hex addresses and hashes). Records keep their spelling. */
   caseInsensitive?: true;
+  /** The subject key this one is called on other claim types, for comparing a derived claim with its dependencies. */
+  sameAs?: string;
 }
 
 const BLOCK_NUMBER_RE = /^(0|[1-9][0-9]{0,17})$/;
@@ -85,6 +87,7 @@ export const SUBJECT_KEY_RULES: Readonly<Record<string, KeyRule>> = {
     accepts: (v) => ADDRESS_RE.test(v),
     schema: { type: "string", pattern: ADDRESS_RE.source, description: "Token contract address: 0x followed by 40 hex digits." },
     caseInsensitive: true,
+    sameAs: "token",
   },
   token: {
     accepts: (v) => ADDRESS_RE.test(v),
@@ -107,7 +110,7 @@ export const SUBJECT_KEY_RULES: Readonly<Record<string, KeyRule>> = {
   },
 };
 
-/** Subject keys whose observation-to-assertion match folds case. The evaluator reads this set; the contract prose is generated from it. */
+/** Subject keys whose identity folds case. subject.ts reads this set for every comparison; the contract prose is generated from it. */
 export const CASE_INSENSITIVE_SUBJECT_KEYS: ReadonlySet<string> = new Set(
   Object.entries(SUBJECT_KEY_RULES)
     .filter(([, rule]) => rule.caseInsensitive === true)
@@ -115,7 +118,7 @@ export const CASE_INSENSITIVE_SUBJECT_KEYS: ReadonlySet<string> = new Set(
 );
 
 const CASE_NOTE =
-  " Matched case-insensitively between an observation and its assertion; conflict grouping and supersession identity compare the exact string, so supply lowercase hex.";
+  " Compared case-insensitively wherever subject identity is compared: observation to assertion, conflict grouping, supersession identity and derived claim to dependency. Records and digests keep the spelling supplied.";
 
 /** Value keys per claim type. The same shape applies to assertion.value and to each supporting observation.payload. */
 export const VALUE_KEY_RULES: Readonly<Record<ClaimType, Readonly<Record<string, KeyRule>>>> = {
@@ -336,7 +339,7 @@ export function claimContracts(examplesByClaim: Readonly<Partial<Record<ClaimTyp
             ruleId: p.ruleId,
             requiredDependencyClaimTypes: p.requiredDependencyClaimTypes,
             linkage:
-              "assertion.derivationId names a bundle derivation whose outputAssertionId is this assertion's id and whose inputAssertionIds name the dependency assertions; assertion.observationIds is empty and assertion.origin is WALLETWALL_DERIVED.",
+              "assertion.derivationId names a bundle derivation whose outputAssertionId is this assertion's id and whose inputAssertionIds name the dependency assertions; assertion.observationIds is empty and assertion.origin is WALLETWALL_DERIVED. assertion.subject must match every dependency's subject on every subject key the two claim types share (an identity's address compares as the token), otherwise the assertion is NOT_ESTABLISHED with SUBJECT_MISMATCH and check_invariants reports it.",
           }
         : null,
       example: examplesByClaim[p.claimType] ?? null,
@@ -351,6 +354,10 @@ export function claimContracts(examplesByClaim: Readonly<Partial<Record<ClaimTyp
       scalarValues: "string, boolean or null. Every evidence-critical value is a string; JSON numbers are rejected by the bundle schema.",
       textPattern: SAFE_TEXT_RE.source,
       maxEntries: LIMITS.recordEntries,
+    },
+    bundleRules: {
+      assertionIds: "An assertion id must be unique within a bundle. A reused id names no record, whichever comes first: every assertion in the bundle is NOT_ESTABLISHED, readiness is NOT_ESTABLISHED and check_invariants reports INV-12 DUPLICATE_ASSERTION_ID.",
+      observationTime: "A reading with a value dated after evaluatedAt is OBSERVATION_FROM_FUTURE with unknown freshness and at most PARTIAL support, whether the claim is CURRENT or PINNED.",
     },
     diagnostics: {
       limitations: SHAPE_LIMITATIONS,
