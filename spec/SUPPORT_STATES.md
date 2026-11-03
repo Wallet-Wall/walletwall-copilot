@@ -13,7 +13,7 @@ All states describe **evidence sufficiency under published policy**. None assert
 | `STALE` | A `CURRENT`-temporality claim whose newest observation is older than the policy maximum age, or whose dependency was superseded. A stale result never satisfies `CURRENT`. |
 | `SUPERSEDED` | A supersession record replaces this assertion with a later assertion about the same claim identity. The old assertion remains in the bundle. |
 | `UNKNOWN` | Sources were consulted but produced only `NO_RESULT` or `ERROR`. Not `FALSE`, not zero. |
-| `NOT_ESTABLISHED` | No admissible basis: no source, wrong subject or value, invalid values, registry mismatch, missing required dependency, derivation not permitted, a cycle, a derived subject that differs from an input's, or any reused assertion id in the bundle. |
+| `NOT_ESTABLISHED` | No admissible basis: no source, wrong subject or value, invalid values, registry mismatch, missing required dependency, derivation not permitted, a cycle, a derived subject that differs from an input's, or any reused assertion, source, observation or derivation id in the bundle. |
 
 Strength order for combining dependencies, strongest to weakest:
 `ESTABLISHED > SUPPORTED > PARTIAL > STALE > SUPERSEDED > UNKNOWN > CONFLICTING > NOT_ESTABLISHED`.
@@ -50,7 +50,7 @@ When observations disagree, the least final value is reported.
 7. Authority, corroboration and finality → `ESTABLISHED` / `SUPPORTED` / `PARTIAL`.
 8. A reading with a value from the future → `PARTIAL` with `UNKNOWN_FRESHNESS`, for `CURRENT` and `PINNED` alike. Otherwise freshness for `CURRENT` claims → may lower to `STALE` or `PARTIAL`.
 9. Lifecycle: supersession overrides to `SUPERSEDED`; conflict overrides to `CONFLICTING`.
-10. A reused assertion id anywhere in the bundle overrides everything to `NOT_ESTABLISHED`.
+10. A reused assertion id, or a reused source, observation or derivation id, anywhere in the bundle overrides everything to `NOT_ESTABLISHED`.
 
 A derived assertion additionally fails with `INVALID_SUBJECT` when its subject does not meet the claim contract, and with `SUBJECT_MISMATCH` when its subject differs from any input's on a subject key their claim types share; both are `NOT_ESTABLISHED`.
 
@@ -60,8 +60,8 @@ A derived assertion additionally fails with `INVALID_SUBJECT` when its subject d
 assertion and a balance assertion. Criteria: C1 identity established in registry and by issuer authority; C2 balance
 established at a finalized block; C3 same chain and token; C4 decimals agree; C5 no conflict or supersession;
 C6 current inputs fresh and no input from the future. Any definite failure gives `CRITERIA_NOT_MET`; otherwise any
-indeterminate criterion gives `NOT_ESTABLISHED`; otherwise `CRITERIA_MET`. A reused assertion id anywhere in the bundle
-makes every criterion indeterminate. A `CRITERIA_NOT_MET` reached because the two inputs are about different subjects
+indeterminate criterion gives `NOT_ESTABLISHED`; otherwise `CRITERIA_MET`. A reused assertion id, or a reused source,
+observation or derivation id, anywhere in the bundle makes every criterion indeterminate. A `CRITERIA_NOT_MET` reached because the two inputs are about different subjects
 stands as the rule's answer, and an assertion recording it derives from inputs about different subjects, so it is
 `NOT_ESTABLISHED` (`SUBJECT_MISMATCH`). Readiness does not establish investment merit, solvency, creditworthiness, legal
 status, regulatory compliance, absence of fraud, or future performance.
