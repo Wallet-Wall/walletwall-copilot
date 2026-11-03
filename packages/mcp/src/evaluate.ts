@@ -115,10 +115,12 @@ export interface BundleIndex {
   duplicateIds: Violation[];
 }
 
-/** What evaluating evidence reads. An assertion id used by more than one record is absent from `assertions`: it names no record. */
+/** What evaluating evidence reads. An id used by more than one record of its kind is absent from that kind's table: it names no record. */
 export interface EvidenceIndex extends BundleIndex {
-  /** The records behind each reused assertion id. Any entry stops every evaluation of the bundle. */
+  /** The records behind each reused assertion id. */
   ambiguousAssertions: Map<string, Assertion[]>;
+  /** The DUPLICATE_*_ID of a reused id, in a fixed order of kinds, or null when no id is reused. A code stops every evaluation of the bundle. */
+  reusedIdCode: string | null;
 }
 
 const FINALITY_ORDER: readonly FinalityState[] = ["UNFINALIZED", "UNKNOWN_FINALITY", "FINALIZED"];
@@ -159,18 +161,34 @@ export function indexBundle(bundle: Bundle): BundleIndex {
   };
 }
 
+/** Takes every id that more than one record uses out of its table, and returns those records by id. */
+function takeReused<T extends { id: string }>(table: Map<string, T>, records: readonly T[]): Map<string, T[]> {
+  const byId = new Map<string, T[]>();
+  for (const r of records) byId.set(r.id, [...(byId.get(r.id) ?? []), r]);
+  const reused = new Map([...byId].filter(([, sharing]) => sharing.length > 1));
+  for (const id of reused.keys()) table.delete(id);
+  return reused;
+}
+
 /**
- * The index for evaluating evidence. A reused assertion id does not say which claim it means, and choosing the first or the
- * last record would only pick which reading wins. So it is taken out of the table, and evaluation, invariants, readiness and
- * provenance all see the same thing: no such record.
+ * The index for evaluating evidence. A reused id does not say which record it means, and choosing the first or the last record
+ * would only pick which reading wins, so it is taken out of its table. Looking it up finds nothing, for evaluation, invariants,
+ * readiness and provenance alike, whichever kind of record it is. check_invariants also reads every record for what the record
+ * itself presents: that picks no record, and is the same in any order.
  */
 export function indexEvidence(bundle: Bundle): EvidenceIndex {
   const index = indexBundle(bundle);
-  const byId = new Map<string, Assertion[]>();
-  for (const a of bundle.assertions) byId.set(a.id, [...(byId.get(a.id) ?? []), a]);
-  const ambiguousAssertions = new Map([...byId].filter(([, records]) => records.length > 1));
-  for (const id of ambiguousAssertions.keys()) index.assertions.delete(id);
-  return { ...index, ambiguousAssertions };
+  const ambiguousAssertions = takeReused(index.assertions, bundle.assertions);
+  const reusedSources = takeReused(index.sources, bundle.sources);
+  const reusedObservations = takeReused(index.observations, bundle.observations);
+  const reusedDerivations = takeReused(index.derivations, bundle.derivations);
+  const reused: readonly [number, string][] = [
+    [ambiguousAssertions.size, "DUPLICATE_ASSERTION_ID"],
+    [reusedSources.size, "DUPLICATE_SOURCE_ID"],
+    [reusedObservations.size, "DUPLICATE_OBSERVATION_ID"],
+    [reusedDerivations.size, "DUPLICATE_DERIVATION_ID"],
+  ];
+  return { ...index, ambiguousAssertions, reusedIdCode: reused.find(([size]) => size > 0)?.[1] ?? null };
 }
 
 export function pick(rec: FlatRecordValue | null, keys: readonly string[]): Record<string, string | boolean | null> | null {
@@ -322,7 +340,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
       support = "CONFLICTING";
       limitations.add(conflictCause.get(a.id) ?? "CONFLICT_DETECTED");
     }
-    if (idx.ambiguousAssertions.size > 0) support = "NOT_ESTABLISHED";
+    if (idx.reusedIdCode !== null) support = "NOT_ESTABLISHED";
     const result: AssertionEvaluation = {
       assertionId: a.id,
       claimType: a.claimType,

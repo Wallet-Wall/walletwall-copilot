@@ -89,7 +89,7 @@ export function assessReadiness(
   balanceAssertionId: string,
 ): ReadinessResult {
   const evalById = new Map(evaluation.assertions.map((e) => [e.assertionId, e]));
-  const { assertions: aById, ambiguousAssertions } = indexEvidence(bundle);
+  const { assertions: aById, reusedIdCode } = indexEvidence(bundle);
   const idEval = find(evalById, identityAssertionId);
   const balEval = find(evalById, balanceAssertionId);
   const idA = aById.get(identityAssertionId);
@@ -100,9 +100,9 @@ export function assessReadiness(
     criteria.push({ id, description: DESCRIPTIONS[id], outcome, reason });
   };
 
-  if (ambiguousAssertions.size > 0) {
-    // A reused assertion id anywhere in the bundle: the structural ambiguity check_invariants reports stops the rule here.
-    for (const id of Object.keys(DESCRIPTIONS) as (keyof typeof DESCRIPTIONS)[]) add(id, "INDETERMINATE", "DUPLICATE_ASSERTION_ID");
+  if (reusedIdCode !== null) {
+    // A reused id of any kind anywhere in the bundle: the structural ambiguity check_invariants reports stops the rule here.
+    for (const id of Object.keys(DESCRIPTIONS) as (keyof typeof DESCRIPTIONS)[]) add(id, "INDETERMINATE", reusedIdCode);
   } else if (!typed || !idA || !balA || !idEval || !balEval) {
     for (const id of Object.keys(DESCRIPTIONS) as (keyof typeof DESCRIPTIONS)[]) {
       add(id, "INDETERMINATE", "REQUIRED_INPUT_ASSERTION_MISSING_OR_WRONG_CLAIM_TYPE");

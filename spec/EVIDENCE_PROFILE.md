@@ -58,8 +58,7 @@ keep them in the record's digest; the claim contract says how they are treated.
   assertedAt, limitations?, declared?}`. A claim about a subject, backed by observations or by a derivation.
   `temporality` is `CURRENT` (must be fresh) or `PINNED` (a historical point such as a block).
   `declared` lets an author state the support, freshness, finality and corroboration they *believe* apply; the
-  engine never trusts it and reports any excess as a violation. An assertion id MUST be unique within a bundle
-  (section 8).
+  engine never trusts it and reports any excess as a violation.
 - **Derivation** — `{id, ruleId, rulesVersion, inputAssertionIds, outputAssertionId}`. A WalletWall rule applied to
   assertions. Derivations take assertions only, never raw observations. A derived assertion is about what its inputs
   are about: its `subject` MUST match every input's `subject` on the subject keys their claim types share, where an
@@ -82,6 +81,8 @@ keep them in the record's digest; the claim contract says how they are treated.
 - **Supersession** — `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion
   replaces an older one; the older assertion stays in the bundle and is reported `SUPERSEDED`.
 - **RegistryVersion**, **RulesVersion**, **EvidenceProfileVersion** — section 2.
+
+A source, observation, assertion or derivation id MUST be unique among the records of its kind (section 8).
 
 ## 5. States
 
@@ -117,7 +118,8 @@ These are enforced by `check_invariants` and by executable conformance tests. Ea
 
 **INV-00** (engine rule) — declared states MUST NOT exceed states computed by the published rules. A derived assertion
 whose subject differs from its inputs is reported here as `SUBJECT_MISMATCH`, and one whose subject fails the claim
-contract as `INVALID_SUBJECT`.
+contract as `INVALID_SUBJECT`. A reused source, observation or derivation id is reported here as `DUPLICATE_SOURCE_ID`,
+`DUPLICATE_OBSERVATION_ID` or `DUPLICATE_DERIVATION_ID`, against no assertion.
 
 ## 7. Canonicalization and digests
 
@@ -142,7 +144,18 @@ explicit input; the engine never reads a clock. Procedure and per-claim policies
 2. Refuse structural ambiguity. A reused assertion id names no record, whichever record comes first, so nothing depends
    on record order: every assertion in the bundle is `NOT_ESTABLISHED`, the reused id itself with `NO_SOURCE`; a reference
    to it resolves to nothing; every readiness criterion is `INDETERMINATE` (`DUPLICATE_ASSERTION_ID`), so readiness is
-   `NOT_ESTABLISHED`; `trace_provenance` finds no such target; `check_invariants` reports INV-12.
+   `NOT_ESTABLISHED`; `trace_provenance` finds no such target; `check_invariants` reports INV-12. A reused source,
+   observation or derivation id is refused the same way, even when its records are identical: every assertion in the
+   bundle is `NOT_ESTABLISHED`; a reference to it resolves to nothing, exactly as if no such record existed, so an assertion
+   that reads it reports `DANGLING_REFERENCE` or `DERIVATION_MISSING` and `trace_provenance` reports `DANGLING_REFERENCE`;
+   every readiness criterion is `INDETERMINATE`, with the first of `DUPLICATE_ASSERTION_ID`, `DUPLICATE_SOURCE_ID`,
+   `DUPLICATE_OBSERVATION_ID` and `DUPLICATE_DERIVATION_ID` that applies as its reason; `check_invariants` reports INV-00,
+   and still reports what each record presents (`TRANSPORT_AS_AUTHORITY`, `ORIGIN_SOURCE_KIND_MISMATCH`, or a source it
+   cannot resolve), whichever comes first. An assertion with no path to the reused id keeps its own freshness, finality,
+   authority and limitations, with one exception that a reused assertion id shares: a derived claim reads a superseded
+   input as `NOT_ESTABLISHED`, not as superseded, so it inherits `SUPERSEDED` but does not report `DEPENDENCY_SUPERSEDED`,
+   and its freshness is worked out as if the input were not superseded. An id is unique within its kind, so a source and
+   an observation may share one. Nothing resolves through a conflict or supersession id.
 3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
    assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject

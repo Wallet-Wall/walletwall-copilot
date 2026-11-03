@@ -356,7 +356,8 @@ export function claimContracts(examplesByClaim: Readonly<Partial<Record<ClaimTyp
       maxEntries: LIMITS.recordEntries,
     },
     bundleRules: {
-      assertionIds: "An assertion id must be unique within a bundle. A reused id names no record, whichever comes first: every assertion in the bundle is NOT_ESTABLISHED, readiness is NOT_ESTABLISHED and check_invariants reports INV-12 DUPLICATE_ASSERTION_ID.",
+      assertionIds: "An assertion id must be unique among the assertions of a bundle. A reused id names no record, whichever comes first: every assertion in the bundle is NOT_ESTABLISHED, readiness is NOT_ESTABLISHED and check_invariants reports INV-12 DUPLICATE_ASSERTION_ID.",
+      recordIds: "A source, observation or derivation id must be unique among the records of its kind. A reused id names no record, whichever comes first and even when the records are identical: a reference to it resolves to nothing, every assertion in the bundle is NOT_ESTABLISHED, readiness is NOT_ESTABLISHED and check_invariants reports INV-00 DUPLICATE_SOURCE_ID, DUPLICATE_OBSERVATION_ID or DUPLICATE_DERIVATION_ID.",
       observationTime: "A reading with a value dated after evaluatedAt is OBSERVATION_FROM_FUTURE with unknown freshness and at most PARTIAL support, whether the claim is CURRENT or PINNED.",
     },
     diagnostics: {

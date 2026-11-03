@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { evaluateBundle } from "../../src/evaluate.ts";
+import { evaluateBundle, indexBundle } from "../../src/evaluate.ts";
 import { checkInvariants } from "../../src/invariants.ts";
+import type { Bundle } from "../../src/schemas.ts";
 import { importExternalAssessments } from "../../src/wallprint/assessor-import.ts";
 import { sameSubjectIdentity, subjectIdentity, subjectIdentityKeys, supersessionIdentity } from "../../src/wallprint/identity.ts";
-import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings } from "../../src/wallprint/record.ts";
+import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings, wallPrintDigest, wallPrintPayload } from "../../src/wallprint/record.ts";
+import { createEvidenceStore, replayWallPrint } from "../../src/wallprint/replay.ts";
 import { WALLPRINT_VERSIONS } from "../../src/wallprint/vocabulary.ts";
-import { EVALUATED_AT, OBSERVED_AT, USDC, balanceAssertion, clone, golden, identityAssertion } from "../support/builders.ts";
+import { EVALUATED_AT, OBSERVED_AT, USDC, balanceAssertion, balanceObservation, clone, golden, identityAssertion, withUsdValue } from "../support/builders.ts";
 
 /**
  * WallPrint subject identity is computed in exactly one place (src/wallprint/identity.ts) and compares the exact subject
@@ -76,9 +78,9 @@ describe("WallPrint subject identity: one module, exact strings, no silent case 
   });
 });
 
-describe("WallPrint admission does not move with the evidence engine's refusal of a reused assertion id", () => {
+describe("WallPrint admission does not move with the evidence engine's refusal of a reused id", () => {
   /**
-   * The engine takes a reused assertion id out of its evidence index. WallPrint's versioned admission rules read the plain
+   * The engine takes a reused id out of its evidence index. WallPrint's versioned admission rules read the plain
    * index, because a correction to evaluation must not change what a historical version admits: unique ids remain the
    * builder's precondition (spec/WALLPRINT.md), so the importer accepts this context and the builder refuses the bundle.
    */
@@ -118,4 +120,56 @@ describe("WallPrint admission does not move with the evidence engine's refusal o
       );
     }
   });
+
+  // The same boundary for the other three id kinds: the engine refuses them, and the plain index WallPrint reads still holds their first record.
+  const REUSED_OTHER_KINDS: readonly (readonly [string, string, () => Bundle])[] = [
+    ["source", "src-chain", () => ({ ...clone(golden()), sources: [{ id: "src-chain", kind: "PROVIDER_ENDPOINT" as const }, ...golden().sources] })],
+    ["observation", "obs-balance", () => ({ ...clone(golden()), observations: [balanceObservation({ payload: { balanceAtomic: "1", decimals: "6" } }), ...golden().observations] })],
+    ["derivation", "d-usd", () => {
+      const b = withUsdValue(golden());
+      return { ...b, derivations: [{ id: "d-usd", ruleId: "wwdr.usd-value", rulesVersion: "0.1.0-draft", inputAssertionIds: ["a-balance"], outputAssertionId: "someone-else" }, ...b.derivations] };
+    }],
+  ];
+
+  for (const [kind, id, bundle] of REUSED_OTHER_KINDS) {
+    for (const wallprintVersion of WALLPRINT_VERSIONS) {
+      test(`the importer still accepts a reused ${kind} id as an evidence reference (${wallprintVersion})`, () => {
+        assert.equal(importExternalAssessments([envelope([id])], { bundle: bundle(), focalAssertionId: "a-balance", wallprintVersion }).status, "IMPORTED");
+      });
+
+      test(`the admission rules find nothing new in a reused ${kind} id (${wallprintVersion})`, () => {
+        const assessment = { assessor: "acme-labs", assessorRole: "INDEPENDENT_REVIEWER", assessment: "REVIEWED", policy: "acme/review-policy", policyVersion: "1", assessedAt: EVALUATED_AT, evidenceRefs: [id] } as const;
+        assert.deepEqual(externalAssessmentAdmissionFindings([{ ...assessment, evidenceRefs: [...assessment.evidenceRefs] }], bundle(), "a-balance", wallprintVersion), []);
+      });
+    }
+
+    test(`the plain index keeps the first record of a reused ${kind} id: what admission reads has not moved`, () => {
+      const b = bundle();
+      const { sources, observations, derivations, duplicateIds } = indexBundle(b);
+      const table = { source: sources, observation: observations, derivation: derivations }[kind] as Map<string, { id: string }>;
+      const list = { source: b.sources, observation: b.observations, derivation: b.derivations }[kind] as { id: string }[];
+      assert.equal(table.get(id), list.find((r) => r.id === id));
+      assert.deepEqual(duplicateIds, [{ invariant: "INV-00", code: `DUPLICATE_${kind.toUpperCase()}_ID`, assertionId: null }]);
+    });
+
+    test(`a record that names a bundle with a reused ${kind} id cannot be replayed: the rebuild is refused, not a mismatch`, () => {
+      const evidence = createEvidenceStore();
+      const bundleDigest = evidence.put(bundle());
+      const payload = structuredClone(wallPrintPayload(buildWallPrintSnapshot({ id: "rec-honest", bundle: golden(), evaluatedAt: EVALUATED_AT, focalAssertionId: "a-balance" })));
+      payload.evidence = { ...payload.evidence, bundleDigest };
+      assert.deepEqual(replayWallPrint({ ...payload, digest: wallPrintDigest(payload) }, { evidence }), { outcome: "UNREPLAYABLE", reasons: ["REBUILD_REFUSED"], recomputedDigest: null, mismatches: [] });
+    });
+
+    test(`the builder still refuses a reused ${kind} id for the reason it always has: the ids in its evidence items are not unique`, () => {
+      assert.throws(
+        () => buildWallPrintSnapshot({ id: "rec-reused", bundle: bundle(), evaluatedAt: EVALUATED_AT, focalAssertionId: "a-balance" }),
+        (e: unknown) => {
+          const findings = (e as { findings?: { code: string; path: string }[] }).findings ?? [];
+          assert.ok(findings.some((f) => f.code === "NOT_CANONICAL_ORDER" && f.path === "evidence.items"), JSON.stringify(findings));
+          assert.ok(!findings.some((f) => f.code === "UNKNOWN_FOCAL_ASSERTION"), JSON.stringify(findings));
+          return true;
+        },
+      );
+    });
+  }
 });
