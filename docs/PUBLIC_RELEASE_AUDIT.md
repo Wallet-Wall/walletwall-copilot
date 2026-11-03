@@ -104,7 +104,7 @@ The WalletWall canvas serves its page from one listener that the Copilot app emb
 - State is per instance: after close nothing remains, a reopened instance is empty with a new key and port, and two sessions share nothing.
 - No network call or storage API is used by the page, and the copy path makes no call at all.
 
-Not proven, and not claimed: behaviour of the Copilot app's own embedding, and protection against a hostile local owner or runtime flags such as `NODE_OPTIONS=--inspect` (see `SECURITY.md`, "Runtime and local-owner trust boundary").
+Not proven, and not claimed: behaviour of the Copilot app's own embedding, and protection against a hostile local owner or runtime flags such as `NODE_OPTIONS=--inspect` (see `SECURITY.md`, "Hostile local owner").
 
 ## Verification summary
 

@@ -7,12 +7,12 @@
     "url": "https://github.com/Wallet-Wall/walletwall-copilot",
     "source": "github"
   },
-  "version": "0.2.1",
+  "version": "0.2.2",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/Wallet-Wall/walletwall-copilot/releases/download/v0.2.1/walletwall.mcpb",
-      "fileSha256": "ea034481c9319bd0221b7de686fa82d163f870247d32249239171689131963cc",
+      "identifier": "https://github.com/Wallet-Wall/walletwall-copilot/releases/download/v0.2.2/walletwall.mcpb",
+      "fileSha256": "b47ff1295ebf07908199fa6d36fee91e916f36f663ddddbfb83ea2ca99665d0e",
       "transport": {
         "type": "stdio"
       }
