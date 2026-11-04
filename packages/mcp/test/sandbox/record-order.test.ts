@@ -49,7 +49,7 @@ interface Checked {
 interface Traced {
   lineage: { id: string; kind: string; depth: number }[];
   issues: { code: string; id: string | null }[];
-  prov: { wasRevisionOf: Record<string, { "prov:generatedEntity": string; "prov:usedEntity": string }> };
+  prov: { entity: Record<string, unknown>; wasRevisionOf: Record<string, { "prov:generatedEntity": string; "prov:usedEntity": string }> };
 }
 type Supersession = NonNullable<Bundle["supersessions"]>[number];
 
@@ -1709,7 +1709,11 @@ describe("what trace_provenance reports as issues follows the records it reaches
     };
     if (one(b.assertions, target) === undefined) return ["TARGET_NOT_FOUND -"];
     const edges = new Map<string, string[]>();
-    const dangling = new Set<string>();
+    // A record that resolves to nothing is told apart by its kind as well as its id: a source and an observation may share an id.
+    const missing = new Set<string>();
+    const miss = (kind: "assertion" | "observation" | "source" | "derivation", id: string): void => {
+      missing.add(`${id}\u0000${kind}`);
+    };
     const pending = [target];
     for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
       const a = edges.has(id) ? undefined : one(b.assertions, id);
@@ -1718,15 +1722,15 @@ describe("what trace_provenance reports as issues follows the records it reaches
       edges.set(id, out);
       for (const oid of a.observationIds) {
         const o = one(b.observations, oid);
-        if (o === undefined) dangling.add(oid);
-        else if (one(b.sources, o.sourceId) === undefined) dangling.add(o.sourceId);
+        if (o === undefined) miss("observation", oid);
+        else if (one(b.sources, o.sourceId) === undefined) miss("source", o.sourceId);
       }
       if (a.derivationId !== undefined) {
         const d = one(b.derivations, a.derivationId);
-        if (d === undefined) dangling.add(a.derivationId);
+        if (d === undefined) miss("derivation", a.derivationId);
         else {
           for (const dep of d.inputAssertionIds) {
-            if (one(b.assertions, dep) === undefined) dangling.add(dep);
+            if (one(b.assertions, dep) === undefined) miss("assertion", dep);
             else out.push(dep);
           }
         }
@@ -1747,7 +1751,7 @@ describe("what trace_provenance reports as issues follows the records it reaches
     const reaches = new Map([...edges.keys()].map((id) => [id, reach(id)] as const));
     const cyclic = [...edges.keys()].filter((id) => reaches.get(id)?.has(id) === true);
     const smallest = new Set(cyclic.map((id) => cyclic.filter((m) => reaches.get(id)?.has(m) === true && reaches.get(m)?.has(id) === true).sort()[0] as string));
-    return [...[...dangling].sort().map((id) => `DANGLING_REFERENCE ${id}`), ...[...smallest].sort().map((id) => `DEPENDENCY_CYCLE ${id}`)];
+    return [...[...missing].sort().map((entry) => `DANGLING_REFERENCE ${entry.slice(0, entry.indexOf("\u0000"))}`), ...[...smallest].sort().map((id) => `DEPENDENCY_CYCLE ${id}`)];
   }
 
   test("CONTROL: an id that resolves to nothing is one issue", () => {
@@ -1772,9 +1776,47 @@ describe("what trace_provenance reports as issues follows the records it reaches
     assert.deepEqual(issuesOf(b, "a-price"), ["DANGLING_REFERENCE src-gone"]);
   });
 
+  describe("a record that resolves to nothing is told apart by its kind as well as its id", () => {
+    /** A source, an observation, an assertion and a derivation that resolve to nothing, spelled by this function of their kind. */
+    const fourMissing = (spell: (kind: "source" | "observation" | "assertion" | "derivation") => string): Bundle => {
+      const b = golden();
+      b.observations.push({ ...balanceObservation({ id: "obs-y" }), sourceId: spell("source") });
+      b.derivations.push({ id: "d-t", ...USD_RULE, inputAssertionIds: ["a-balance", "a-price", spell("assertion"), "a-u"], outputAssertionId: "t" });
+      b.assertions.push({ ...balanceAssertion({ id: "t", observationIds: ["obs-y", spell("observation")] }), derivationId: "d-t" });
+      b.assertions.push({ ...balanceAssertion({ id: "a-u", observationIds: [] }), derivationId: spell("derivation") });
+      return b;
+    };
+
+    test("BUG: a source, an observation, an assertion and a derivation that resolve to nothing and are spelled alike are four issues, not one", () => {
+      assert.deepEqual(issuesOf(fourMissing(() => "x"), "t"), ["DANGLING_REFERENCE x", "DANGLING_REFERENCE x", "DANGLING_REFERENCE x", "DANGLING_REFERENCE x"]);
+    });
+
+    test("BUG: the same four are four however they are spelled: the count follows the records, not whether a spelling is shared", () => {
+      assert.deepEqual(issuesOf(fourMissing((kind) => `${kind}-gone`), "t"), ["assertion-gone", "derivation-gone", "observation-gone", "source-gone"].map((id) => `DANGLING_REFERENCE ${id}`));
+      assert.equal(issuesOf(fourMissing((kind) => (kind === "source" || kind === "observation" ? "x" : `${kind}-gone`)), "t").length, 4);
+      assert.equal(issuesOf(fourMissing((kind) => (kind === "assertion" ? "assertion-gone" : "x")), "t").length, 4);
+    });
+
+    test("CONTROL: two missing records of the same kind and id are one: the id is named by several records, and it is one record", () => {
+      const b = golden();
+      b.observations.push({ ...balanceObservation({ id: "obs-y" }), sourceId: "x" }, { ...balanceObservation({ id: "obs-z" }), sourceId: "x" });
+      b.assertions.push(balanceAssertion({ id: "t", observationIds: ["obs-y", "obs-z"] }));
+      assert.deepEqual(issuesOf(b, "t"), ["DANGLING_REFERENCE x"]);
+    });
+  });
+
   test("BUG: a dependency cycle is one issue naming its smallest id, whichever member the walk enters", () => {
     const b = ringOf("n-b", "n-a", "n-c");
     for (const target of ["n-a", "n-b", "n-c"]) assert.deepEqual(issuesOf(b, target), ["DEPENDENCY_CYCLE n-a"], target);
+  });
+
+  test("CONTROL: the issue names one member of a cycle, and every member stays in the lineage and among the PROV entities", () => {
+    const b = ringOf("n-b", "n-a", "n-c");
+    for (const target of ["n-a", "n-b", "n-c"]) {
+      const t = trace(b, target);
+      assert.deepEqual(t.lineage.filter((l) => l.kind === "assertion" && l.id.startsWith("n-")).map((l) => l.id).sort(), ["n-a", "n-b", "n-c"], target);
+      for (const id of ["n-a", "n-b", "n-c"]) assert.ok(`ww:assertion/${id}` in t.prov.entity, `${id} from ${target}`);
+    }
   });
 
   test("BUG: a claim over a cycle reports it once, however the claim lists its inputs", () => {
@@ -1845,17 +1887,28 @@ describe("what trace_provenance reports as issues follows the records it reaches
     }
   });
 
-  test("BUG: over free graphs of claims, every trace reports each id that resolves to nothing once and each cycle once, however any list is ordered", () => {
+  test("BUG: over free graphs of claims, every trace reports each record that resolves to nothing once and each cycle once, however any list is ordered", () => {
     const rand = mulberry32(20261105);
     let traces = 0;
     let withCycle = 0;
     let withDangling = 0;
-    /** The same ids that resolve to nothing named by several records and twice in one list, so the graphs hold what the rule counts once. */
-    const withGhosts = (b: Bundle): Bundle => ({
-      ...b,
-      assertions: b.assertions.map((a) => (rand() < 0.2 ? { ...a, observationIds: [...a.observationIds, `obs-gone-${String(Math.floor(rand() * 3))}`, `obs-gone-${String(Math.floor(rand() * 3))}`] } : a)),
-      derivations: b.derivations.map((d) => (rand() < 0.2 ? { ...d, inputAssertionIds: [...d.inputAssertionIds, `a-gone-${String(Math.floor(rand() * 3))}`] } : d)),
-    });
+    /**
+     * The same ids that resolve to nothing named by several records and twice in one list, so the graphs hold what the rule counts once; and
+     * one spelling for the missing records of every kind (an observation, a source, an assertion, a derivation), so the graphs hold records
+     * of different kinds that share an id, which the rule counts apart.
+     */
+    const withGhosts = (b: Bundle): Bundle => {
+      const ghost = (): string => `gone-${String(Math.floor(rand() * 3))}`;
+      return {
+        ...b,
+        observations: b.observations.map((o) => (rand() < 0.1 ? { ...o, sourceId: ghost() } : o)),
+        assertions: b.assertions.map((a) => {
+          const named = rand() < 0.2 ? { ...a, observationIds: [...a.observationIds, ghost(), ghost()] } : a;
+          return named.derivationId === undefined && rand() < 0.1 ? { ...named, derivationId: ghost() } : named;
+        }),
+        derivations: b.derivations.map((d) => (rand() < 0.2 ? { ...d, inputAssertionIds: [...d.inputAssertionIds, ghost()] } : d)),
+      };
+    };
     for (let n = 0; n < 200; n++) {
       const b = withGhosts(randomGraph(rand));
       for (const id of [...new Set(b.assertions.map((a) => a.id)), "no-such-target"].sort()) {
@@ -1898,7 +1951,7 @@ describe("the published contract says so", () => {
   test("BUG: walletwall://schemas/claims says what trace_provenance reports as issues, and what a record may carry", () => {
     assert.equal(
       rules()["provenanceIssues"],
-      "trace_provenance reports each id a walked record names that resolves to nothing once, as DANGLING_REFERENCE, then each dependency cycle in the graph it walks once, as DEPENDENCY_CYCLE naming its smallest id, each in order of code unit. How many it reports follows the records it reaches, never where the walk enters them, how they are listed or how their ids are spelled. WallPrint refuses a record whose trace reports more than 640, and does not truncate it.",
+      "trace_provenance reports each record a walked record names that resolves to nothing, whether an assertion, an observation, a source or a derivation, once, as DANGLING_REFERENCE naming its id, then each dependency cycle in the graph it walks once, as DEPENDENCY_CYCLE naming its smallest id, each in order of code unit. Two such records of different kinds that share an id are two issues. How many it reports follows the records it reaches, never where the walk enters them, how they are listed or how their ids are spelled. Every member of a cycle stays in lineage and in the PROV relations. WallPrint refuses a record whose trace reports more than 640, and does not truncate it.",
     );
   });
 
@@ -1940,7 +1993,7 @@ describe("the specification says what a faulty supersession does", () => {
   test("BUG: spec/EVIDENCE_PROFILE.md says what the issues of a provenance trace are, and what they follow", () => {
     assert.ok(
       flat("spec/EVIDENCE_PROFILE.md").includes(
-        "Its issues are a set: each id a walked record names that resolves to nothing once, as `DANGLING_REFERENCE`, then each cycle of the graph it walks, a set of assertions that all reach one another or one that names itself, once, as `DEPENDENCY_CYCLE` naming its smallest id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are listed or how their ids are spelled.",
+        "Its issues are a set: each record a walked record names that resolves to nothing, whether an assertion, an observation, a source or a derivation, once, as `DANGLING_REFERENCE` naming its id (two of different kinds that share an id are two issues), then each cycle of the graph it walks, a set of assertions that all reach one another or one that names itself, once, as `DEPENDENCY_CYCLE` naming its smallest id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are listed or how their ids are spelled. Every member of a cycle stays in `lineage` and in the PROV relations.",
       ),
     );
   });
@@ -1948,7 +2001,7 @@ describe("the specification says what a faulty supersession does", () => {
   test("BUG: spec/WALLPRINT.md says when a bundle is refused for its provenance issues, and that a record is never truncated", () => {
     assert.ok(
       flat("spec/WALLPRINT.md").includes(
-        "A record carries at most 640 provenance issues. A trace reports each id that resolves to nothing once and each cycle once, so a bundle is refused for it (`TOO_MANY` on `provenance.issues` when a record is built, `REBUILD_REFUSED` when one is replayed) only when the ids that resolve to nothing, with its cycles, number more than 640: never because of how its records are listed, how its ids are spelled or how dense a cycle is. A record is never truncated to fit.",
+        "A record carries at most 640 provenance issues. A trace reports each record that resolves to nothing once and each cycle once, so a bundle is refused for it (`TOO_MANY` on `provenance.issues` when a record is built, `REBUILD_REFUSED` when one is replayed) only when the records that resolve to nothing, with its cycles, number more than 640: never because of how its records are listed, how its ids are spelled or how dense a cycle is. A record is never truncated to fit.",
       ),
     );
   });
@@ -2000,6 +2053,14 @@ function sharedFlood(leaves: number): Bundle {
   const b = flood(32);
   for (let l = 1; l < leaves; l++) b.assertions.push(balanceAssertion({ id: `leaf-${String(l).padStart(2, "0")}`, observationIds: Array.from({ length: 32 }, (_, k) => `ghost-${String(k).padStart(4, "0")}`), assertedAt: EVALUATED_AT }));
   b.derivations = b.derivations.map((d) => ({ ...d, inputAssertionIds: Array.from({ length: leaves }, (_, l) => `leaf-${String(l).padStart(2, "0")}`) }));
+  return b;
+}
+/** flood(distinct), and one more leaf resting on a real observation whose source resolves to nothing, spelled as given: one more missing record, of another kind. */
+function floodWithAMissingSource(distinct: number, source: string): Bundle {
+  const b = flood(distinct);
+  b.observations.push({ ...balanceObservation({ id: "obs-src" }), sourceId: source });
+  b.assertions.push(balanceAssertion({ id: "leaf-src", observationIds: ["obs-src"], assertedAt: EVALUATED_AT }));
+  b.derivations = b.derivations.map((d) => ({ ...d, inputAssertionIds: [...d.inputAssertionIds, "leaf-src"] }));
   return b;
 }
 
@@ -2142,6 +2203,15 @@ describe("WallPrint", () => {
           assert.equal(trace(flood(640, nameOf), "t").issues.length, 640);
           assert.deepEqual(refusal(flood(640, nameOf), "t"), []);
           assert.deepEqual(refusal(flood(641, nameOf), "t"), ["TOO_MANY provenance.issues"]);
+        }
+      });
+
+      test("BUG: nor does it follow a spelling shared across kinds: 639 missing observations and a missing source build, 640 and one are refused, whether the source is spelled like one of them or not", () => {
+        for (const source of ["ghost-0000", "src-gone"]) {
+          assert.equal(trace(floodWithAMissingSource(639, source), "t").issues.length, 640, source);
+          assert.deepEqual(refusal(floodWithAMissingSource(639, source), "t"), [], source);
+          assert.equal(trace(floodWithAMissingSource(640, source), "t").issues.length, 641, source);
+          assert.deepEqual(refusal(floodWithAMissingSource(640, source), "t"), ["TOO_MANY provenance.issues"], source);
         }
       });
 
