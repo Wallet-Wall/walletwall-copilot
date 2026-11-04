@@ -552,6 +552,24 @@ describe("a dependency cycle is read the same from every side", () => {
       }
     });
 
+    // spec/EVIDENCE_PROFILE.md, step 2: beside a reused id "a derived claim reads a superseded input as NOT_ESTABLISHED, not as superseded, so it
+    // inherits SUPERSEDED but does not report DEPENDENCY_SUPERSEDED". The one other claim on a cycle reads the superseded one as an input, so
+    // this is the path no other test reached once a record that cannot be valid stopped raising the assertion it names.
+    test("CONTROL: beside a reused id, the claim over a superseded one on its cycle inherits SUPERSEDED and reports no DEPENDENCY_SUPERSEDED, and every claim is refused", () => {
+      const reused = (b: Bundle): Bundle => {
+        b.sources.push({ id: "src-reused", kind: "USER_INPUT" }, { id: "src-reused", kind: "CHAIN_STATE" });
+        return b;
+      };
+      for (const b of eachListedFirst(reused(superseding(cycleOfTwo(), "a-usd-2")))) {
+        for (const a of b.assertions) assert.equal(byId(b, a.id).supportState, "NOT_ESTABLISHED", `${a.id} in ${listing(b)}`);
+        const over = byId(b, "a-usd");
+        assert.ok(over.limitations.includes("SUPERSEDED"), listing(b));
+        assert.ok(!over.limitations.includes("DEPENDENCY_SUPERSEDED"), listing(b));
+        assert.equal(over.supersededBy, null, listing(b));
+        assert.equal(byId(b, "a-usd-2").supersededBy, "a-usd-new", listing(b));
+      }
+    });
+
     test("BUG: a supersession on one claim reaches the others around a ring, past the claim that reads it", () => {
       for (const b of eachListedFirst(superseding(ringOfThree(), "a-usd-3"))) {
         for (const id of ["a-usd-1", "a-usd-2", "a-usd-3"]) assert.deepEqual(byId(b, id).limitations, onACycleAnd("DEPENDENCY_SUPERSEDED", "SUPERSEDED"), `${id} in ${listing(b)}`);
