@@ -718,6 +718,61 @@ base(
   base("CNF-031", "conflict", "supersession", "The same two supersessions with the records in the other order give the same answer.", supersessions(byTheSecond, byNothing), nothing);
 }
 
+// A supersession that cannot be valid takes nothing out of conflict detection. The world of CNF-002, and one record about the rival.
+{
+  const world = (): Bundle => {
+    const b = golden();
+    b.sources.push(chain2());
+    b.observations.push(bal2());
+    b.assertions.push(balanceAssertion({ id: "a-balance-2", value: { balanceAtomic: "1400000", decimals: "6" }, observationIds: ["obs-balance-2"] }));
+    return b;
+  };
+  const record = (b: Bundle, to: string): Bundle => ({
+    ...b,
+    supersessions: [{ id: "s-1", supersededAssertionId: "a-balance-2", supersedingAssertionId: to, effectiveAt: T("2026-10-23T12:00:20Z"), reason: "CORRECTED" }],
+  });
+  /** The rival still reads SUPERSEDED, as CNF-006 says of a record that is not later, and stays compared, so the conflict stays, and readiness cannot be met. */
+  const stays = (to: string, codes: string[]): Expectation => ({
+    assertions: {
+      "a-balance": { supportState: "CONFLICTING", conflictsWith: ["a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] },
+      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: to, conflictsWith: ["a-balance"] },
+    },
+    violations: { include: codes.map((code) => ({ invariant: "INV-12", code })) },
+    readiness: { ...READINESS_INPUTS, classification: "NOT_ESTABLISHED" },
+  });
+  base("CNF-032", "conflict", "supersession", "A supersession that names nothing cannot hide a conflict: the rival still reads SUPERSEDED and stays compared, so both are CONFLICTING and readiness is not established.", record(world(), "a-missing"), stays("a-missing", ["SUPERSESSION_REFERENCE_INVALID"]));
+  base("CNF-033", "conflict", "supersession", "A supersession of the assertion by itself cannot hide a conflict.", record(world(), "a-balance-2"), stays("a-balance-2", ["SUPERSESSION_REFERENCE_INVALID", "SUPERSESSION_CYCLE"]));
+  base("CNF-034", "conflict", "supersession", "A supersession by an assertion of another claim cannot hide a conflict.", record(world(), "a-identity"), stays("a-identity", ["SUPERSESSION_CLAIM_IDENTITY_MISMATCH"]));
+  base("CNF-035", "conflict", "supersession", "A supersession by an assertion that is not later in time cannot hide a conflict.", record(world(), "a-balance"), stays("a-balance", ["SUPERSESSION_NOT_FORWARD_IN_TIME"]));
+
+  const retired = world();
+  retired.observations.push(
+    balanceObservation({
+      id: "obs-balance-new",
+      subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` },
+      payload: { balanceAtomic: "1400000", decimals: "6" },
+      observedAt: T("2026-10-23T12:00:20Z"),
+    }),
+  );
+  retired.assertions.push(
+    balanceAssertion({
+      id: "a-balance-new",
+      subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` },
+      value: { balanceAtomic: "1400000", decimals: "6" },
+      observationIds: ["obs-balance-new"],
+      assertedAt: T("2026-10-23T12:00:20Z"),
+    }),
+  );
+  base("CNF-036", "conflict", "supersession", "CONTROL: a well-formed supersession retires the rival, so it leaves conflict detection and the balance it disagreed with is ESTABLISHED and readiness is met.", record(retired, "a-balance-new"), {
+    assertions: {
+      "a-balance": { supportState: "ESTABLISHED", conflictsWith: [] },
+      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: "a-balance-new", conflictsWith: [] },
+    },
+    violations: { none: true },
+    readiness: { ...READINESS_INPUTS, classification: "CRITERIA_MET" },
+  });
+}
+
 // --------------------------------------------------------------- authority
 base("AUT-001", "authority", "authority", "retrievedVia = Alchemy does not make Alchemy the authority for chain state: authority is canonical chain state; transport is metadata.", golden(), {
   assertions: { "a-balance": { supportState: "ESTABLISHED", authoritySatisfied: true } },
