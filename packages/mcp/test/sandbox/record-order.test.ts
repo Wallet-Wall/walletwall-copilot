@@ -1473,6 +1473,22 @@ describe("what a supersession record does not do, which the specification and th
     }
   });
 
+  test("BUG: readiness is no more favourable at any criterion: a balance with no basis that a record that cannot be valid names is still superseded for C5, though it no longer reads SUPERSEDED", () => {
+    interface Result {
+      classification: string;
+      criteria: { id: string; outcome: string; reason: string }[];
+    }
+    const c5Of = (r: Result): (string | undefined)[] => {
+      const c = r.criteria.find((x) => x.id === "C5");
+      return [c?.outcome, c?.reason];
+    };
+    const without = readiness(sourceless(), "a-identity", "a-balance") as Result;
+    assert.deepEqual(c5Of(without), ["MET", "NO_CONFLICT"], "control: with no record, nothing is superseded or in conflict");
+    const named = readiness(supersede(sourceless(), ["a-balance", "a-ghost"]), "a-identity", "a-balance") as Result;
+    assert.deepEqual(c5Of(named), ["INDETERMINATE", "CONFLICT_OR_SUPERSESSION"]);
+    assert.equal(named.classification, "NOT_ESTABLISHED");
+  });
+
   test("CHARACTERIZATION: a record that can be valid marks an assertion whatever state it had: one it retires with no basis reads SUPERSEDED, above NOT_ESTABLISHED in the strength order, and a value derived from it STALE", () => {
     const b = balances("a-newer");
     b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, observationIds: [] } : a));
