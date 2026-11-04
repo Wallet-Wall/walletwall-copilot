@@ -5,7 +5,7 @@ import { claimContracts } from "../../src/claims.ts";
 import { type Assertion, type Bundle, type LimitationCode } from "../../src/schemas.ts";
 import { callTool } from "../../src/tools.ts";
 import { WallPrintError } from "../../src/wallprint/errors.ts";
-import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings } from "../../src/wallprint/record.ts";
+import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings, wallPrintDigest, wallPrintPayload } from "../../src/wallprint/record.ts";
 import { createEvidenceStore, replayWallPrint } from "../../src/wallprint/replay.ts";
 import { WALLPRINT_VERSIONS } from "../../src/wallprint/vocabulary.ts";
 import { BLOCK_HASH, BLOCK_NUMBER, EVALUATED_AT, HOLDER, OBSERVED_AT, USDC, balanceAssertion, balanceObservation, clone, golden, identityAssertion, identityObservation, priceAssertion, priceObservation } from "../support/builders.ts";
@@ -1682,6 +1682,204 @@ describe("no list in a bundle has an order that matters", () => {
   });
 });
 
+describe("what trace_provenance reports as issues follows the records it reaches", () => {
+  const issuesOf = (b: Bundle, id: string): string[] => trace(b, id).issues.map((i) => `${i.code} ${i.id ?? "-"}`);
+  /** USD values over each other in a ring, each with a complete set of inputs. */
+  const ringOf = (...names: readonly string[]): Bundle => {
+    const b = golden();
+    names.forEach((id, i) => addUsd(b, id, ["a-balance", "a-price", names[(i + 1) % names.length] as string]));
+    return b;
+  };
+  const withObservations = (b: Bundle, id: string, observationIds: readonly string[]): Bundle => ({ ...b, assertions: b.assertions.map((a) => (a.id === id ? { ...a, observationIds: [...observationIds] } : a)) });
+  /** Every list in the bundle in another order, and the lists inside its records. */
+  const shuffledEverywhere = (b: Bundle, rand: () => number): Bundle => {
+    const moved = shuffled(b, rand);
+    return {
+      ...moved,
+      assertions: moved.assertions.map((a) => ({ ...a, observationIds: shuffle(a.observationIds, rand) })),
+      derivations: moved.derivations.map((d) => ({ ...d, inputAssertionIds: shuffle(d.inputAssertionIds, rand) })),
+    };
+  };
+
+  /** What a walk from a target should report, written from the contract for this file's own count: the engine is not asked. */
+  function walkedIssues(b: Bundle, target: string): string[] {
+    const one = <T extends { id: string }>(list: readonly T[], id: string): T | undefined => {
+      const found = list.filter((r) => r.id === id);
+      return found.length === 1 ? found[0] : undefined;
+    };
+    if (one(b.assertions, target) === undefined) return ["TARGET_NOT_FOUND -"];
+    const edges = new Map<string, string[]>();
+    const dangling = new Set<string>();
+    const pending = [target];
+    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+      const a = edges.has(id) ? undefined : one(b.assertions, id);
+      if (a === undefined) continue;
+      const out: string[] = [];
+      edges.set(id, out);
+      for (const oid of a.observationIds) {
+        const o = one(b.observations, oid);
+        if (o === undefined) dangling.add(oid);
+        else if (one(b.sources, o.sourceId) === undefined) dangling.add(o.sourceId);
+      }
+      if (a.derivationId !== undefined) {
+        const d = one(b.derivations, a.derivationId);
+        if (d === undefined) dangling.add(a.derivationId);
+        else {
+          for (const dep of d.inputAssertionIds) {
+            if (one(b.assertions, dep) === undefined) dangling.add(dep);
+            else out.push(dep);
+          }
+        }
+      }
+      for (const s of b.supersessions ?? []) if (s.supersedingAssertionId === id && one(b.assertions, s.supersededAssertionId) !== undefined) out.push(s.supersededAssertionId);
+      pending.push(...out);
+    }
+    const reach = (from: string): Set<string> => {
+      const seen = new Set<string>();
+      const todo = [...(edges.get(from) ?? [])];
+      for (let m = todo.pop(); m !== undefined; m = todo.pop()) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        todo.push(...(edges.get(m) ?? []));
+      }
+      return seen;
+    };
+    const reaches = new Map([...edges.keys()].map((id) => [id, reach(id)] as const));
+    const cyclic = [...edges.keys()].filter((id) => reaches.get(id)?.has(id) === true);
+    const smallest = new Set(cyclic.map((id) => cyclic.filter((m) => reaches.get(id)?.has(m) === true && reaches.get(m)?.has(id) === true).sort()[0] as string));
+    return [...[...dangling].sort().map((id) => `DANGLING_REFERENCE ${id}`), ...[...smallest].sort().map((id) => `DEPENDENCY_CYCLE ${id}`)];
+  }
+
+  test("CONTROL: an id that resolves to nothing is one issue", () => {
+    assert.deepEqual(issuesOf(withObservations(golden(), "a-balance", ["obs-balance", "obs-missing"]), "a-balance"), ["DANGLING_REFERENCE obs-missing"]);
+  });
+
+  test("BUG: an id that several records or one list name is one issue, however many name it", () => {
+    const b = withObservations(withObservations(golden(), "a-balance", ["obs-balance", "obs-gone", "obs-gone"]), "a-price", ["obs-price-a", "obs-price-b", "obs-gone"]);
+    addUsd(b, "a-usd", ["a-balance", "a-price", "a-gone-input", "a-gone-input"], USD_LIMITATIONS);
+    assert.deepEqual(issuesOf(b, "a-usd"), ["DANGLING_REFERENCE a-gone-input", "DANGLING_REFERENCE obs-gone"]);
+  });
+
+  test("BUG: ids that resolve to nothing come in order of code unit, not in the order they are listed or walked", () => {
+    for (const listed of [["obs-z", "obs-a", "obs-m"], ["obs-m", "obs-z", "obs-a"], ["Z-obs", "a-obs"]]) {
+      assert.deepEqual(issuesOf(withObservations(golden(), "a-balance", ["obs-balance", ...listed]), "a-balance"), [...listed].sort().map((id) => `DANGLING_REFERENCE ${id}`), listed.join());
+    }
+  });
+
+  test("BUG: a source that resolves to nothing is reported by its id, once, whatever number of readings name it", () => {
+    const b = golden();
+    b.observations = b.observations.map((o) => (o.id === "obs-price-a" || o.id === "obs-price-b" ? { ...o, sourceId: "src-gone" } : o));
+    assert.deepEqual(issuesOf(b, "a-price"), ["DANGLING_REFERENCE src-gone"]);
+  });
+
+  test("BUG: a dependency cycle is one issue naming its smallest id, whichever member the walk enters", () => {
+    const b = ringOf("n-b", "n-a", "n-c");
+    for (const target of ["n-a", "n-b", "n-c"]) assert.deepEqual(issuesOf(b, target), ["DEPENDENCY_CYCLE n-a"], target);
+  });
+
+  test("BUG: a claim over a cycle reports it once, however the claim lists its inputs", () => {
+    for (const inputs of permutations(["a-balance", "a-price", "n-c"])) {
+      const b = ringOf("n-b", "n-a", "n-c");
+      addUsd(b, "x-over", inputs, USD_LIMITATIONS);
+      assert.deepEqual(issuesOf(b, "x-over"), ["DEPENDENCY_CYCLE n-a"], inputs.join());
+    }
+  });
+
+  test("BUG: a dense cycle is one issue, not one for each way back into it", () => {
+    const names = Array.from({ length: 16 }, (_, i) => `n-${String(i).padStart(2, "0")}`);
+    const b = golden();
+    names.forEach((id, i) => addUsd(b, id, ["a-balance", "a-price", ...names.filter((_, j) => j !== i)]));
+    for (const target of names) assert.deepEqual(issuesOf(b, target), ["DEPENDENCY_CYCLE n-00"], target);
+  });
+
+  test("BUG: two cycles are two issues, in order of their smallest ids, whichever is listed or reached first", () => {
+    const b = ringOf("b-1", "b-2");
+    addUsd(b, "a-1", ["a-balance", "a-price", "a-2"]);
+    addUsd(b, "a-2", ["a-balance", "a-price", "a-1"]);
+    for (const inputs of permutations(["a-balance", "a-price", "b-1", "a-1"])) {
+      const c = clone(b);
+      addUsd(c, "x-over", inputs, USD_LIMITATIONS);
+      assert.deepEqual(issuesOf(c, "x-over"), ["DEPENDENCY_CYCLE a-1", "DEPENDENCY_CYCLE b-1"], inputs.join());
+    }
+  });
+
+  test("CONTROL: a claim that is its own input is a cycle of one", () => {
+    const b = golden();
+    addUsd(b, "a-self", ["a-balance", "a-price", "a-self"]);
+    assert.deepEqual(issuesOf(b, "a-self"), ["DEPENDENCY_CYCLE a-self"]);
+  });
+
+  test("BUG: a cycle made of supersessions alone is one issue naming its smallest id, whichever member the walk enters", () => {
+    const b = supersede(balances("a-b2"), ["a-balance", "a-b2"], ["a-b2", "a-balance"]);
+    for (const target of ["a-balance", "a-b2"]) assert.deepEqual(issuesOf(b, target), ["DEPENDENCY_CYCLE a-b2"], target);
+  });
+
+  test("CONTROL: an assertion reached two ways is no cycle", () => {
+    const b = golden();
+    addUsd(b, "a-usd-1", ["a-balance", "a-price"], USD_LIMITATIONS);
+    addUsd(b, "a-usd-2", ["a-balance", "a-price", "a-usd-1"], USD_LIMITATIONS);
+    assert.deepEqual(issuesOf(b, "a-usd-2"), []);
+  });
+
+  test("BUG: what resolves to nothing comes first and the cycles after it, each in order", () => {
+    const b = ringOf("n-b", "n-a");
+    addUsd(b, "x-over", ["a-balance", "a-price", "n-b", "z-gone", "a-gone"], USD_LIMITATIONS);
+    assert.deepEqual(issuesOf(b, "x-over"), ["DANGLING_REFERENCE a-gone", "DANGLING_REFERENCE z-gone", "DEPENDENCY_CYCLE n-a"]);
+  });
+
+  test("BUG: a cycle is the same one whichever way its ids are spelled: the count does not follow the spelling", () => {
+    for (const nameOf of [ascending, descending]) assert.equal(trace(atTheCap(nameOf, "first-listed-first"), "t").issues.length, 1, nameOf(0));
+  });
+
+  test("BUG: no listing of any record, or of a list inside one, moves an issue", () => {
+    const rand = mulberry32(20261105);
+    const names = Array.from({ length: 12 }, (_, i) => `n-${String(i).padStart(2, "0")}`);
+    const b = golden();
+    names.forEach((id, i) => addUsd(b, id, ["a-balance", "a-price", names[(i + 1) % names.length] as string, names[(i + 5) % names.length] as string, "g-gone"]));
+    addUsd(b, "m-self", ["a-balance", "a-price", "m-self", "n-03"]);
+    for (const target of [...names, "m-self"]) {
+      const listed = issuesOf(b, target);
+      // Twelve claims in one strongly connected ring (each reads the next and the fifth after), each naming a missing id; and one that reads itself and the ring.
+      assert.deepEqual(listed, target === "m-self" ? ["DANGLING_REFERENCE g-gone", "DEPENDENCY_CYCLE m-self", "DEPENDENCY_CYCLE n-00"] : ["DANGLING_REFERENCE g-gone", "DEPENDENCY_CYCLE n-00"], target);
+      for (let k = 0; k < 6; k++) assert.deepEqual(issuesOf(shuffledEverywhere(b, rand), target), listed, `${target} shuffled ${String(k)}`);
+    }
+  });
+
+  test("BUG: over free graphs of claims, every trace reports each id that resolves to nothing once and each cycle once, however any list is ordered", () => {
+    const rand = mulberry32(20261105);
+    let traces = 0;
+    let withCycle = 0;
+    let withDangling = 0;
+    /** The same ids that resolve to nothing named by several records and twice in one list, so the graphs hold what the rule counts once. */
+    const withGhosts = (b: Bundle): Bundle => ({
+      ...b,
+      assertions: b.assertions.map((a) => (rand() < 0.2 ? { ...a, observationIds: [...a.observationIds, `obs-gone-${String(Math.floor(rand() * 3))}`, `obs-gone-${String(Math.floor(rand() * 3))}`] } : a)),
+      derivations: b.derivations.map((d) => (rand() < 0.2 ? { ...d, inputAssertionIds: [...d.inputAssertionIds, `a-gone-${String(Math.floor(rand() * 3))}`] } : d)),
+    });
+    for (let n = 0; n < 200; n++) {
+      const b = withGhosts(randomGraph(rand));
+      for (const id of [...new Set(b.assertions.map((a) => a.id)), "no-such-target"].sort()) {
+        const expected = walkedIssues(b, id);
+        assert.deepEqual(issuesOf(b, id), expected, `graph ${String(n)}, target ${id}: ${JSON.stringify(b)}`);
+        for (let k = 0; k < 2; k++) assert.deepEqual(issuesOf(shuffledEverywhere(b, rand), id), expected, `graph ${String(n)}, target ${id}, shuffle ${String(k)}`);
+        traces++;
+        if (expected.some((x) => x.startsWith("DEPENDENCY_CYCLE"))) withCycle++;
+        if (expected.some((x) => x.startsWith("DANGLING_REFERENCE"))) withDangling++;
+      }
+    }
+    // The graphs are not trivial: many traces reach a cycle, and many a reference to nothing.
+    assert.ok(withCycle >= 300, `${String(withCycle)} of ${String(traces)} traces reach a cycle`);
+    assert.ok(withDangling >= 600, `${String(withDangling)} of ${String(traces)} traces reach an id that resolves to nothing`);
+  });
+
+  test("CONTROL: the cycle a trace reports is one the evaluation reports on every member: the two tools agree", () => {
+    const b = ringOf("n-b", "n-a", "n-c");
+    const onCycle = inspect(b).assertions.filter((e) => e.limitations.includes("DEPENDENCY_CYCLE")).map((e) => e.assertionId).sort();
+    assert.deepEqual(onCycle, ["n-a", "n-b", "n-c"]);
+    assert.ok(onCycle.includes(trace(b, "n-c").issues[0]?.id ?? ""));
+  });
+});
+
 describe("the published contract says so", () => {
   const rules = (): Record<string, string> => (claimContracts({}) as { bundleRules: Record<string, string> }).bundleRules;
 
@@ -1694,6 +1892,13 @@ describe("the published contract says so", () => {
     assert.equal(
       rules()["derivedValues"],
       "check_invariants recomputes a derived USD value under every balance and every price among its inputs, and a derived readiness classification under every identity and every balance, and reports INV-00 RECOMPUTATION_MISMATCH if any reading gives another value. The order of inputAssertionIds changes no verdict; trace_provenance still lists what it walks in that order.",
+    );
+  });
+
+  test("BUG: walletwall://schemas/claims says what trace_provenance reports as issues, and what a record may carry", () => {
+    assert.equal(
+      rules()["provenanceIssues"],
+      "trace_provenance reports each id a walked record names that resolves to nothing once, as DANGLING_REFERENCE, then each dependency cycle in the graph it walks once, as DEPENDENCY_CYCLE naming its smallest id, each in order of code unit. How many it reports follows the records it reaches, never where the walk enters them, how they are listed or how their ids are spelled. WallPrint refuses a record whose trace reports more than 640, and does not truncate it.",
     );
   });
 
@@ -1732,6 +1937,22 @@ describe("the specification says what a faulty supersession does", () => {
     assert.ok(text.includes("A derived value that recomputation does not reproduce is reported here as `RECOMPUTATION_MISMATCH`: the rule is applied to every balance with every price among the inputs of a USD value, and to every identity with every balance among those of a readiness claim, and one reading that gives another value is a mismatch."));
   });
 
+  test("BUG: spec/EVIDENCE_PROFILE.md says what the issues of a provenance trace are, and what they follow", () => {
+    assert.ok(
+      flat("spec/EVIDENCE_PROFILE.md").includes(
+        "Its issues are a set: each id a walked record names that resolves to nothing once, as `DANGLING_REFERENCE`, then each cycle of the graph it walks, a set of assertions that all reach one another or one that names itself, once, as `DEPENDENCY_CYCLE` naming its smallest id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are listed or how their ids are spelled.",
+      ),
+    );
+  });
+
+  test("BUG: spec/WALLPRINT.md says when a bundle is refused for its provenance issues, and that a record is never truncated", () => {
+    assert.ok(
+      flat("spec/WALLPRINT.md").includes(
+        "A record carries at most 640 provenance issues. A trace reports each id that resolves to nothing once and each cycle once, so a bundle is refused for it (`TOO_MANY` on `provenance.issues` when a record is built, `REBUILD_REFUSED` when one is replayed) only when the ids that resolve to nothing, with its cycles, number more than 640: never because of how its records are listed, how its ids are spelled or how dense a cycle is. A record is never truncated to fit.",
+      ),
+    );
+  });
+
   test("BUG: spec/SUPPORT_STATES.md says a faulty record still marks the assertion and does not take it out of conflict detection", () => {
     assert.ok(flat("spec/SUPPORT_STATES.md").includes("A faulty record, one that names nothing, the assertion itself, another claim or an assertion that is not later, still marks it, and does not take it out of conflict detection."));
   });
@@ -1742,6 +1963,45 @@ describe("the specification says what a faulty supersession does", () => {
     assert.ok(text.includes("`CNF-005..009`, `CNF-013..015`, `CNF-017..036`"));
   });
 });
+
+/**
+ * 64 USD values on one dense cycle, each reading the next and up to twelve before it, and a balance that supersedes the first and the
+ * last. Walking in from the first used to find 690 DEPENDENCY_CYCLE issues, more than a record may carry, and from the last far fewer.
+ */
+function atTheCap(nameOf: (i: number) => string, order: "first-listed-first" | "last-listed-first"): Bundle {
+  const b = golden();
+  for (let i = 0; i < 64; i++) {
+    const back = Array.from({ length: Math.min(i, 12) }, (_, k) => nameOf(i - k - 1));
+    addUsd(b, nameOf(i), [...(i < 63 ? [nameOf(i + 1)] : []), "a-balance", "a-price", ...back]);
+  }
+  b.observations.push(balanceObservation({ id: "obs-t" }));
+  b.assertions.push(balanceAssertion({ id: "t", observationIds: ["obs-t"], assertedAt: "2026-10-23T12:00:31Z" }));
+  const records = [supersession("s-first", nameOf(0), "t"), supersession("s-last", nameOf(63), "t")];
+  b.supersessions = order === "first-listed-first" ? records : [...records].reverse();
+  return b;
+}
+const ascending = (i: number): string => `n-${String(i).padStart(2, "0")}`;
+const descending = (i: number): string => `n-${String(63 - i).padStart(2, "0")}`;
+
+/** A USD value t over leaf assertions that rest on this many distinct observation ids that do not exist, 32 to a leaf: so many ids resolve to nothing. */
+function flood(distinct: number, nameOf: (i: number) => string = (i) => `ghost-${String(i).padStart(4, "0")}`): Bundle {
+  const b = golden();
+  const leaves = Math.ceil(distinct / 32);
+  const leaf = (l: number): string => `leaf-${String(l).padStart(2, "0")}`;
+  for (let l = 0; l < leaves; l++) {
+    b.assertions.push(balanceAssertion({ id: leaf(l), observationIds: Array.from({ length: Math.min(32, distinct - l * 32) }, (_, k) => nameOf(l * 32 + k)), assertedAt: EVALUATED_AT }));
+  }
+  b.derivations.push({ id: "d-t", ruleId: "wwdr.usd-value", rulesVersion: "0.1.0-draft", inputAssertionIds: Array.from({ length: leaves }, (_, l) => leaf(l)), outputAssertionId: "t" });
+  b.assertions.push({ id: "t", claimType: "TOKEN_USD_VALUE", origin: "WALLETWALL_DERIVED", temporality: "PINNED", subject: balanceSubject(), value: USD_VALUE, observationIds: [], derivationId: "d-t", assertedAt: EVALUATED_AT });
+  return b;
+}
+/** The same, with every leaf resting on the same 32 ids: many mentions of few ids. */
+function sharedFlood(leaves: number): Bundle {
+  const b = flood(32);
+  for (let l = 1; l < leaves; l++) b.assertions.push(balanceAssertion({ id: `leaf-${String(l).padStart(2, "0")}`, observationIds: Array.from({ length: 32 }, (_, k) => `ghost-${String(k).padStart(4, "0")}`), assertedAt: EVALUATED_AT }));
+  b.derivations = b.derivations.map((d) => ({ ...d, inputAssertionIds: Array.from({ length: leaves }, (_, l) => `leaf-${String(l).padStart(2, "0")}`) }));
+  return b;
+}
 
 describe("WallPrint", () => {
   const snapshot = (bundle: Bundle, focalAssertionId: string): ReturnType<typeof buildWallPrintSnapshot> => buildWallPrintSnapshot({ id: "rec-order", bundle: clone(bundle), evaluatedAt: EVALUATED_AT, focalAssertionId });
@@ -1828,34 +2088,69 @@ describe("WallPrint", () => {
   });
 
   describe("at the cap on provenance issues", () => {
-    /**
-     * 64 USD values on one dense cycle, each reading the next and up to twelve before it, and a balance that supersedes the first
-     * and the last. Walking in from the first finds more DEPENDENCY_CYCLE issues than a record may carry, and from the last far fewer.
-     */
-    function atTheCap(nameOf: (i: number) => string, order: "first-listed-first" | "last-listed-first"): Bundle {
-      const b = golden();
-      for (let i = 0; i < 64; i++) {
-        const back = Array.from({ length: Math.min(i, 12) }, (_, k) => nameOf(i - k - 1));
-        addUsd(b, nameOf(i), [...(i < 63 ? [nameOf(i + 1)] : []), "a-balance", "a-price", ...back]);
-      }
-      b.observations.push(balanceObservation({ id: "obs-t" }));
-      b.assertions.push(balanceAssertion({ id: "t", observationIds: ["obs-t"], assertedAt: "2026-10-23T12:00:31Z" }));
-      const records = [supersession("s-first", nameOf(0), "t"), supersession("s-last", nameOf(63), "t")];
-      b.supersessions = order === "first-listed-first" ? records : [...records].reverse();
-      return b;
-    }
-    const ascending = (i: number): string => `n-${String(i).padStart(2, "0")}`;
-    const descending = (i: number): string => `n-${String(63 - i).padStart(2, "0")}`;
+    const cycleOnce = [{ code: "DEPENDENCY_CYCLE", id: "n-00" }];
 
-    test("BUG: whether a record builds follows no listing. It does follow the spelling of the ids, because they say where the walk enters: a follow-up", () => {
-      for (const order of ["first-listed-first", "last-listed-first"] as const) {
-        const enteredAtTheFirst = atTheCap(ascending, order);
-        assert.ok(trace(enteredAtTheFirst, "t").issues.length > 640, order);
-        assert.deepEqual(refusal(enteredAtTheFirst, "t"), ["TOO_MANY provenance.issues"], order);
-        const enteredAtTheLast = atTheCap(descending, order);
-        assert.ok(trace(enteredAtTheLast, "t").issues.length <= 640, order);
-        assert.deepEqual(refusal(enteredAtTheLast, "t"), [], order);
+    test("BUG: whether a record builds follows no listing and no spelling: the dense cycle is one issue, so it builds, and replays", () => {
+      for (const nameOf of [ascending, descending]) {
+        for (const order of ["first-listed-first", "last-listed-first"] as const) {
+          const b = atTheCap(nameOf, order);
+          assert.deepEqual(trace(b, "t").issues, cycleOnce, `${nameOf(0)} ${order}`);
+          assert.deepEqual(refusal(b, "t"), [], `${nameOf(0)} ${order}`);
+          const evidence = createEvidenceStore();
+          evidence.put(clone(b));
+          assert.equal(replayWallPrint(snapshot(b, "t"), { evidence }).outcome, "REPRODUCED", `${nameOf(0)} ${order}`);
+          assert.deepEqual(snapshot(b, "t").provenance.issues, cycleOnce, `${nameOf(0)} ${order}`);
+        }
       }
+    });
+
+    test("BUG: a record that carries the issues an older walk counted, one per back edge, replays as MISMATCH in provenance, not as UNREPLAYABLE", () => {
+      const b = atTheCap(ascending, "last-listed-first");
+      assert.deepEqual(refusal(b, "t"), [], "the record builds");
+      const built = snapshot(b, "t");
+      const counted = Array.from({ length: 63 }, (_, i) => ({ code: "DEPENDENCY_CYCLE" as const, id: ascending(i + 1) }));
+      const older = { ...wallPrintPayload(built), provenance: { ...built.provenance, issues: counted } };
+      const evidence = createEvidenceStore();
+      evidence.put(clone(b));
+      const r = replayWallPrint(JSON.parse(JSON.stringify({ ...older, digest: wallPrintDigest(older) })), { evidence });
+      assert.deepEqual([r.outcome, r.reasons, r.mismatches], ["MISMATCH", ["DIGEST_MISMATCH", "PROVENANCE_MISMATCH"], ["provenance"]]);
+    });
+
+    describe("a flood of ids that resolve to nothing is refused explicitly, never truncated, and by how many there are", () => {
+      test("CONTROL: 640 distinct ids that resolve to nothing: the record builds, and carries every one", () => {
+        const b = flood(640);
+        assert.equal(trace(b, "t").issues.length, 640);
+        assert.deepEqual(refusal(b, "t"), []);
+        assert.equal(snapshot(b, "t").provenance.issues.length, 640);
+      });
+
+      test("CONTROL: 641: it is refused, with the one finding that says why, not cut to fit, and a replay of a record over such evidence says it was refused", () => {
+        const b = flood(641);
+        assert.equal(trace(b, "t").issues.length, 641, "the trace itself reports all of them");
+        assert.deepEqual(refusal(b, "t"), ["TOO_MANY provenance.issues"]);
+        // A record of the 640 that names the 641 as its evidence: its own inputs cannot be rebuilt, which replay says in one word.
+        const evidence = createEvidenceStore();
+        const bundleDigest = evidence.put(clone(b));
+        const built = snapshot(flood(640), "t");
+        const forged = { ...wallPrintPayload(built), evidence: { ...built.evidence, bundleDigest } };
+        const r = replayWallPrint(JSON.parse(JSON.stringify({ ...forged, digest: wallPrintDigest(forged) })), { evidence });
+        assert.deepEqual([r.outcome, r.reasons, r.recomputedDigest], ["UNREPLAYABLE", ["REBUILD_REFUSED"], null]);
+      });
+
+      test("CONTROL: the count and the refusal are the same however the ids are spelled and listed", () => {
+        for (const nameOf of [(i: number) => `g-${String(i).padStart(4, "0")}`, (i: number) => `z${String(9999 - i)}`, (i: number) => `${i % 2 === 0 ? "A" : "b"}-${String(i)}`]) {
+          assert.equal(trace(flood(640, nameOf), "t").issues.length, 640);
+          assert.deepEqual(refusal(flood(640, nameOf), "t"), []);
+          assert.deepEqual(refusal(flood(641, nameOf), "t"), ["TOO_MANY provenance.issues"]);
+        }
+      });
+
+      test("BUG: an id named by many records counts once: 672 mentions of 32 ids is 32 issues, and the record builds", () => {
+        const b = sharedFlood(21);
+        assert.equal(trace(b, "t").issues.length, 32);
+        assert.deepEqual(refusal(b, "t"), []);
+        assert.equal(snapshot(b, "t").provenance.issues.length, 32);
+      });
     });
   });
 
