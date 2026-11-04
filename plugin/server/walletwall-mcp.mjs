@@ -24988,7 +24988,7 @@ function assessReadiness(bundle, evaluation, identityAssertionId, balanceAsserti
     const balDec = balA.value?.["decimals"];
     if (typeof idDec !== "string" || typeof balDec !== "string") add("C4", "INDETERMINATE", "DECIMALS_MISSING");
     else add("C4", idDec === balDec ? "MET" : "NOT_MET", idDec === balDec ? "DECIMALS_CONSISTENT" : "DECIMALS_INCONSISTENT");
-    const bad2 = (e) => e.supportState === "CONFLICTING" || e.supportState === "SUPERSEDED" || e.conflictsWith.length > 0;
+    const bad2 = (e) => e.supportState === "CONFLICTING" || e.supportState === "SUPERSEDED" || e.supersededBy !== null || e.conflictsWith.length > 0;
     add("C5", bad2(idEval) || bad2(balEval) ? "INDETERMINATE" : "MET", bad2(idEval) || bad2(balEval) ? "CONFLICT_OR_SUPERSESSION" : "NO_CONFLICT");
     const freshOk = (e) => !e.limitations.includes("OBSERVATION_FROM_FUTURE") && (e.temporality === "PINNED" || e.freshnessState === "CURRENT");
     add("C6", freshOk(idEval) && freshOk(balEval) ? "MET" : "INDETERMINATE", freshOk(idEval) && freshOk(balEval) ? "FRESH_OR_PINNED" : "NOT_CURRENT");

@@ -127,8 +127,9 @@ export function assessReadiness(
     if (typeof idDec !== "string" || typeof balDec !== "string") add("C4", "INDETERMINATE", "DECIMALS_MISSING");
     else add("C4", idDec === balDec ? "MET" : "NOT_MET", idDec === balDec ? "DECIMALS_CONSISTENT" : "DECIMALS_INCONSISTENT");
 
+    // Superseded is what a record says of it, whatever it reads: one that cannot be valid leaves an assertion with no basis reading NOT_ESTABLISHED, but it is still named as superseded.
     const bad = (e: AssertionEvaluation): boolean =>
-      e.supportState === "CONFLICTING" || e.supportState === "SUPERSEDED" || e.conflictsWith.length > 0;
+      e.supportState === "CONFLICTING" || e.supportState === "SUPERSEDED" || e.supersededBy !== null || e.conflictsWith.length > 0;
     add("C5", bad(idEval) || bad(balEval) ? "INDETERMINATE" : "MET", bad(idEval) || bad(balEval) ? "CONFLICT_OR_SUPERSESSION" : "NO_CONFLICT");
 
     const freshOk = (e: AssertionEvaluation): boolean => !e.limitations.includes("OBSERVATION_FROM_FUTURE") && (e.temporality === "PINNED" || e.freshnessState === "CURRENT");
