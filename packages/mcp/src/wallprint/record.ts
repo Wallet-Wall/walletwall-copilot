@@ -94,7 +94,9 @@ const DEPTH_RE = /^(0|[1-9][0-9]{0,3})$/;
 const CODE_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const INVARIANT_RE = /^INV-[0-9]{2}$/;
 
-// Caps derive from the engine's own maxima so every engine-valid evaluation is recordable.
+// Caps derive from the engine's own maxima so every engine-valid evaluation is recordable, but one. Provenance issues are a set (provenance.ts):
+// each id a walked record names that resolves to nothing once, and each dependency cycle once. A bundle that names more than
+// MAX_PROVENANCE_ISSUES of them is refused (TOO_MANY on provenance.issues), never truncated, and a replay of its record says REBUILD_REFUSED.
 const MAX_EVIDENCE_ITEMS = LIMITS.sources + LIMITS.observations + LIMITS.assertions + LIMITS.derivations;
 const MAX_VIOLATIONS = LIMITS.assertions * 32;
 const MAX_PROVENANCE_ISSUES = (LIMITS.assertions + LIMITS.observations + LIMITS.derivations) * 2;

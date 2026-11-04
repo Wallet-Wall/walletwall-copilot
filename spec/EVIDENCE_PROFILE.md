@@ -215,7 +215,11 @@ limitation codes are the stable machine-facing reason; diagnostics only explain 
 `wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full
 implementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced. It walks every
 derivation an assertion names and what the assertion supersedes, so it can report `DEPENDENCY_CYCLE` for a loop evaluation
-does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit.
+does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit. Its issues are a
+set: each id a walked record names that resolves to nothing once, as `DANGLING_REFERENCE`, then each cycle of the graph it
+walks, a set of assertions that all reach one another or one that names itself, once, as `DEPENDENCY_CYCLE` naming its
+smallest id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they
+are listed or how their ids are spelled.
 
 ## 10. Readiness terminology
 
