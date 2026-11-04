@@ -11,13 +11,13 @@ All states describe **evidence sufficiency under published policy**. None assert
 | `PARTIAL` | Some usable evidence exists but it is insufficient: a single or non-independent provider, user-supplied only, asset outside the registry, chain outside the registry, unknown rules version, unknown freshness for a current claim, or a pinned dependency used for a current claim. |
 | `CONFLICTING` | Observations or assertions about the same claim identity disagree, or a conflict is declared. Never `ESTABLISHED`. |
 | `STALE` | A `CURRENT`-temporality claim whose newest observation is older than the policy maximum age, or whose dependency was superseded. A stale result never satisfies `CURRENT`. |
-| `SUPERSEDED` | A supersession record replaces this assertion with a later assertion about the same claim identity. The old assertion remains in the bundle. |
+| `SUPERSEDED` | A supersession record replaces this assertion with a later assertion about the same claim identity. The old assertion remains in the bundle. Superseded more than once, `supersededBy` names one of them, as section 8 of `EVIDENCE_PROFILE.md` says. |
 | `UNKNOWN` | Sources were consulted but produced only `NO_RESULT` or `ERROR`. Not `FALSE`, not zero. |
-| `NOT_ESTABLISHED` | No admissible basis: no source, wrong subject or value, invalid values, registry mismatch, missing required dependency, derivation not permitted, a cycle, a derived subject that differs from an input's, or any reused assertion, source, observation or derivation id in the bundle. |
+| `NOT_ESTABLISHED` | No admissible basis: no source, wrong subject or value, invalid values, registry mismatch, missing required dependency, derivation not permitted, a dependency cycle, a derived subject that differs from an input's, or any reused assertion, source, observation or derivation id in the bundle. |
 
 Strength order for combining dependencies, strongest to weakest:
 `ESTABLISHED > SUPPORTED > PARTIAL > STALE > SUPERSEDED > UNKNOWN > CONFLICTING > NOT_ESTABLISHED`.
-A superseded dependency counts as `STALE` for its dependents (limitation `DEPENDENCY_SUPERSEDED`).
+A superseded dependency counts as `STALE` for its dependents (limitation `DEPENDENCY_SUPERSEDED`), except that an assertion on a dependency cycle stays `NOT_ESTABLISHED`.
 
 ## FreshnessState
 
@@ -26,7 +26,7 @@ A superseded dependency counts as `STALE` for its dependents (limitation `DEPEND
 | `CURRENT` | `CURRENT`-temporality claim; newest observation is no older than the policy maximum age and not in the future. |
 | `STALE` | `CURRENT`-temporality claim older than the maximum age. |
 | `PINNED` | `PINNED`-temporality claim about a specific point (for example a block). Recency is not required, and an old observation stays valid. An observation dated after the evaluation time is never `PINNED`. |
-| `UNKNOWN_FRESHNESS` | No maximum age, an observation timestamp later than the evaluation time (whatever the temporality), or a current claim that depends on pinned evidence. |
+| `UNKNOWN_FRESHNESS` | No maximum age, an observation timestamp later than the evaluation time (whatever the temporality), a current claim that depends on pinned evidence, or a current claim that reads an assertion on its own dependency cycle. Past its refusals, a current derived claim with a stale or superseded input is `STALE` instead. |
 
 ## FinalityState
 
@@ -34,7 +34,7 @@ A superseded dependency counts as `STALE` for its dependents (limitation `DEPEND
 | --- | --- |
 | `FINALIZED` | All relied-upon observations state finalized finality. |
 | `UNFINALIZED` | At least one relied-upon observation states it is not finalized. |
-| `UNKNOWN_FINALITY` | Finality was not stated for at least one observation and none states `UNFINALIZED`. |
+| `UNKNOWN_FINALITY` | Finality was not stated for at least one observation and none states `UNFINALIZED`. A derived claim reads an assertion on its own dependency cycle as `UNKNOWN_FINALITY`, so on a cycle it is `UNFINALIZED` only if it reads something `UNFINALIZED` itself, even when it retains `NOT_FINALIZED`. |
 | `null` | Finality does not apply to this claim type (for example issuer identity or price). |
 
 When observations disagree, the least final value is reported.
@@ -52,7 +52,7 @@ When observations disagree, the least final value is reported.
 9. Lifecycle: supersession overrides to `SUPERSEDED`; conflict overrides to `CONFLICTING`.
 10. A reused assertion id, or a reused source, observation or derivation id, anywhere in the bundle overrides everything to `NOT_ESTABLISHED`.
 
-A derived assertion additionally fails with `INVALID_SUBJECT` when its subject does not meet the claim contract, and with `SUBJECT_MISMATCH` when its subject differs from any input's on a subject key their claim types share; both are `NOT_ESTABLISHED`.
+A derived assertion additionally fails with `INVALID_SUBJECT` when its subject does not meet the claim contract, and with `SUBJECT_MISMATCH` when its subject differs from any input's on a subject key their claim types share; both are `NOT_ESTABLISHED`. One on a dependency cycle is `NOT_ESTABLISHED` with `DEPENDENCY_CYCLE`, whichever assertion on the cycle comes first and whatever its inputs read, until lifecycle overrides that as it does any state (steps 9 and 10). It is otherwise evaluated as any derived assertion is, reading the others on the cycle as inputs with no basis. It retains every limitation any assertion on the cycle reports, but only the diagnostics of its own refusal.
 
 ## Vault technical readiness
 

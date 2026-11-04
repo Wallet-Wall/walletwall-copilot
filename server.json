@@ -12,7 +12,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/Wallet-Wall/walletwall-copilot/releases/download/v0.2.2/walletwall.mcpb",
-      "fileSha256": "882a2cd8254e4fbf5837cf906e30ee8910ed17ca5536f78cacb620db0686ff2b",
+      "fileSha256": "709be61052e117d91079c83dd6e24e6ccab971d6f9deda458374d307d81a84ee",
       "transport": {
         "type": "stdio"
       }

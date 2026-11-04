@@ -676,6 +676,48 @@ base(
   base("CNF-025", "conflict", "conflict", "A reused derivation id is refused even when both records are byte-identical.", derivationIdentical, derivationRefused);
 }
 
+{
+  // Supersessions that overlap read the same in any order: one assertion superseded twice, and a cycle through one of its two successors.
+  const laterBalances = (): Bundle => {
+    const b = golden();
+    for (const [id, blockNumber, hash] of [["a-balance-2", "21000001", "cd"], ["a-balance-3", "21000002", "ef"]] as const) {
+      const subject = { chainId: "1", token: USDC, holder: HOLDER, blockNumber, blockHash: `0x${hash.repeat(32)}` };
+      b.observations.push(balanceObservation({ id: `obs-${id}`, subject }));
+      b.assertions.push(balanceAssertion({ id, subject, observationIds: [`obs-${id}`], assertedAt: EVALUATED_AT }));
+    }
+    return b;
+  };
+  const supersessions = (...records: readonly (readonly [string, string, string])[]): Bundle => ({
+    ...laterBalances(),
+    supersessions: records.map(([id, superseded, superseding]) => ({ id, supersededAssertionId: superseded, supersedingAssertionId: superseding, effectiveAt: EVALUATED_AT, reason: "NEWER_OBSERVATION" as const })),
+  });
+  const byTheThird = ["s-third", "a-balance", "a-balance-3"] as const;
+  const byTheSecond = ["s-second", "a-balance", "a-balance-2"] as const;
+  const backAgain = ["s-back", "a-balance-3", "a-balance"] as const;
+  const byNothing = ["s-nothing", "a-balance", "0-nothing"] as const;
+  const twice: Expectation = {
+    assertions: { "a-balance": { supportState: "SUPERSEDED", supersededBy: "a-balance-2", limitationsInclude: ["SUPERSEDED"] } },
+    violations: { include: [{ invariant: "INV-12", code: "SUPERSEDED_MULTIPLE_TIMES" }] },
+  };
+  base("CNF-026", "conflict", "supersession", "An assertion superseded twice is SUPERSEDED, and supersededBy names the smaller of the two ids, with the larger listed first.", supersessions(byTheThird, byTheSecond), twice);
+  base("CNF-027", "conflict", "supersession", "The same two supersessions with the records in the other order give the same answer.", supersessions(byTheSecond, byTheThird), twice);
+  const cycle: Expectation = {
+    assertions: {
+      "a-balance": { supportState: "SUPERSEDED", supersededBy: "a-balance-2" },
+      "a-balance-3": { supportState: "SUPERSEDED", supersededBy: "a-balance" },
+    },
+    violations: { include: [{ invariant: "INV-12", code: "SUPERSEDED_MULTIPLE_TIMES" }, { invariant: "INV-12", code: "SUPERSESSION_CYCLE" }] },
+  };
+  base("CNF-028", "conflict", "supersession", "A supersession cycle through one of an assertion's two successors is reported, with the other successor listed last.", supersessions(byTheThird, byTheSecond, backAgain), cycle);
+  base("CNF-029", "conflict", "supersession", "The same cycle with the records in the other order gives the same answer.", supersessions(byTheSecond, byTheThird, backAgain), cycle);
+  const nothing: Expectation = {
+    assertions: { "a-balance": { supportState: "SUPERSEDED", supersededBy: "a-balance-2" } },
+    violations: { include: [{ invariant: "INV-12", code: "SUPERSESSION_REFERENCE_INVALID" }] },
+  };
+  base("CNF-030", "conflict", "supersession", "An id that resolves to nothing does not outrank another assertion, however it is spelled, with it listed first.", supersessions(byNothing, byTheSecond), nothing);
+  base("CNF-031", "conflict", "supersession", "The same two supersessions with the records in the other order give the same answer.", supersessions(byTheSecond, byNothing), nothing);
+}
+
 // --------------------------------------------------------------- authority
 base("AUT-001", "authority", "authority", "retrievedVia = Alchemy does not make Alchemy the authority for chain state: authority is canonical chain state; transport is metadata.", golden(), {
   assertions: { "a-balance": { supportState: "ESTABLISHED", authoritySatisfied: true } },
@@ -907,4 +949,24 @@ base("ADV-015", "adversarial", "registry", "A bundle that names a different regi
     assertions: { "a-usd": { supportState: "NOT_ESTABLISHED", limitationsInclude: ["SUBJECT_MISMATCH"] } },
     violations: { include: [{ invariant: "INV-00", code: "SUBJECT_MISMATCH" }] },
   });
+}
+
+{
+  // A dependency cycle is read the same from every side: the second claim has no balance input, and each retains what the other reports.
+  const declared: LimitationCode[] = ["DEPENDENCY_CYCLE", "NO_AUTHORITATIVE_OBSERVATION", "PRICE_IS_PROVIDER_OBSERVATION", "REGISTRY_VERIFIED_POINT_IN_TIME", "TRANSPORT_FIDELITY_NOT_VERIFIED", "WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY"];
+  const b = withUsdValue(golden());
+  b.derivations = b.derivations.map((d) => ({ ...d, inputAssertionIds: ["a-balance", "a-price", "a-usd-2"] }));
+  b.derivations.push({ id: "d-usd-2", ruleId: "wwdr.usd-value", rulesVersion: "0.1.0-draft", inputAssertionIds: ["a-usd", "a-price"], outputAssertionId: "a-usd-2" });
+  const usd = b.assertions.find((a) => a.id === "a-usd") as Assertion;
+  b.assertions = b.assertions.map((a) => (a.id === "a-usd" ? { ...a, limitations: [...declared, "MISSING_REQUIRED_DEPENDENCY" as const] } : a));
+  b.assertions.push({ ...clone(usd), id: "a-usd-2", derivationId: "d-usd-2", limitations: declared });
+  const expected: Expectation = {
+    assertions: {
+      "a-usd": { supportState: "NOT_ESTABLISHED", freshnessState: "PINNED", finalityState: "UNKNOWN_FINALITY", authoritySatisfied: true, independentCorroboration: null, limitationsInclude: ["DEPENDENCY_CYCLE", "MISSING_REQUIRED_DEPENDENCY"] },
+      "a-usd-2": { supportState: "NOT_ESTABLISHED", freshnessState: "UNKNOWN_FRESHNESS", finalityState: "UNKNOWN_FINALITY", authoritySatisfied: false, independentCorroboration: null, limitationsInclude: ["DEPENDENCY_CYCLE", "MISSING_REQUIRED_DEPENDENCY"] },
+    },
+    violations: { include: [{ invariant: "INV-10", code: "DEPENDENCY_LIMITATIONS_DROPPED" }] },
+  };
+  base("ADV-018", "adversarial", "dependency-graph", "Each claim on a dependency cycle has no basis and retains what the other reports, so the claim that does not declare it fails INV-10.", b, expected);
+  base("ADV-019", "adversarial", "dependency-graph", "The same cycle with the assertion records in the other order gives the same answer.", { ...clone(b), assertions: [...clone(b.assertions)].reverse() }, expected);
 }

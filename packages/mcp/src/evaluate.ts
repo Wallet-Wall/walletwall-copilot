@@ -253,14 +253,42 @@ function emptyCore(policy: Policy | undefined): Core {
   };
 }
 
+/**
+ * What each assertion depends on, directly or through others, over the inputs evaluation reads: those of a derivation that names
+ * it as the output, for a claim type that may be derived. It is worked out from the records, so what lies on a cycle does not
+ * follow where evaluation enters it, and an assertion that depends on itself is on a cycle.
+ */
+function dependencyClosure(idx: EvidenceIndex): Map<string, Set<string>> {
+  const inputsOf = (a: Assertion | undefined): readonly string[] => {
+    const d = a?.derivationId === undefined ? undefined : idx.derivations.get(a.derivationId);
+    return a !== undefined && d?.outputAssertionId === a.id && getPolicy(a.claimType)?.derived === true ? d.inputAssertionIds.filter((id) => idx.assertions.has(id)) : [];
+  };
+  const closure = new Map<string, Set<string>>();
+  for (const a of idx.assertions.values()) {
+    const seen = new Set<string>();
+    const pending = [...inputsOf(a)];
+    for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      pending.push(...inputsOf(idx.assertions.get(id)));
+    }
+    closure.set(a.id, seen);
+  }
+  return closure;
+}
+
 export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation {
   const idx = indexEvidence(bundle);
   const evalMs = Date.parse(evaluatedAt);
   const violations: Violation[] = [...idx.duplicateIds];
 
+  // An assertion superseded more than once names another assertion over itself, and itself over an id that resolves to nothing, then
+  // the smallest id: no record is first or last, and how an id that resolves to nothing is spelled decides nothing.
   const supersededBy = new Map<string, string>();
-  for (const s of bundle.supersessions ?? []) {
-    if (!supersededBy.has(s.supersededAssertionId)) supersededBy.set(s.supersededAssertionId, s.supersedingAssertionId);
+  const rank = (superseded: string, by: string): number => (by === superseded ? 1 : idx.assertions.has(by) ? 0 : 2);
+  for (const { supersededAssertionId: superseded, supersedingAssertionId: by } of bundle.supersessions ?? []) {
+    const named = supersededBy.get(superseded);
+    if (named === undefined || rank(superseded, by) < rank(superseded, named) || (rank(superseded, by) === rank(superseded, named) && by < named)) supersededBy.set(superseded, by);
   }
 
   const conflictsWith = new Map<string, Set<string>>();
@@ -295,7 +323,9 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
   }
 
   const memo = new Map<string, AssertionEvaluation>();
-  const inProgress = new Set<string>();
+  const dependsOn = dependencyClosure(idx);
+  const onCycle = (id: string): boolean => dependsOn.get(id)?.has(id) === true;
+  const onSameCycle = (a: string, b: string): boolean => dependsOn.get(a)?.has(b) === true && dependsOn.get(b)?.has(a) === true;
   const bundleLimitations: LimitationCode[] = [];
   if (bundle.registryVersion !== undefined && bundle.registryVersion !== REGISTRY_VERSION) {
     bundleLimitations.push("REGISTRY_VERSION_MISMATCH");
@@ -307,14 +337,9 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
   const evalAssertion = (a: Assertion): AssertionEvaluation => {
     const cached = memo.get(a.id);
     if (cached) return cached;
+    if (onCycle(a.id)) return evalCycle(a);
     const policy = getPolicy(a.claimType);
     let core: Core;
-    if (inProgress.has(a.id)) {
-      core = emptyCore(policy);
-      core.limitations.add("DEPENDENCY_CYCLE");
-      return finish(a, policy, core, true);
-    }
-    inProgress.add(a.id);
     if (policy === undefined) {
       core = emptyCore(policy);
       core.limitations.add("POLICY_MISSING");
@@ -323,8 +348,36 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     } else {
       core = evalDirect(a, policy);
     }
-    inProgress.delete(a.id);
     return finish(a, policy, core, false);
+  };
+
+  /**
+   * A dependency cycle is evaluated together, so no assertion on it is read in full by another on it. Each reads the others on the
+   * cycle as readOnCycle gives them, which is the same from every side, and each depends on all the others, so all of them retain
+   * what any of them reports (INV-10), and a PINNED one that retains a reading from the future reports as if it had read it itself.
+   */
+  const evalCycle = (entry: Assertion): AssertionEvaluation => {
+    const members = [...idx.assertions.values()]
+      .filter((m) => onSameCycle(entry.id, m.id))
+      .map((m) => {
+        const policy = getPolicy(m.claimType) as Policy;
+        return { m, policy, core: evalDerived(m, policy) };
+      });
+    const retained = new Set(members.flatMap(({ core }) => [...core.limitations]));
+    for (const { m, policy, core } of members) {
+      const freshness = core.freshness === "PINNED" && retained.has("OBSERVATION_FROM_FUTURE") ? "UNKNOWN_FRESHNESS" : core.freshness;
+      finish(m, policy, { ...core, freshness, limitations: retained }, false);
+    }
+    return memo.get(entry.id) as AssertionEvaluation;
+  };
+
+  /** An input with no basis. What a PINNED one is about comes from its record, not from its evidence. */
+  const readOnCycle = (a: Assertion): AssertionEvaluation => {
+    const policy = getPolicy(a.claimType);
+    const core = emptyCore(policy);
+    core.limitations.add("DEPENDENCY_CYCLE");
+    if (a.temporality === "PINNED") core.freshness = "PINNED";
+    return finish(a, policy, core, true);
   };
 
   const finish = (a: Assertion, policy: Policy | undefined, core: Core, transient: boolean): AssertionEvaluation => {
@@ -627,7 +680,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
         continue;
       }
       for (const k of dependencySubjectMismatches(a.subject, policy.subjectKeys, dep.subject, getPolicy(dep.claimType)?.subjectKeys ?? [])) mismatchedKeys.add(k);
-      deps.push(evalAssertion(dep));
+      deps.push(onSameCycle(a.id, id) ? readOnCycle(dep) : evalAssertion(dep));
     }
     core.assertionIds = deps.map((x) => x.assertionId);
     lim.add("WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY");
@@ -707,7 +760,8 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
       core.freshness = "CURRENT";
     }
     if (core.freshness === "STALE") support = weakest([support, "STALE"]);
-    core.support = support;
+    // A cycle has no basis, whatever its inputs read: it is the weakest thing here, and lifecycle overrides it as it overrides any state.
+    core.support = onCycle(a.id) ? "NOT_ESTABLISHED" : support;
     return core;
   };
 

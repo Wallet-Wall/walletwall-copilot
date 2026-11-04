@@ -112,7 +112,9 @@ These are enforced by `check_invariants` and by executable conformance tests. Ea
 10. **INV-10** Derived results retain the limitations of their dependencies.
 11. **INV-11** Token quantity MUST NOT silently become USD value without explicit price evidence.
 12. **INV-12** Historical assertions are superseded, never silently rewritten. A reused assertion id is reported here
-    as `DUPLICATE_ASSERTION_ID`.
+    as `DUPLICATE_ASSERTION_ID`, an assertion superseded by more than one record that names another assertion as
+    `SUPERSEDED_MULTIPLE_TIMES`, a record that names nothing or its own assertion as `SUPERSESSION_REFERENCE_INVALID`,
+    and a chain of supersessions that comes back on itself by any of them as `SUPERSESSION_CYCLE`.
 13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply
     `authority = Alchemy` for Ethereum state.
 
@@ -137,8 +139,10 @@ Two digests are defined for an observation: the **evidence digest** (canonical f
 ## 8. Evaluation
 
 Evaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rules)`. The evaluation time is an
-explicit input; the engine never reads a clock. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and
-`SUPPORT_STATES.md`. In outline:
+explicit input; the engine never reads a clock. The order of the records in any list of a bundle the schema accepts
+changes no answer of `inspect_evidence`, `check_invariants`, `assess_vault_readiness` or `trace_provenance`; only
+`bundleDigest`, a digest of the records as listed, follows it. A list inside one record is part of that record, and this
+does not cover it. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outline:
 
 1. Reject any bundle that fails the closed schema.
 2. Refuse structural ambiguity. A reused assertion id names no record, whichever record comes first, so nothing depends
@@ -156,10 +160,23 @@ explicit input; the engine never reads a clock. Procedure and per-claim policies
    input as `NOT_ESTABLISHED`, not as superseded, so it inherits `SUPERSEDED` but does not report `DEPENDENCY_SUPERSEDED`,
    and its freshness is worked out as if the input were not superseded. An id is unique within its kind, so a source and
    an observation may share one. Nothing resolves through a conflict or supersession id.
-3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions.
+3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions. An
+   assertion superseded more than once is `SUPERSEDED`. `supersededBy` names the smallest id, by code unit, among the other
+   assertions its records name that resolve; if there is none, the assertion itself if a record names it; otherwise the
+   smallest of the ids, which resolve to nothing.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
    assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject
-   differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`.
+   differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`. A derived assertion that
+   depends on itself, directly or through others, is on a dependency cycle. For evaluation, only an input that resolves, of a
+   derivation that names the assertion as its output, for a claim type that may be derived, makes a dependency. A cycle has
+   no basis and is read the same from every side: no assertion on it is read in full by another on it. Each reads the
+   others on it as inputs with no basis: `NOT_ESTABLISHED` unless superseded or conflicting, with `DEPENDENCY_CYCLE`,
+   unknown finality, and unknown freshness unless `PINNED`. It is otherwise evaluated as usual, except that its own support
+   is `NOT_ESTABLISHED` whatever those inputs read, and supersession and conflict override that as they override any state.
+   Each retains every limitation any of them reports, so the assertions on a cycle report the same limitations (INV-10),
+   though not always the same freshness, finality or authority, and a `PINNED` one that retains `OBSERVATION_FROM_FUTURE`
+   reports `UNKNOWN_FRESHNESS`. An assertion that depends on a cycle without being on it is evaluated as usual, over those
+   assertions as they read.
 5. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations. A reading with a
    value dated after `evaluatedAt` is `OBSERVATION_FROM_FUTURE` with `UNKNOWN_FRESHNESS` and at most `PARTIAL` support,
    whether the claim is `CURRENT` or `PINNED`. A claim derived from it inherits the limitation and the cap, and a `PINNED`
@@ -169,8 +186,9 @@ explicit input; the engine never reads a clock. Procedure and per-claim policies
 
 A shape failure is an evaluation state, not a schema rejection: an assertion whose subject or value, or whose supporting
 observation's subject or payload, does not meet the claim contract is reported `NOT_ESTABLISHED` with the limitation
-`INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`. Each such limitation carries a structured
-`diagnostics` entry naming the record checked, the required keys and the missing, invalid, unexpected or mismatched keys.
+`INVALID_SUBJECT`, `SUBJECT_MISMATCH`, `INVALID_VALUE` or `VALUE_MISMATCH`. On the assertion that fails, each such
+limitation carries a structured `diagnostics` entry naming the record checked, the required keys and the missing, invalid,
+unexpected or mismatched keys; an assertion that inherits or retains the limitation from another carries none.
 Diagnostics are deterministic and bounded (one entry per distinct observation), never include record values (only
 observation ids already present in the evaluation), and report key names outside the contract vocabulary as `*`. The
 limitation codes are the stable machine-facing reason; diagnostics only explain them.
@@ -180,7 +198,9 @@ limitation codes are the stable machine-facing reason; diagnostics only explain 
 `trace_provenance` emits a graph shaped like W3C PROV-JSON: observations and assertions are `entity`, derivations are
 `activity`, sources and the WalletWall rule engine are `agent`; relations use `wasDerivedFrom`, `wasAttributedTo`,
 `wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full
-implementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced.
+implementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced. It walks every
+derivation an assertion names and what the assertion supersedes, so it can report `DEPENDENCY_CYCLE` for a loop evaluation
+does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit.
 
 ## 10. Readiness terminology
 
