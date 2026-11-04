@@ -173,12 +173,15 @@ per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outli
    code unit, among the other assertions its records name that resolve; if there is none, the assertion itself if a record
    names it; otherwise the smallest of the ids, which resolve to nothing. A supersession record is well-formed when it names
    two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed
-   record takes an assertion out of conflict detection, because only then does a later assertion carry the claim forward. An
-   assertion that a faulty record supersedes (one `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`,
-   `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) still reads `SUPERSEDED`, and stays among
-   those compared, so a record that cannot be valid cannot hide a conflict. This only ever adds a conflict: an assertion it
-   changes reads `CONFLICTING`, a fall from any state that was a basis and no gain for one that was not (`NOT_ESTABLISHED`),
-   and no readiness answer is more favourable.
+   record takes an assertion out of conflict detection: it is the author's claim that the later assertion replaces the
+   earlier, taken as made, and nothing asks whether the later assertion has evidence of its own (the residual risks in
+   `THREAT_MODEL.md` say so). An assertion that a faulty record supersedes (one `check_invariants` reports as
+   `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) still
+   reads `SUPERSEDED`, whatever state it had, and stays among those compared, so a record that cannot be valid cannot hide
+   a conflict. Being compared can only add a conflict, and an assertion in a conflict reads `CONFLICTING` whatever state it
+   had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of
+   `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the
+   computed state. No readiness answer is more favourable.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
    assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject
    differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`. A derived assertion that

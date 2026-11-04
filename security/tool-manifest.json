@@ -2294,7 +2294,7 @@
       "title": "Per-claim-type contract: subject, value, observation linkage and authority",
       "description": "For every claim type: the required subject and value keys with their formats, which observation origins and source kinds may establish or corroborate the claim, how observations link to assertions, the registry and derivation relationships, and the structured diagnostics attached to shape failures. Generated from the bundled authority policies and the evaluator's own rules.",
       "mimeType": "application/json",
-      "sha256": "5293bb0160a90e74dd762639b7d4079e24104202f1542b9547d96ab84cce80db"
+      "sha256": "5a2cbc327334feea23f130ab2f9bac980908cd0f1548d5b5ef745b976d7f5bc5"
     },
     {
       "uri": "walletwall://policies/authority",
@@ -2310,7 +2310,7 @@
       "title": "WalletWall Evidence Profile 0.1 (draft)",
       "description": "Normative draft text of the WalletWall Evidence Profile 0.1. Not an industry standard.",
       "mimeType": "text/markdown",
-      "sha256": "9cb46fe14d29acf9c5a56f8c4a5cbe43e5d9fd0f0114b50e0e0e2038de7b34a1"
+      "sha256": "90605a8c66f76aaf5eefb27f51f1f948eeac6697c88b2ad40bbdf9fab5bca7db"
     },
     {
       "uri": "walletwall://conformance/version",
@@ -2318,7 +2318,7 @@
       "title": "Engine, rules and data versions",
       "description": "Versions and content digests of the bundled engine, registry, policies, rules and specification.",
       "mimeType": "application/json",
-      "sha256": "15d4b881994b0b6e4461ba3ea9925a44892a1693c417422b64d3ddc7970aebdf"
+      "sha256": "9c2245dab09e7a6023b00edba7838fc90489da2e833d7f1388a0efe2dd876736"
     },
     {
       "uri": "walletwall://examples/identity-established",
