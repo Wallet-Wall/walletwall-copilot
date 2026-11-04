@@ -74,8 +74,9 @@ keep them in the record's digest; the claim contract says how they are treated.
   assertion's `subject` and each supporting observation's `subject` share one shape; an assertion's `value` and each
   supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.
 - **SupportState**, **FreshnessState**, **FinalityState** — section 5.
-- **Conflict** — `{id, assertionIds, reason}` declared by an author, or detected by the engine when two
-  non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.
+- **Conflict** — `{id, assertionIds, reason}` declared by an author, or detected by the engine when two assertions
+  about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values.
+  Conflicts are never auto-resolved.
 - **Limitation** — a code from a closed enumeration attached to a result that explains why it is weaker than it
   might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).
 - **Supersession** — `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion
@@ -114,14 +115,19 @@ These are enforced by `check_invariants` and by executable conformance tests. Ea
 12. **INV-12** Historical assertions are superseded, never silently rewritten. A reused assertion id is reported here
     as `DUPLICATE_ASSERTION_ID`, an assertion superseded by more than one record that names another assertion as
     `SUPERSEDED_MULTIPLE_TIMES`, a record that names nothing or its own assertion as `SUPERSESSION_REFERENCE_INVALID`,
-    and a chain of supersessions that comes back on itself by any of them as `SUPERSESSION_CYCLE`.
+    one whose two assertions are not about the same claim as `SUPERSESSION_CLAIM_IDENTITY_MISMATCH`, one whose superseding
+    assertion is not later as `SUPERSESSION_NOT_FORWARD_IN_TIME`, and a chain of supersessions that comes back on itself by
+    any of them as `SUPERSESSION_CYCLE`.
 13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply
     `authority = Alchemy` for Ethereum state.
 
 **INV-00** (engine rule) — declared states MUST NOT exceed states computed by the published rules. A derived assertion
 whose subject differs from its inputs is reported here as `SUBJECT_MISMATCH`, and one whose subject fails the claim
 contract as `INVALID_SUBJECT`. A reused source, observation or derivation id is reported here as `DUPLICATE_SOURCE_ID`,
-`DUPLICATE_OBSERVATION_ID` or `DUPLICATE_DERIVATION_ID`, against no assertion.
+`DUPLICATE_OBSERVATION_ID` or `DUPLICATE_DERIVATION_ID`, against no assertion. A derived value that recomputation does
+not reproduce is reported here as `RECOMPUTATION_MISMATCH`: the rule is applied to every balance with every price among
+the inputs of a USD value, and to every identity with every balance among those of a readiness claim, and one reading
+that gives another value is a mismatch.
 
 ## 7. Canonicalization and digests
 
@@ -142,7 +148,9 @@ Evaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rule
 explicit input; the engine never reads a clock. The order of the records in any list of a bundle the schema accepts
 changes no answer of `inspect_evidence`, `check_invariants`, `assess_vault_readiness` or `trace_provenance`; only
 `bundleDigest`, a digest of the records as listed, follows it. A list inside one record is part of that record, and this
-does not cover it. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outline:
+does not cover it. It moves no state, limitation or violation, because a derived value is recomputed under every reading
+of its inputs, but it is what `trace_provenance` walks and what `dependencies` echo, in that order. Procedure and
+per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outline:
 
 1. Reject any bundle that fails the closed schema.
 2. Refuse structural ambiguity. A reused assertion id names no record, whichever record comes first, so nothing depends
@@ -160,23 +168,36 @@ does not cover it. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` 
    input as `NOT_ESTABLISHED`, not as superseded, so it inherits `SUPERSEDED` but does not report `DEPENDENCY_SUPERSEDED`,
    and its freshness is worked out as if the input were not superseded. An id is unique within its kind, so a source and
    an observation may share one. Nothing resolves through a conflict or supersession id.
-3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions. An
-   assertion superseded more than once is `SUPERSEDED`. `supersededBy` names the smallest id, by code unit, among the other
-   assertions its records name that resolve; if there is none, the assertion itself if a record names it; otherwise the
-   smallest of the ids, which resolve to nothing.
+3. Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed
+   supersession retires. An assertion that a well-formed record supersedes, once or more than once, is `SUPERSEDED`.
+   `supersededBy` names the smallest id, by code unit, among the other assertions its records name that resolve;
+   if there is none, the assertion itself if a record names it; otherwise the smallest of the ids, which resolve to
+   nothing. A supersession record is well-formed when it names two different assertions that resolve, of one claim
+   identity, the superseding one asserted later. Only a well-formed
+   record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it
+   had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the
+   later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks
+   in `THREAT_MODEL.md` say so). An assertion that only faulty records supersede (records `check_invariants` reports as
+   `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries
+   the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it
+   computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no
+   conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had:
+   a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of
+   `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the
+   computed state. No readiness answer is more favourable.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
    assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject
    differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`. A derived assertion that
    depends on itself, directly or through others, is on a dependency cycle. For evaluation, only an input that resolves, of a
    derivation that names the assertion as its output, for a claim type that may be derived, makes a dependency. A cycle has
    no basis and is read the same from every side: no assertion on it is read in full by another on it. Each reads the
-   others on it as inputs with no basis: `NOT_ESTABLISHED` unless superseded or conflicting, with `DEPENDENCY_CYCLE`,
-   unknown finality, and unknown freshness unless `PINNED`. It is otherwise evaluated as usual, except that its own support
-   is `NOT_ESTABLISHED` whatever those inputs read, and supersession and conflict override that as they override any state.
-   Each retains every limitation any of them reports, so the assertions on a cycle report the same limitations (INV-10),
-   though not always the same freshness, finality or authority, and a `PINNED` one that retains `OBSERVATION_FROM_FUTURE`
-   reports `UNKNOWN_FRESHNESS`. An assertion that depends on a cycle without being on it is evaluated as usual, over those
-   assertions as they read.
+   others on it as inputs with no basis: `NOT_ESTABLISHED` unless a well-formed supersession or a conflict overrides that,
+   with `DEPENDENCY_CYCLE`, unknown finality, and unknown freshness unless `PINNED`. It is otherwise evaluated as usual,
+   except that its own support is `NOT_ESTABLISHED` whatever those inputs read, and a well-formed supersession and a
+   conflict override that as they override any state. Each retains every limitation any of them reports, so the
+   assertions on a cycle report the same limitations (INV-10), though not always the same freshness, finality or
+   authority, and a `PINNED` one that retains `OBSERVATION_FROM_FUTURE` reports `UNKNOWN_FRESHNESS`. An assertion that
+   depends on a cycle without being on it is evaluated as usual, over those assertions as they read.
 5. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations. A reading with a
    value dated after `evaluatedAt` is `OBSERVATION_FROM_FUTURE` with `UNKNOWN_FRESHNESS` and at most `PARTIAL` support,
    whether the claim is `CURRENT` or `PINNED`. A claim derived from it inherits the limitation and the cap, and a `PINNED`
@@ -200,7 +221,13 @@ limitation codes are the stable machine-facing reason; diagnostics only explain 
 `wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full
 implementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced. It walks every
 derivation an assertion names and what the assertion supersedes, so it can report `DEPENDENCY_CYCLE` for a loop evaluation
-does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit.
+does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit. Its issues are one
+for each record that resolves to nothing among those the assertions it walks cite (an observation they rest on, the source
+of an observation, the derivation they name, the assertions that derivation takes as inputs), as `DANGLING_REFERENCE`
+naming its id (two of different kinds that share an id give two identical entries), then one for each cycle of the graph it
+walks, a set of assertions that all reach one another or one that names itself, as `DEPENDENCY_CYCLE` naming its smallest
+id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are
+listed or how their ids are spelled. Every member of a cycle stays in `lineage` and in the PROV relations.
 
 ## 10. Readiness terminology
 

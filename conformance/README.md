@@ -7,7 +7,7 @@ Each JSON file is one case: `{ id, category, claimCategory, description, evaluat
 | `evidence/` | `EVD-*` | identity, spoofed symbols, duplicate/missing evidence, NO_RESULT vs ZERO, UNKNOWN vs FALSE, malformed numbers, decimal precision, quantity vs USD |
 | `authority/` | `AUT-*` | claim-specific authority, transport vs authority, provider independence, authority escalation, derived limitations |
 | `freshness/` | `FRS-*` | staleness, pinned vs current, future timestamps, finality |
-| `conflict/` | `CNF-*` | observation and assertion conflicts, case-insensitive address identity, declared conflicts, reused assertion, source, observation and derivation ids, supersession integrity, overlapping supersessions in either record order |
+| `conflict/` | `CNF-*` | observation and assertion conflicts, case-insensitive address identity, declared conflicts, reused assertion, source, observation and derivation ids, supersession integrity, supersessions that cannot be valid and cannot hide a conflict, overlapping supersessions in either record order |
 | `adversarial/` | `ADV-*` | schema abuse, bounds, prototype keys, cycles in either record order, dangling references, derivation and recomputation tampering, derived subject forgery |
 | `privacy/` | `PRIV-matrix.json` | requirement-to-test matrix; the privacy tests themselves live in `packages/mcp/test/privacy` |
 

@@ -25,9 +25,61 @@ export interface ProvenanceTrace {
   issues: { code: "TARGET_NOT_FOUND" | "DANGLING_REFERENCE" | "DEPENDENCY_CYCLE"; id: string | null }[];
 }
 
+const byCodeUnit = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
+
+/** What a walked record can name that may resolve to nothing. An id is unique within its kind only, so a source and an observation may share one. */
+type RecordKind = "assertion" | "observation" | "source" | "derivation";
+
+/**
+ * The cycles of a graph, each once: a strongly connected set of nodes, or a node that names itself, reported by its smallest id, in order
+ * of code unit. A set of nodes does not change with where a walk entered it, how its records were listed or how its ids are spelled, so
+ * neither can change how many there are: a walk that counted every way back into a cycle counted them by where it began.
+ */
+function cycleIds(edges: ReadonlyMap<string, readonly string[]>): string[] {
+  let counter = 0;
+  const index = new Map<string, number>();
+  const lowest = new Map<string, number>();
+  const open: string[] = [];
+  const onOpen = new Set<string>();
+  const found: string[] = [];
+  const connect = (v: string): void => {
+    index.set(v, counter);
+    lowest.set(v, counter);
+    counter++;
+    open.push(v);
+    onOpen.add(v);
+    for (const w of edges.get(v) ?? []) {
+      if (!index.has(w)) {
+        connect(w);
+        lowest.set(v, Math.min(lowest.get(v) ?? 0, lowest.get(w) ?? 0));
+      } else if (onOpen.has(w)) {
+        lowest.set(v, Math.min(lowest.get(v) ?? 0, index.get(w) ?? 0));
+      }
+    }
+    if (lowest.get(v) !== index.get(v)) return;
+    const members: string[] = [];
+    for (let w = open.pop(); w !== undefined; w = open.pop()) {
+      onOpen.delete(w);
+      members.push(w);
+      if (w === v) break;
+    }
+    if (members.length > 1 || (edges.get(v) ?? []).includes(v)) found.push(members.reduce((x, y) => (x < y ? x : y)));
+  };
+  for (const v of edges.keys()) if (!index.has(v)) connect(v);
+  return found.sort(byCodeUnit);
+}
+
 /**
  * Builds a W3C PROV-JSON-shaped provenance graph for one assertion and its ancestors.
  * Transport (ww:retrievedVia) is recorded as an attribute and never as an agent or authority.
+ *
+ * The issues are one for each thing the walk reaches, not a count of how it got there: each record that resolves to nothing among those the
+ * assertions walked cite (an observation they rest on, the source of one, the derivation they name, the assertions it takes as inputs),
+ * once, then each cycle of the graph walked, once, each in order of code unit. A missing record is told apart by its kind as well as its
+ * id, so a missing source and a missing observation that share an id are two issues, as they are two records. How many there are
+ * follows the records reached, never the assertion the walk entered at, the order the records or a list inside one are in, or how the ids
+ * are spelled; and the count is never more than the walk's own per-reference, per-back-edge count was, so a record that fitted under that
+ * fits under this.
  */
 export function traceProvenance(bundle: Bundle, assertionId: string): ProvenanceTrace {
   const idx = indexEvidence(bundle);
@@ -42,10 +94,16 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
     used: {},
     wasRevisionOf: {},
   };
-  const issues: ProvenanceTrace["issues"] = [];
   const lineage: ProvenanceTrace["lineage"] = [];
   const visited = new Set<string>();
-  const stack = new Set<string>();
+  /** Every record a walked record names that resolves to nothing, as the kinds it is missing in under each id, and what each walked assertion leads to, for the issues the walk ends with. */
+  const missing = new Map<string, Set<RecordKind>>();
+  const miss = (kind: RecordKind, id: string): void => {
+    const kinds = missing.get(id) ?? new Set<RecordKind>();
+    kinds.add(kind);
+    missing.set(id, kinds);
+  };
+  const edges = new Map<string, string[]>();
   let relCounter = 0;
   const rel = (p: string): string => `${NS}:${p}${++relCounter}`;
 
@@ -60,7 +118,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
   const addObservation = (id: string, depth: number): void => {
     const o = idx.observations.get(id);
     if (o === undefined) {
-      issues.push({ code: "DANGLING_REFERENCE", id });
+      miss("observation", id);
       return;
     }
     const key = `${NS}:obs/${o.id}`;
@@ -75,7 +133,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
     };
     const s = idx.sources.get(o.sourceId);
     if (s === undefined) {
-      issues.push({ code: "DANGLING_REFERENCE", id: o.sourceId });
+      miss("source", o.sourceId);
       return;
     }
     const agentKey = `${NS}:source/${s.id}`;
@@ -92,16 +150,13 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
   const walk = (id: string, depth: number): void => {
     const a = idx.assertions.get(id);
     if (a === undefined) {
-      issues.push({ code: "DANGLING_REFERENCE", id });
-      return;
-    }
-    if (stack.has(id)) {
-      issues.push({ code: "DEPENDENCY_CYCLE", id });
+      miss("assertion", id);
       return;
     }
     if (visited.has(id)) return;
     visited.add(id);
-    stack.add(id);
+    const successors: string[] = [];
+    edges.set(id, successors);
     const key = `${NS}:assertion/${a.id}`;
     lineage.push({ id: a.id, kind: "assertion", depth });
     prov.entity[key] = {
@@ -120,7 +175,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
     if (a.derivationId !== undefined) {
       const d = idx.derivations.get(a.derivationId);
       if (d === undefined) {
-        issues.push({ code: "DANGLING_REFERENCE", id: a.derivationId });
+        miss("derivation", a.derivationId);
       } else {
         const actKey = `${NS}:derivation/${d.id}`;
         prov.activity[actKey] = { "prov:type": "ww:Derivation", "ww:ruleId": d.ruleId, "ww:rulesVersion": d.rulesVersion };
@@ -130,6 +185,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
         for (const dep of d.inputAssertionIds) {
           prov.used[rel("use")] = { "prov:activity": actKey, "prov:entity": `${NS}:assertion/${dep}` };
           prov.wasDerivedFrom[rel("der")] = { "prov:generatedEntity": key, "prov:usedEntity": `${NS}:assertion/${dep}` };
+          if (idx.assertions.has(dep)) successors.push(dep);
           walk(dep, depth + 1);
         }
       }
@@ -140,12 +196,16 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
           "prov:generatedEntity": key,
           "prov:usedEntity": `${NS}:assertion/${s.supersededAssertionId}`,
         };
+        successors.push(s.supersededAssertionId);
         walk(s.supersededAssertionId, depth + 1);
       }
     }
-    stack.delete(id);
   };
 
   walk(assertionId, 0);
+  const issues: ProvenanceTrace["issues"] = [
+    ...[...missing.keys()].sort(byCodeUnit).flatMap((id) => Array.from(missing.get(id) ?? [], () => ({ code: "DANGLING_REFERENCE" as const, id }))),
+    ...cycleIds(edges).map((id) => ({ code: "DEPENDENCY_CYCLE" as const, id })),
+  ];
   return { target: assertionId, lineage, prov, issues };
 }

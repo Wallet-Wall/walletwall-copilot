@@ -35,9 +35,10 @@ Corroboration can raise support to at most `SUPPORTED` and never to `ESTABLISHED
 A derived assertion has origin `WALLETWALL_DERIVED`. Its authority is WalletWall's published rule, scoped to the
 derived claim only; it never relabels the authority of its inputs, and always carries
 `WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY`. Its support is the weakest of its dependencies, and on a dependency cycle,
-which has no basis, it is `NOT_ESTABLISHED` unless it is itself superseded or conflicting. It inherits every dependency
-limitation. It gets no support from a dependency about another subject: its subject must match every dependency's on
-the subject keys their claim types share, otherwise it is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`.
+which has no basis, it is `NOT_ESTABLISHED` unless a well-formed supersession or a conflict overrides that. It
+inherits every dependency limitation. It gets no support from a dependency about another subject: its subject must
+match every dependency's on the subject keys their claim types share, otherwise it is `NOT_ESTABLISHED` with
+`SUBJECT_MISMATCH`.
 
 ## Conflicts
 

@@ -836,11 +836,11 @@ describe("a reused id overrides every state, and nothing else", () => {
     }
   });
 
-  test("two readings of one reused source are two dangling references", () => {
+  test("two readings of one reused source are one dangling reference: the id once, however many readings name it", () => {
     const b = clone(golden());
     b.observations = b.observations.map((o) => (o.id === "obs-price-b" ? { ...o, sourceId: "src-prov-a" } : o));
     b.sources.push({ id: "src-prov-a", kind: "USER_INPUT" });
-    assert.deepEqual(trace(b, "a-price").issues, [{ code: "DANGLING_REFERENCE", id: "src-prov-a" }, { code: "DANGLING_REFERENCE", id: "src-prov-a" }]);
+    assert.deepEqual(trace(b, "a-price").issues, [{ code: "DANGLING_REFERENCE", id: "src-prov-a" }]);
   });
 
   // check_invariants reads every record for what it presents, and that is a union: no first, last, smallest or largest record wins.

@@ -718,6 +718,65 @@ base(
   base("CNF-031", "conflict", "supersession", "The same two supersessions with the records in the other order give the same answer.", supersessions(byTheSecond, byNothing), nothing);
 }
 
+// A supersession that cannot be valid takes nothing out of conflict detection. The world of CNF-002, and one record about the rival.
+{
+  const world = (): Bundle => {
+    const b = golden();
+    b.sources.push(chain2());
+    b.observations.push(bal2());
+    b.assertions.push(balanceAssertion({ id: "a-balance-2", value: { balanceAtomic: "1400000", decimals: "6" }, observationIds: ["obs-balance-2"] }));
+    return b;
+  };
+  const record = (b: Bundle, to: string): Bundle => ({
+    ...b,
+    supersessions: [{ id: "s-1", supersededAssertionId: "a-balance-2", supersedingAssertionId: to, effectiveAt: T("2026-10-23T12:00:20Z"), reason: "CORRECTED" }],
+  });
+  /**
+   * The rival stays compared, so the conflict stays and readiness cannot be met, and it reads CONFLICTING too: a record that cannot be valid
+   * never raises what it names. It still carries the record's limitation and supersededBy, and the record is reported (CNF-006 pins what it
+   * reads when it is in no conflict: SUPERSEDED).
+   */
+  const stays = (to: string, codes: string[]): Expectation => ({
+    assertions: {
+      "a-balance": { supportState: "CONFLICTING", conflictsWith: ["a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] },
+      "a-balance-2": { supportState: "CONFLICTING", supersededBy: to, conflictsWith: ["a-balance"], limitationsInclude: ["SUPERSEDED", "CONFLICT_DETECTED"] },
+    },
+    violations: { include: codes.map((code) => ({ invariant: "INV-12", code })) },
+    readiness: { ...READINESS_INPUTS, classification: "NOT_ESTABLISHED" },
+  });
+  base("CNF-032", "conflict", "supersession", "A supersession that names nothing cannot hide a conflict: the rival stays compared and reads CONFLICTING, with the record's limitation and supersededBy, so both are CONFLICTING and readiness is not established.", record(world(), "a-missing"), stays("a-missing", ["SUPERSESSION_REFERENCE_INVALID"]));
+  base("CNF-033", "conflict", "supersession", "A supersession of the assertion by itself cannot hide a conflict.", record(world(), "a-balance-2"), stays("a-balance-2", ["SUPERSESSION_REFERENCE_INVALID", "SUPERSESSION_CYCLE"]));
+  base("CNF-034", "conflict", "supersession", "A supersession by an assertion of another claim cannot hide a conflict.", record(world(), "a-identity"), stays("a-identity", ["SUPERSESSION_CLAIM_IDENTITY_MISMATCH"]));
+  base("CNF-035", "conflict", "supersession", "A supersession by an assertion that is not later in time cannot hide a conflict.", record(world(), "a-balance"), stays("a-balance", ["SUPERSESSION_NOT_FORWARD_IN_TIME"]));
+
+  const retired = world();
+  retired.observations.push(
+    balanceObservation({
+      id: "obs-balance-new",
+      subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` },
+      payload: { balanceAtomic: "1400000", decimals: "6" },
+      observedAt: T("2026-10-23T12:00:20Z"),
+    }),
+  );
+  retired.assertions.push(
+    balanceAssertion({
+      id: "a-balance-new",
+      subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` },
+      value: { balanceAtomic: "1400000", decimals: "6" },
+      observationIds: ["obs-balance-new"],
+      assertedAt: T("2026-10-23T12:00:20Z"),
+    }),
+  );
+  base("CNF-036", "conflict", "supersession", "CONTROL: a well-formed supersession retires the rival, so it leaves conflict detection and the balance it disagreed with is ESTABLISHED and readiness is met.", record(retired, "a-balance-new"), {
+    assertions: {
+      "a-balance": { supportState: "ESTABLISHED", conflictsWith: [] },
+      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: "a-balance-new", conflictsWith: [] },
+    },
+    violations: { none: true },
+    readiness: { ...READINESS_INPUTS, classification: "CRITERIA_MET" },
+  });
+}
+
 // --------------------------------------------------------------- authority
 base("AUT-001", "authority", "authority", "retrievedVia = Alchemy does not make Alchemy the authority for chain state: authority is canonical chain state; transport is metadata.", golden(), {
   assertions: { "a-balance": { supportState: "ESTABLISHED", authoritySatisfied: true } },
@@ -969,4 +1028,35 @@ base("ADV-015", "adversarial", "registry", "A bundle that names a different regi
   };
   base("ADV-018", "adversarial", "dependency-graph", "Each claim on a dependency cycle has no basis and retains what the other reports, so the claim that does not declare it fails INV-10.", b, expected);
   base("ADV-019", "adversarial", "dependency-graph", "The same cycle with the assertion records in the other order gives the same answer.", { ...clone(b), assertions: [...clone(b.assertions)].reverse() }, expected);
+}
+
+// A derived value is checked against every reading of its inputs, so the order of a derivation's inputs decides nothing: each pair is one bundle, its inputs listed two ways.
+{
+  const twoBalances = (inputs: string[], atomic: string): Bundle => {
+    const b = withUsdValue(golden());
+    b.observations.push(balanceObservation({ id: "obs-balance-cur", payload: { balanceAtomic: atomic, decimals: "6" } }));
+    b.assertions.push(balanceAssertion({ id: "a-balance-cur", temporality: "CURRENT", observationIds: ["obs-balance-cur"], value: { balanceAtomic: atomic, decimals: "6" } }));
+    b.derivations = b.derivations.map((d) => ({ ...d, inputAssertionIds: inputs }));
+    return b;
+  };
+  const mismatch: Expectation = { violations: { include: [{ invariant: "INV-00", code: "RECOMPUTATION_MISMATCH" }] } };
+  const disagree = "A derived USD value over two balances that disagree is checked against both: declared from the first of them, it fails";
+  base("ADV-020", "adversarial", "recomputation", `${disagree}, the first listed.`, twoBalances(["a-balance", "a-balance-cur", "a-price"], "2000000"), mismatch);
+  base("ADV-021", "adversarial", "recomputation", `${disagree}, the first listed last: the order of the inputs decides nothing.`, twoBalances(["a-balance-cur", "a-balance", "a-price"], "2000000"), mismatch);
+  const agree = "CONTROL: a derived USD value over two balances that agree holds under both, so it passes";
+  base("ADV-022", "adversarial", "recomputation", `${agree}, in this order.`, twoBalances(["a-balance", "a-balance-cur", "a-price"], "1500000"), { violations: { none: true } });
+  base("ADV-023", "adversarial", "recomputation", `${agree}, in the other order.`, twoBalances(["a-balance-cur", "a-balance", "a-price"], "1500000"), { violations: { none: true } });
+
+  const readinessOver = (inputs: string[]): Bundle => {
+    const b = golden();
+    b.observations.push(balanceObservation({ id: "obs-balance-unfinal", finality: "UNFINALIZED" }));
+    b.assertions.push(balanceAssertion({ id: "a-balance-unfinal", observationIds: ["obs-balance-unfinal"] }));
+    const r = withReadiness(b, { value: { classification: "CRITERIA_MET" } });
+    r.derivations = r.derivations.map((d) => ({ ...d, inputAssertionIds: inputs }));
+    r.assertions = r.assertions.map((a) => (a.id === "readiness-result" ? { ...a, limitations: [...(a.limitations ?? []), "NOT_FINALIZED" as const].sort() } : a));
+    return r;
+  };
+  const unfinal = "A readiness result claiming CRITERIA_MET over a finalized and an unfinalized balance fails: the rule gives NOT_ESTABLISHED over the second";
+  base("ADV-024", "adversarial", "recomputation", `${unfinal}, the finalized one listed first.`, readinessOver(["a-identity", "a-balance", "a-balance-unfinal"]), mismatch);
+  base("ADV-025", "adversarial", "recomputation", `${unfinal}, the unfinalized one listed first.`, readinessOver(["a-identity", "a-balance-unfinal", "a-balance"]), mismatch);
 }
