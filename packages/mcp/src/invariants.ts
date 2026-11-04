@@ -48,6 +48,7 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
   const push = (invariant: Violation["invariant"], code: string, assertionId: string | null): void => {
     out.push({ invariant, code, assertionId });
   };
+  const classified = new Map<string, string | null>();
 
   for (const s of bundle.sources) {
     const via = s.transport?.retrievedVia.toLowerCase();
@@ -122,7 +123,7 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
       if (a.claimType === "TOKEN_USD_VALUE" && !deps.some((dep) => dep.claimType === "TOKEN_USD_PRICE")) {
         push("INV-11", "USD_VALUE_WITHOUT_PRICE_EVIDENCE", a.id);
       }
-      if (d !== undefined && policy?.ruleId === d.ruleId) recompute(bundle, idx, evaluation, a, d.inputAssertionIds, push);
+      if (d !== undefined && policy?.ruleId === d.ruleId) recompute(bundle, idx, evaluation, a, d.inputAssertionIds, classified, push);
     }
 
     if (a.claimType !== "TOKEN_USD_PRICE" && a.claimType !== "TOKEN_USD_VALUE" && a.value !== null) {
@@ -196,40 +197,63 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
     });
 }
 
+/**
+ * Whether a derived value is the rule's answer. A derivation may list several balances and prices, or several identities and balances, and
+ * the value must be the answer under every reading: every balance with every price, every identity with every balance. Taking the first
+ * of each in the order the derivation lists them would let that order decide whether a value passes, and let an author pick the verdict
+ * by listing the reading that reproduces it first. `classified` holds what the readiness rule says of each identity and balance, so that
+ * a pair read for one derivation is not worked out again for the next: it is a cache of an answer, and changes none.
+ */
 function recompute(
   bundle: Bundle,
   idx: EvidenceIndex,
   evaluation: Evaluation,
   a: Assertion,
   inputIds: readonly string[],
+  classified: Map<string, string | null>,
   push: (invariant: Violation["invariant"], code: string, assertionId: string | null) => void,
 ): void {
-  const inputs = inputIds.map((id) => idx.assertions.get(id)).filter((x): x is Assertion => x !== undefined);
+  const inputs = [...new Set(inputIds)].map((id) => idx.assertions.get(id)).filter((x): x is Assertion => x !== undefined);
+  const ofType = (claimType: Assertion["claimType"]): Assertion[] => inputs.filter((x) => x.claimType === claimType);
   const mismatch = (): void => push("INV-00", "RECOMPUTATION_MISMATCH", a.id);
 
   if (a.claimType === "TOKEN_USD_VALUE") {
-    const bal = inputs.find((x) => x.claimType === "TOKEN_BALANCE_AT_BLOCK");
-    const price = inputs.find((x) => x.claimType === "TOKEN_USD_PRICE");
-    if (bal === undefined || price === undefined || a.value === null) return;
-    try {
-      const sameToken = bal.subject["chainId"] === price.subject["chainId"] && subjectKeyEqual("token", String(bal.subject["token"]), String(price.subject["token"]));
-      const atomic = parseAtomic(String(bal.value?.["balanceAtomic"]));
-      const decimals = parseDecimals(String(bal.value?.["decimals"]));
-      const p = parsePriceScaled18(String(price.value?.["priceUsd"]));
-      const expected = usdValueScaled18(atomic, decimals, p).toString();
-      if (!sameToken || a.value["usdScaled18"] !== expected || a.value["rounding"] !== "FLOOR_SCALED_18") mismatch();
-    } catch {
-      mismatch();
+    const balances = ofType("TOKEN_BALANCE_AT_BLOCK");
+    const prices = ofType("TOKEN_USD_PRICE");
+    if (balances.length === 0 || prices.length === 0 || a.value === null) return;
+    for (const bal of balances) {
+      for (const price of prices) {
+        try {
+          const sameToken = bal.subject["chainId"] === price.subject["chainId"] && subjectKeyEqual("token", String(bal.subject["token"]), String(price.subject["token"]));
+          const atomic = parseAtomic(String(bal.value?.["balanceAtomic"]));
+          const decimals = parseDecimals(String(bal.value?.["decimals"]));
+          const p = parsePriceScaled18(String(price.value?.["priceUsd"]));
+          const expected = usdValueScaled18(atomic, decimals, p).toString();
+          if (!sameToken || a.value["usdScaled18"] !== expected || a.value["rounding"] !== "FLOOR_SCALED_18") return mismatch();
+        } catch {
+          return mismatch();
+        }
+      }
     }
     return;
   }
 
   if (a.claimType === "VAULT_TECHNICAL_READINESS") {
-    const ident = inputs.find((x) => x.claimType === "ASSET_IDENTITY");
-    const bal = inputs.find((x) => x.claimType === "TOKEN_BALANCE_AT_BLOCK");
-    if (ident === undefined || bal === undefined || a.value === null) return;
-    const r = assessReadiness(bundle, evaluation, ident.id, bal.id);
-    if (r.ruleId !== READINESS_RULE_ID || a.value["classification"] !== r.classification) mismatch();
+    const identities = ofType("ASSET_IDENTITY");
+    const balances = ofType("TOKEN_BALANCE_AT_BLOCK");
+    if (identities.length === 0 || balances.length === 0 || a.value === null) return;
+    for (const ident of identities) {
+      for (const bal of balances) {
+        const key = `${ident.id}\u0000${bal.id}`;
+        let classification = classified.get(key);
+        if (classification === undefined) {
+          const r = assessReadiness(bundle, evaluation, ident.id, bal.id);
+          classification = r.ruleId === READINESS_RULE_ID ? r.classification : null;
+          classified.set(key, classification);
+        }
+        if (a.value["classification"] !== classification) return mismatch();
+      }
+    }
   }
 }
 

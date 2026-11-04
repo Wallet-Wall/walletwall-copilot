@@ -124,7 +124,10 @@ These are enforced by `check_invariants` and by executable conformance tests. Ea
 **INV-00** (engine rule) — declared states MUST NOT exceed states computed by the published rules. A derived assertion
 whose subject differs from its inputs is reported here as `SUBJECT_MISMATCH`, and one whose subject fails the claim
 contract as `INVALID_SUBJECT`. A reused source, observation or derivation id is reported here as `DUPLICATE_SOURCE_ID`,
-`DUPLICATE_OBSERVATION_ID` or `DUPLICATE_DERIVATION_ID`, against no assertion.
+`DUPLICATE_OBSERVATION_ID` or `DUPLICATE_DERIVATION_ID`, against no assertion. A derived value that recomputation does
+not reproduce is reported here as `RECOMPUTATION_MISMATCH`: the rule is applied to every balance with every price among
+the inputs of a USD value, and to every identity with every balance among those of a readiness claim, and one reading
+that gives another value is a mismatch.
 
 ## 7. Canonicalization and digests
 
@@ -145,7 +148,9 @@ Evaluation is a pure function of `(bundle, evaluatedAt, registry, policies, rule
 explicit input; the engine never reads a clock. The order of the records in any list of a bundle the schema accepts
 changes no answer of `inspect_evidence`, `check_invariants`, `assess_vault_readiness` or `trace_provenance`; only
 `bundleDigest`, a digest of the records as listed, follows it. A list inside one record is part of that record, and this
-does not cover it. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outline:
+does not cover it. It moves no state, limitation or violation, because a derived value is recomputed under every reading
+of its inputs, but it is what `trace_provenance` walks and what `dependencies` echo, in that order. Procedure and
+per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outline:
 
 1. Reject any bundle that fails the closed schema.
 2. Refuse structural ambiguity. A reused assertion id names no record, whichever record comes first, so nothing depends

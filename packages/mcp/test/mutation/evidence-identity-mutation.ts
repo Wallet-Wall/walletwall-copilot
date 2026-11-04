@@ -83,6 +83,16 @@ const SUPERSEDED_LOOP = "  for (const { supersededAssertionId: superseded, super
 const FAULTS_CALL = "    const faults = supersessionFaults(idx, s);\n";
 const TIME_RULE = '  if (Date.parse(newer.assertedAt) <= Date.parse(older.assertedAt)) faults.push("SUPERSESSION_NOT_FORWARD_IN_TIME");\n';
 const FAULTY_SENTENCE = " Only a record with none of those faults takes an assertion out of conflict detection: an assertion that a faulty record supersedes still reads SUPERSEDED but stays among those compared, so a record that cannot be valid cannot hide a conflict.";
+/** Recomputation reads every reading of its inputs: the loops, the exits, the cache key, and what is published. */
+const USD_LOOPS = "    for (const bal of balances) {\n      for (const price of prices) {\n";
+const USD_MISMATCH = '          if (!sameToken || a.value["usdScaled18"] !== expected || a.value["rounding"] !== "FLOOR_SCALED_18") return mismatch();\n';
+const USD_END = '    return;\n  }\n\n  if (a.claimType === "VAULT_TECHNICAL_READINESS") {\n';
+const USD_CATCH = "        } catch {\n          return mismatch();\n        }\n";
+const USD_GUARD = "    if (balances.length === 0 || prices.length === 0 || a.value === null) return;\n";
+const READINESS_LOOPS = "    for (const ident of identities) {\n      for (const bal of balances) {\n";
+const READINESS_END = '        if (a.value["classification"] !== classification) return mismatch();\n      }\n    }\n  }\n}\n';
+const READINESS_KEY = "        const key = `${ident.id}\\u0000${bal.id}`;\n";
+const DERIVED_VALUES_RULE = '      derivedValues: "check_invariants recomputes a derived USD value under every balance and every price among its inputs, and a derived readiness classification under every identity and every balance, and reports INV-00 RECOMPUTATION_MISMATCH if any reading gives another value. The order of inputAssertionIds changes no verdict; trace_provenance still lists what it walks in that order.",\n';
 /** The retained limitations with one kind left out, for a member that did not report it itself. */
 const retainedWithout = (...left: readonly string[]): Patch[] => [
   P("evaluate.ts", CYCLE_RETAINED, `    const retained = new Set(members.flatMap(({ core }) => [...core.limitations].filter((l) => ![${left.map((l) => `"${l}"`).join(", ")}].includes(l))));\n`),
@@ -381,6 +391,24 @@ const MUTANTS: readonly Mutant[] = [
   M(304, "the published rule stops saying a faulty record hides no conflict", P("claims.ts", FAULTY_SENTENCE, "")),
   M(305, "the published rule says a faulty record can hide a conflict, keeping every phrase in it", P("claims.ts", "so a record that cannot be valid cannot hide a conflict.", "so a record that cannot be valid can hide a conflict.")),
   M(306, "the profile stops saying a faulty record stays among those compared", P("../../../spec/EVIDENCE_PROFILE.md", "still reads `SUPERSEDED`, and stays among\n   those compared, so a record that cannot be valid cannot hide a conflict.", "still reads `SUPERSEDED`, and is taken out of\n   those compared.")),
+  // A derived value is checked against every reading of its inputs (310 to 326): the old first-reading rule, each way the new one can be half applied, a wrong cache key, and what is published.
+  M(310, "recomputation reads only the first balance and the first price, as it used to", P("invariants.ts", USD_LOOPS, "    for (const bal of balances.slice(0, 1)) {\n      for (const price of prices.slice(0, 1)) {\n")),
+  M(311, "recomputation reads only the last balance and the last price", P("invariants.ts", USD_LOOPS, "    for (const bal of balances.slice(-1)) {\n      for (const price of prices.slice(-1)) {\n")),
+  M(312, "recomputation reads every balance with the first price only", P("invariants.ts", USD_LOOPS, "    for (const bal of balances) {\n      for (const price of prices.slice(0, 1)) {\n")),
+  M(313, "recomputation reads every price with the first balance only", P("invariants.ts", USD_LOOPS, "    for (const bal of balances.slice(0, 1)) {\n      for (const price of prices) {\n")),
+  M(314, "a USD value that some reading gives passes", P("invariants.ts", USD_MISMATCH, '          if (sameToken && a.value["usdScaled18"] === expected && a.value["rounding"] === "FLOOR_SCALED_18") return;\n'), P("invariants.ts", USD_END, '    mismatch();\n    return;\n  }\n\n  if (a.claimType === "VAULT_TECHNICAL_READINESS") {\n')),
+  M(315, "a reading that cannot be parsed is skipped", P("invariants.ts", USD_CATCH, "        } catch {\n          continue;\n        }\n")),
+  M(316, "readiness reads only the first identity and the first balance", P("invariants.ts", READINESS_LOOPS, "    for (const ident of identities.slice(0, 1)) {\n      for (const bal of balances.slice(0, 1)) {\n")),
+  M(317, "readiness reads every balance with the first identity only", P("invariants.ts", READINESS_LOOPS, "    for (const ident of identities.slice(0, 1)) {\n      for (const bal of balances) {\n")),
+  M(318, "readiness reads every identity with the first balance only", P("invariants.ts", READINESS_LOOPS, "    for (const ident of identities) {\n      for (const bal of balances.slice(0, 1)) {\n")),
+  M(319, "a classification that some reading gives passes", P("invariants.ts", READINESS_END, '        if (a.value["classification"] === classification) return;\n      }\n    }\n    mismatch();\n  }\n}\n')),
+  M(320, "what the readiness rule says is remembered by balance alone: another identity reads it", P("invariants.ts", READINESS_KEY, "        const key = bal.id;\n")),
+  M(321, "what the readiness rule says is remembered by identity alone: another balance reads it", P("invariants.ts", READINESS_KEY, "        const key = ident.id;\n")),
+  M(322, "a USD value is checked only when its derivation lists exactly one balance and one price", P("invariants.ts", USD_GUARD, '    if (balances.length !== 1 || prices.length !== 1 || a.value === null) return;\n')),
+  M(323, "the published rule stops saying a derived value is recomputed under every reading", P("claims.ts", DERIVED_VALUES_RULE, "")),
+  M(324, "the published rule says only the first reading is used, keeping every phrase in it", P("claims.ts", "recomputes a derived USD value under every balance and every price among its inputs, and a derived readiness classification under every identity and every balance, and reports", "recomputes a derived USD value under the first balance and the first price among its inputs, and a derived readiness classification under the first identity and the first balance, and reports")),
+  M(325, "the profile stops saying a list inside a record moves no verdict", P("../../../spec/EVIDENCE_PROFILE.md", "It moves no state, limitation or violation, because a derived value is recomputed under every reading\nof its inputs, but it is what `trace_provenance` walks and what `dependencies` echo, in that order. ", "")),
+  M(326, "the profile stops saying every reading is applied", P("../../../spec/EVIDENCE_PROFILE.md", "the rule is applied to every balance with every price among\nthe inputs of a USD value, and to every identity with every balance among those of a readiness claim, and one reading\nthat gives another value is a mismatch.", "the rule is applied to the inputs of a USD value and of a readiness claim.")),
   M(169, "the transport rule fires on the mere presence of a reused source", P("invariants.ts", '      ((s.kind === "PROVIDER_ENDPOINT" && CANONICAL_AUTHORITY_PREFIXES.some((p) => s.authorityId?.startsWith(p))) ||\n', '      ((idx.sources.get(s.id) === undefined && CANONICAL_AUTHORITY_PREFIXES.some((p) => s.authorityId?.startsWith(p))) || (s.kind === "PROVIDER_ENDPOINT" && CANONICAL_AUTHORITY_PREFIXES.some((p) => s.authorityId?.startsWith(p))) ||\n')),
 ];
 
