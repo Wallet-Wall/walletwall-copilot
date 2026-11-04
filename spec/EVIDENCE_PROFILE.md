@@ -173,13 +173,15 @@ per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outli
    code unit, among the other assertions its records name that resolve; if there is none, the assertion itself if a record
    names it; otherwise the smallest of the ids, which resolve to nothing. A supersession record is well-formed when it names
    two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed
-   record takes an assertion out of conflict detection: it is the author's claim that the later assertion replaces the
-   earlier, taken as made, and nothing asks whether the later assertion has evidence of its own (the residual risks in
-   `THREAT_MODEL.md` say so). An assertion that a faulty record supersedes (one `check_invariants` reports as
-   `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) still
-   reads `SUPERSEDED`, whatever state it had, and stays among those compared, so a record that cannot be valid cannot hide
-   a conflict. Being compared can only add a conflict, and an assertion in a conflict reads `CONFLICTING` whatever state it
-   had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of
+   record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it
+   had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the
+   later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks
+   in `THREAT_MODEL.md` say so). An assertion that only faulty records supersede (records `check_invariants` reports as
+   `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries
+   the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it
+   computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no
+   conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had:
+   a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of
    `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the
    computed state. No readiness answer is more favourable.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
@@ -218,13 +220,13 @@ limitation codes are the stable machine-facing reason; diagnostics only explain 
 `wasGeneratedBy`, `used` and `wasRevisionOf` (supersession). The mapping is a profile of PROV, not a full
 implementation, and the namespace `urn:walletwall:wwep:0.1:` is an identifier that is never dereferenced. It walks every
 derivation an assertion names and what the assertion supersedes, so it can report `DEPENDENCY_CYCLE` for a loop evaluation
-does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit. Its issues are a
-set: each record a walked record names that resolves to nothing, whether an assertion, an observation, a source or a
-derivation, once, as `DANGLING_REFERENCE` naming its id (two of different kinds that share an id are two issues), then
-each cycle of the graph it walks, a set of assertions that all reach one another or one that names itself, once, as
-`DEPENDENCY_CYCLE` naming its smallest id by code unit. How many it reports follows the records it reaches, never where
-the walk entered them, how they are listed or how their ids are spelled. Every member of a cycle stays in `lineage` and
-in the PROV relations.
+does not follow. What one assertion supersedes is walked in order of the superseded id, by code unit. Its issues are one
+for each record that resolves to nothing among those the assertions it walks cite (an observation they rest on, the source
+of an observation, the derivation they name, the assertions that derivation takes as inputs), as `DANGLING_REFERENCE`
+naming its id (two of different kinds that share an id give two identical entries), then one for each cycle of the graph it
+walks, a set of assertions that all reach one another or one that names itself, as `DEPENDENCY_CYCLE` naming its smallest
+id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are
+listed or how their ids are spelled. Every member of a cycle stays in `lineage` and in the PROV relations.
 
 ## 10. Readiness terminology
 

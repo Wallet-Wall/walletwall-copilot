@@ -73,9 +73,10 @@ function cycleIds(edges: ReadonlyMap<string, readonly string[]>): string[] {
  * Builds a W3C PROV-JSON-shaped provenance graph for one assertion and its ancestors.
  * Transport (ww:retrievedVia) is recorded as an attribute and never as an agent or authority.
  *
- * The issues are a set of what the walk reaches, not a count of how it got there: each record a walked record names that resolves to
- * nothing, once, then each cycle of the graph walked, once, each in order of code unit. A missing record is told apart by its kind as well
- * as its id, so a missing source and a missing observation that share an id are two issues, as they are two records. How many there are
+ * The issues are one for each thing the walk reaches, not a count of how it got there: each record that resolves to nothing among those the
+ * assertions walked cite (an observation they rest on, the source of one, the derivation they name, the assertions it takes as inputs),
+ * once, then each cycle of the graph walked, once, each in order of code unit. A missing record is told apart by its kind as well as its
+ * id, so a missing source and a missing observation that share an id are two issues, as they are two records. How many there are
  * follows the records reached, never the assertion the walk entered at, the order the records or a list inside one are in, or how the ids
  * are spelled; and the count is never more than the walk's own per-reference, per-back-edge count was, so a record that fitted under that
  * fits under this.

@@ -315,8 +315,9 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     if (named === undefined || rank(superseded, by) < rank(superseded, named) || (rank(superseded, by) === rank(superseded, named) && by < named)) supersededBy.set(superseded, by);
   }
 
-  // Only a well-formed record takes an assertion out of conflict detection: its superseding assertion carries the claim forward. A faulty
-  // one still reads SUPERSEDED, below, but the assertion stays among those compared, so a record that cannot be valid hides no conflict.
+  // Only a well-formed record takes an assertion out of conflict detection, and makes it read SUPERSEDED whatever it was: it is the author's
+  // claim that the superseding assertion replaces it, taken as made. A faulty one marks the assertion (its limitation and supersededBy,
+  // below) but the assertion stays among those compared, and never reads higher for it, so a record that cannot be valid hides no conflict.
   const retired = new Set<string>();
   for (const s of bundle.supersessions ?? []) if (supersessionFaults(idx, s).length === 0) retired.add(s.supersededAssertionId);
 
@@ -416,8 +417,17 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     const sup = supersededBy.get(a.id) ?? null;
     const conflicts = [...(conflictsWith.get(a.id) ?? [])].sort();
     if (sup !== null) {
-      support = "SUPERSEDED";
       limitations.add("SUPERSEDED");
+      if (retired.has(a.id)) {
+        support = "SUPERSEDED";
+      } else {
+        // Superseded only by records that cannot be valid: it reads the weaker of what it computes, a conflict included, and SUPERSEDED. So the
+        // record lowers an assertion that has a basis and is in no conflict (CNF-006), and raises nothing: one with no basis stays so, and one in
+        // a conflict reads CONFLICTING, as does whatever is derived from it.
+        const computed: SupportState = conflicts.length > 0 ? "CONFLICTING" : support;
+        support = weakest([computed, "SUPERSEDED"]);
+        if (conflicts.length > 0) limitations.add(conflictCause.get(a.id) ?? "CONFLICT_DETECTED");
+      }
     } else if (conflicts.length > 0) {
       support = "CONFLICTING";
       limitations.add(conflictCause.get(a.id) ?? "CONFLICT_DETECTED");

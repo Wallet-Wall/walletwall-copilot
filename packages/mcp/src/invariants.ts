@@ -248,11 +248,11 @@ function recompute(
         let classification = classified.get(key);
         if (classification === undefined) {
           const r = assessReadiness(bundle, evaluation, ident.id, bal.id);
-          // Only the readiness rule's own answer is compared, as it always was: null is no answer from that rule.
+          // Another rule's answer is no answer from the readiness rule, so it reproduces nothing: null is a mismatch, as it always was.
           classification = r.ruleId === READINESS_RULE_ID ? r.classification : null;
           classified.set(key, classification);
         }
-        if (classification !== null && a.value["classification"] !== classification) return mismatch();
+        if (classification === null || a.value["classification"] !== classification) return mismatch();
       }
     }
   }
