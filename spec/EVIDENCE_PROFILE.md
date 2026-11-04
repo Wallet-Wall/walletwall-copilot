@@ -169,10 +169,11 @@ per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outli
    and its freshness is worked out as if the input were not superseded. An id is unique within its kind, so a source and
    an observation may share one. Nothing resolves through a conflict or supersession id.
 3. Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed
-   supersession retires. An assertion superseded more than once is `SUPERSEDED`. `supersededBy` names the smallest id, by
-   code unit, among the other assertions its records name that resolve; if there is none, the assertion itself if a record
-   names it; otherwise the smallest of the ids, which resolve to nothing. A supersession record is well-formed when it names
-   two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed
+   supersession retires. An assertion that a well-formed record supersedes, once or more than once, is `SUPERSEDED`.
+   `supersededBy` names the smallest id, by code unit, among the other assertions its records name that resolve;
+   if there is none, the assertion itself if a record names it; otherwise the smallest of the ids, which resolve to
+   nothing. A supersession record is well-formed when it names two different assertions that resolve, of one claim
+   identity, the superseding one asserted later. Only a well-formed
    record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it
    had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the
    later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks
@@ -190,13 +191,13 @@ per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outli
    depends on itself, directly or through others, is on a dependency cycle. For evaluation, only an input that resolves, of a
    derivation that names the assertion as its output, for a claim type that may be derived, makes a dependency. A cycle has
    no basis and is read the same from every side: no assertion on it is read in full by another on it. Each reads the
-   others on it as inputs with no basis: `NOT_ESTABLISHED` unless superseded or conflicting, with `DEPENDENCY_CYCLE`,
-   unknown finality, and unknown freshness unless `PINNED`. It is otherwise evaluated as usual, except that its own support
-   is `NOT_ESTABLISHED` whatever those inputs read, and supersession and conflict override that as they override any state.
-   Each retains every limitation any of them reports, so the assertions on a cycle report the same limitations (INV-10),
-   though not always the same freshness, finality or authority, and a `PINNED` one that retains `OBSERVATION_FROM_FUTURE`
-   reports `UNKNOWN_FRESHNESS`. An assertion that depends on a cycle without being on it is evaluated as usual, over those
-   assertions as they read.
+   others on it as inputs with no basis: `NOT_ESTABLISHED` unless a well-formed supersession or a conflict overrides that,
+   with `DEPENDENCY_CYCLE`, unknown finality, and unknown freshness unless `PINNED`. It is otherwise evaluated as usual,
+   except that its own support is `NOT_ESTABLISHED` whatever those inputs read, and a well-formed supersession and a
+   conflict override that as they override any state. Each retains every limitation any of them reports, so the
+   assertions on a cycle report the same limitations (INV-10), though not always the same freshness, finality or
+   authority, and a `PINNED` one that retains `OBSERVATION_FROM_FUTURE` reports `UNKNOWN_FRESHNESS`. An assertion that
+   depends on a cycle without being on it is evaluated as usual, over those assertions as they read.
 5. Cap and combine states by the weakest-member rule; apply freshness and finality; attach limitations. A reading with a
    value dated after `evaluatedAt` is `OBSERVATION_FROM_FUTURE` with `UNKNOWN_FRESHNESS` and at most `PARTIAL` support,
    whether the claim is `CURRENT` or `PINNED`. A claim derived from it inherits the limitation and the cap, and a `PINNED`
