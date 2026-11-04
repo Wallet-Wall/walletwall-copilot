@@ -1025,3 +1025,34 @@ base("ADV-015", "adversarial", "registry", "A bundle that names a different regi
   base("ADV-018", "adversarial", "dependency-graph", "Each claim on a dependency cycle has no basis and retains what the other reports, so the claim that does not declare it fails INV-10.", b, expected);
   base("ADV-019", "adversarial", "dependency-graph", "The same cycle with the assertion records in the other order gives the same answer.", { ...clone(b), assertions: [...clone(b.assertions)].reverse() }, expected);
 }
+
+// A derived value is checked against every reading of its inputs, so the order of a derivation's inputs decides nothing: each pair is one bundle, its inputs listed two ways.
+{
+  const twoBalances = (inputs: string[], atomic: string): Bundle => {
+    const b = withUsdValue(golden());
+    b.observations.push(balanceObservation({ id: "obs-balance-cur", payload: { balanceAtomic: atomic, decimals: "6" } }));
+    b.assertions.push(balanceAssertion({ id: "a-balance-cur", temporality: "CURRENT", observationIds: ["obs-balance-cur"], value: { balanceAtomic: atomic, decimals: "6" } }));
+    b.derivations = b.derivations.map((d) => ({ ...d, inputAssertionIds: inputs }));
+    return b;
+  };
+  const mismatch: Expectation = { violations: { include: [{ invariant: "INV-00", code: "RECOMPUTATION_MISMATCH" }] } };
+  const disagree = "A derived USD value over two balances that disagree is checked against both: declared from the first of them, it fails";
+  base("ADV-020", "adversarial", "recomputation", `${disagree}, the first listed.`, twoBalances(["a-balance", "a-balance-cur", "a-price"], "2000000"), mismatch);
+  base("ADV-021", "adversarial", "recomputation", `${disagree}, the first listed last: the order of the inputs decides nothing.`, twoBalances(["a-balance-cur", "a-balance", "a-price"], "2000000"), mismatch);
+  const agree = "CONTROL: a derived USD value over two balances that agree holds under both, so it passes";
+  base("ADV-022", "adversarial", "recomputation", `${agree}, in this order.`, twoBalances(["a-balance", "a-balance-cur", "a-price"], "1500000"), { violations: { none: true } });
+  base("ADV-023", "adversarial", "recomputation", `${agree}, in the other order.`, twoBalances(["a-balance-cur", "a-balance", "a-price"], "1500000"), { violations: { none: true } });
+
+  const readinessOver = (inputs: string[]): Bundle => {
+    const b = golden();
+    b.observations.push(balanceObservation({ id: "obs-balance-unfinal", finality: "UNFINALIZED" }));
+    b.assertions.push(balanceAssertion({ id: "a-balance-unfinal", observationIds: ["obs-balance-unfinal"] }));
+    const r = withReadiness(b, { value: { classification: "CRITERIA_MET" } });
+    r.derivations = r.derivations.map((d) => ({ ...d, inputAssertionIds: inputs }));
+    r.assertions = r.assertions.map((a) => (a.id === "readiness-result" ? { ...a, limitations: [...(a.limitations ?? []), "NOT_FINALIZED" as const].sort() } : a));
+    return r;
+  };
+  const unfinal = "A readiness result claiming CRITERIA_MET over a finalized and an unfinalized balance fails: the rule gives NOT_ESTABLISHED over the second";
+  base("ADV-024", "adversarial", "recomputation", `${unfinal}, the finalized one listed first.`, readinessOver(["a-identity", "a-balance", "a-balance-unfinal"]), mismatch);
+  base("ADV-025", "adversarial", "recomputation", `${unfinal}, the unfinalized one listed first.`, readinessOver(["a-identity", "a-balance-unfinal", "a-balance"]), mismatch);
+}

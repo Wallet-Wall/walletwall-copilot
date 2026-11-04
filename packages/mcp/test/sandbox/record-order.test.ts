@@ -8,7 +8,7 @@ import { WallPrintError } from "../../src/wallprint/errors.ts";
 import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings } from "../../src/wallprint/record.ts";
 import { createEvidenceStore, replayWallPrint } from "../../src/wallprint/replay.ts";
 import { WALLPRINT_VERSIONS } from "../../src/wallprint/vocabulary.ts";
-import { BLOCK_HASH, BLOCK_NUMBER, EVALUATED_AT, HOLDER, OBSERVED_AT, USDC, balanceAssertion, balanceObservation, clone, golden } from "../support/builders.ts";
+import { BLOCK_HASH, BLOCK_NUMBER, EVALUATED_AT, HOLDER, OBSERVED_AT, USDC, balanceAssertion, balanceObservation, clone, golden, identityAssertion, identityObservation, priceAssertion, priceObservation } from "../support/builders.ts";
 import { loadCorpus } from "../support/runner.ts";
 
 /**
@@ -1336,6 +1336,219 @@ describe("supersessions that overlap are read the same in any order", () => {
   });
 });
 
+/** A balance of golden()'s block, read separately, so a derived claim over several balances has several readings. */
+function addBalanceReading(b: Bundle, id: string, atomic: string, over: { finality?: "FINALIZED" | "UNFINALIZED"; temporality?: "CURRENT" | "PINNED" } = {}): void {
+  const value = { balanceAtomic: atomic, decimals: "6" };
+  b.observations.push(balanceObservation({ id: `obs-${id}`, payload: value, finality: over.finality ?? "FINALIZED" }));
+  b.assertions.push(balanceAssertion({ id, temporality: over.temporality ?? "PINNED", observationIds: [`obs-${id}`], value }));
+}
+/** A price of golden()'s token from the same two providers as a-price. */
+function addPriceReading(b: Bundle, id: string, price: string, temporality: "CURRENT" | "PINNED" = "CURRENT"): void {
+  b.observations.push(priceObservation(`obs-${id}-a`, "src-prov-a", price), priceObservation(`obs-${id}-b`, "src-prov-b", price));
+  b.assertions.push(priceAssertion({ id, temporality, value: { priceUsd: price }, observationIds: [`obs-${id}-a`, `obs-${id}-b`] }));
+}
+/** An identity of golden()'s token read only from chain state: no issuer attests it, so it is PARTIAL and readiness over it is not met. */
+function addPartialIdentity(b: Bundle, id: string): void {
+  b.observations.push(identityObservation({ id: `obs-${id}`, sourceId: "src-chain", origin: "CHAIN_OBSERVED" }));
+  b.assertions.push(identityAssertion({ id, origin: "CHAIN_OBSERVED", observationIds: [`obs-${id}`] }));
+}
+/** Every limitation these inputs report, which a claim over them has to declare (INV-10): so that only recomputation can fault it. */
+function retainedBy(b: Bundle, inputs: readonly string[]): LimitationCode[] {
+  const retained = new Set<LimitationCode>(["WALLETWALL_DERIVED_NOT_UPSTREAM_AUTHORITY"]);
+  for (const e of inspect(b).assertions) if (inputs.includes(e.assertionId)) for (const l of e.limitations as LimitationCode[]) retained.add(l);
+  return [...retained].sort();
+}
+/** A USD value named a-usd over these inputs, declaring this value. */
+function usdOver(b: Bundle, inputs: readonly string[], usdScaled18: string): Bundle {
+  addUsd(b, "a-usd", inputs, retainedBy(b, inputs), { value: { usdScaled18, rounding: "FLOOR_SCALED_18" } });
+  return b;
+}
+/** A readiness claim named a-ready over these inputs, declaring this classification. */
+function readinessOver(b: Bundle, inputs: readonly string[], classification: string): Bundle {
+  b.derivations.push({ id: "d-ready", ruleId: "wwvr.vault-technical-readiness", rulesVersion: "0.1.0-draft", inputAssertionIds: [...inputs], outputAssertionId: "a-ready" });
+  b.assertions.push({ id: "a-ready", claimType: "VAULT_TECHNICAL_READINESS", origin: "WALLETWALL_DERIVED", temporality: "PINNED", subject: balanceSubject(), value: { classification }, observationIds: [], derivationId: "d-ready", assertedAt: EVALUATED_AT, limitations: retainedBy(b, inputs) });
+  return b;
+}
+/** golden() and a second balance of the same block, CURRENT where a-balance is PINNED, so the two never conflict. With golden()'s own amount it agrees with a-balance. */
+function twoBalances(atomic = "2000000", finality: "FINALIZED" | "UNFINALIZED" = "FINALIZED"): Bundle {
+  const b = golden();
+  addBalanceReading(b, "a-balance-cur", atomic, { temporality: "CURRENT", finality });
+  return b;
+}
+/** The USD values the rule gives, written by hand: floor(atomic units x price / 10^6) at 18 places. */
+const USD_OF = { firstBalanceFirstPrice: "1500150000000000000", secondBalanceFirstPrice: "2000200000000000000", firstBalanceSecondPrice: "3750000000000000000" } as const;
+const MISMATCH = ["a-usd INV-00 RECOMPUTATION_MISMATCH"];
+
+describe("a derived value is checked against every reading of its inputs", () => {
+  test("CONTROL: one balance and one price: the value they give passes and any other fails, whatever is listed first", () => {
+    for (const inputs of permutations(["a-balance", "a-price"])) {
+      assert.deepEqual(violations(usdOver(golden(), inputs, USD_OF.firstBalanceFirstPrice)), [], inputs.join());
+      assert.deepEqual(violations(usdOver(golden(), inputs, "1")), MISMATCH, inputs.join());
+    }
+  });
+
+  test("BUG: two balances that disagree: a value declared from either fails, in every order of the inputs", () => {
+    for (const value of [USD_OF.firstBalanceFirstPrice, USD_OF.secondBalanceFirstPrice]) {
+      for (const inputs of permutations(["a-balance", "a-balance-cur", "a-price"])) assert.deepEqual(violations(usdOver(twoBalances(), inputs, value)), MISMATCH, `${value} from ${inputs.join()}`);
+    }
+  });
+
+  test("CONTROL: two balances that agree: the value holds under both, so it passes in every order", () => {
+    for (const inputs of permutations(["a-balance", "a-balance-cur", "a-price"])) assert.deepEqual(violations(usdOver(twoBalances("1500000"), inputs, USD_OF.firstBalanceFirstPrice)), [], inputs.join());
+  });
+
+  test("BUG: two prices that disagree: a value declared from either fails, in every order of the inputs", () => {
+    for (const value of [USD_OF.firstBalanceFirstPrice, USD_OF.firstBalanceSecondPrice]) {
+      for (const inputs of permutations(["a-balance", "a-price", "a-price-2"])) {
+        const b = golden();
+        addPriceReading(b, "a-price-2", "2.5", "PINNED");
+        assert.deepEqual(violations(usdOver(b, inputs, value)), MISMATCH, `${value} from ${inputs.join()}`);
+      }
+    }
+  });
+
+  test("BUG: a reading that gives another value fails when it is listed last or in the middle, among many", () => {
+    const readings = (disagrees: boolean): Bundle => {
+      const b = golden();
+      for (let i = 0; i < 15; i++) addBalanceReading(b, `g-balance-${String(i)}`, i === 7 && disagrees ? "2000000" : "1500000", { temporality: i === 7 && disagrees ? "CURRENT" : "PINNED" });
+      for (let i = 0; i < 14; i++) addPriceReading(b, `g-price-${String(i)}`, "1.0001");
+      return b;
+    };
+    const balanceIds = ["a-balance", ...Array.from({ length: 15 }, (_, i) => `g-balance-${String(i)}`)];
+    const priceIds = ["a-price", ...Array.from({ length: 14 }, (_, i) => `g-price-${String(i)}`)];
+    for (const inputs of [[...balanceIds, ...priceIds], [...priceIds, ...balanceIds], [...balanceIds].reverse().concat(priceIds)]) {
+      assert.equal(inputs.length, 31);
+      assert.deepEqual(violations(usdOver(readings(false), inputs, USD_OF.firstBalanceFirstPrice)), [], "every reading agrees");
+      assert.deepEqual(violations(usdOver(readings(true), inputs, USD_OF.firstBalanceFirstPrice)), MISMATCH, "one reading in thirty-one disagrees");
+    }
+  });
+
+  test("CONTROL: a balance whose amount cannot be read fails recomputation: nothing can be reproduced from it", () => {
+    const b = golden();
+    addBalanceReading(b, "a-balance-bad", "not-a-number", { temporality: "CURRENT" });
+    assert.ok(violations(usdOver(b, ["a-balance-bad", "a-price"], USD_OF.firstBalanceFirstPrice)).includes("a-usd INV-00 RECOMPUTATION_MISMATCH"));
+  });
+
+  test("BUG: a reading whose amount cannot be read cannot hide behind one that can: the value fails, in every order of the inputs", () => {
+    for (const inputs of permutations(["a-balance", "a-balance-bad", "a-price"])) {
+      const b = golden();
+      addBalanceReading(b, "a-balance-bad", "not-a-number", { temporality: "CURRENT" });
+      assert.ok(violations(usdOver(b, inputs, USD_OF.firstBalanceFirstPrice)).includes("a-usd INV-00 RECOMPUTATION_MISMATCH"), inputs.join());
+    }
+  });
+
+  describe("readiness", () => {
+    const withUnfinalized = (): Bundle => {
+      const b = golden();
+      withUnfinalizedBalance(b);
+      return b;
+    };
+    const classificationOf = (b: Bundle, identityId: string, balanceId: string): string => (readiness(b, identityId, balanceId) as { classification: string }).classification;
+
+    test("CONTROL: assess_vault_readiness says CRITERIA_MET over the finalized balance and NOT_ESTABLISHED over the other: they are two readings", () => {
+      assert.equal(classificationOf(withUnfinalized(), "a-identity", "a-balance"), "CRITERIA_MET");
+      assert.equal(classificationOf(withUnfinalized(), "a-identity", "a-balance-unfinal"), "NOT_ESTABLISHED");
+    });
+
+    test("BUG: a readiness claim over a finalized and an unfinalized balance: CRITERIA_MET fails, and so does NOT_ESTABLISHED, in every order", () => {
+      for (const classification of ["CRITERIA_MET", "NOT_ESTABLISHED"]) {
+        for (const inputs of permutations(["a-identity", "a-balance", "a-balance-unfinal"])) {
+          assert.deepEqual(violations(readinessOver(withUnfinalized(), inputs, classification)), ["a-ready INV-00 RECOMPUTATION_MISMATCH"], `${classification} from ${inputs.join()}`);
+        }
+      }
+    });
+
+    test("CONTROL: readings the rule reads alike: the classification holds under both, in every order", () => {
+      for (const inputs of permutations(["a-identity", "a-balance", "a-balance-cur"])) assert.deepEqual(violations(readinessOver(twoBalances("1500000"), inputs, "CRITERIA_MET")), [], inputs.join());
+      const both = withUnfinalized();
+      both.observations = both.observations.map((o) => (o.id === "obs-balance" ? { ...o, finality: "UNFINALIZED" as const } : o));
+      for (const inputs of permutations(["a-identity", "a-balance", "a-balance-unfinal"])) assert.deepEqual(violations(readinessOver(clone(both), inputs, "NOT_ESTABLISHED")), [], inputs.join());
+    });
+
+    test("BUG: two identities, one of them only read from chain state: CRITERIA_MET fails in every order", () => {
+      for (const inputs of permutations(["a-identity", "a-identity-2", "a-balance"])) {
+        const b = golden();
+        addPartialIdentity(b, "a-identity-2");
+        assert.equal(classificationOf(b, "a-identity-2", "a-balance"), "NOT_ESTABLISHED", "the second identity is a reading that gives another answer");
+        assert.deepEqual(violations(readinessOver(b, inputs, "CRITERIA_MET")), ["a-ready INV-00 RECOMPUTATION_MISMATCH"], inputs.join());
+      }
+    });
+  });
+
+  describe("no list inside a record decides a verdict", () => {
+    const PRICE18: Readonly<Record<string, bigint>> = { "1.0001": 1000100000000000000n, "2.5": 2500000000000000000n };
+    const usdOf = (atomic: string, price: string): string => ((BigInt(atomic) * (PRICE18[price] as bigint)) / 10n ** 6n).toString();
+    /** What the tools classify, which a list inside a record may not move: the walk of provenance and the echo of a record's own lists are left out. */
+    const verdicts = (b: Bundle): string =>
+      JSON.stringify([inspect(b).assertions.map((e) => [e.assertionId, e.supportState, e.freshnessState, e.finalityState, e.authority?.satisfied, e.limitations, e.independentCorroboration, e.conflictsWith, e.supersededBy]), invariants(b).violations, invariants(b).pass]);
+    /** The lists inside the records in another order: what a derivation takes as inputs, and what an assertion rests on. */
+    const shuffledInside = (b: Bundle, rand: () => number): Bundle => ({
+      ...clone(b),
+      assertions: clone(b.assertions).map((a) => ({ ...a, observationIds: shuffle(a.observationIds, rand) })),
+      derivations: clone(b.derivations).map((d) => ({ ...d, inputAssertionIds: shuffle(d.inputAssertionIds, rand) })),
+    });
+
+    /** Several balances, prices and identities, and a USD value and a readiness claim over some of them, declaring any value. */
+    function readingsWorld(rand: () => number): { b: Bundle; usdFails: boolean; readinessFails: boolean; several: boolean } {
+      const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)] as T;
+      const b = golden();
+      const balances = [{ id: "a-balance", atomic: "1500000" }];
+      const prices = [{ id: "a-price", price: "1.0001" }];
+      const identities = ["a-identity"];
+      for (let i = 0; i < Math.floor(rand() * 3); i++) {
+        const atomic = pick(["1500000", "2000000"]);
+        addBalanceReading(b, `a-balance-${String(i)}`, atomic, { temporality: pick(["CURRENT", "PINNED"] as const), finality: pick(["FINALIZED", "FINALIZED", "UNFINALIZED"] as const) });
+        balances.push({ id: `a-balance-${String(i)}`, atomic });
+      }
+      for (let i = 0; i < Math.floor(rand() * 2); i++) {
+        const price = pick(["1.0001", "2.5"]);
+        addPriceReading(b, `a-price-${String(i)}`, price, pick(["CURRENT", "PINNED"] as const));
+        prices.push({ id: `a-price-${String(i)}`, price });
+      }
+      if (rand() < 0.3) {
+        addPartialIdentity(b, "a-identity-2");
+        identities.push("a-identity-2");
+      }
+      const some = <T>(xs: readonly T[]): T[] => {
+        const kept = xs.filter(() => rand() < 0.7);
+        return kept.length > 0 ? kept : [pick(xs)];
+      };
+      const [bs, ps, is] = [some(balances), some(prices), some(identities)];
+      const value = rand() < 0.75 ? pick(bs.flatMap((x) => ps.map((p) => usdOf(x.atomic, p.price)))) : "1";
+      usdOver(b, shuffle([...bs.map((x) => x.id), ...ps.map((x) => x.id)], rand), value);
+      const classification = pick(["CRITERIA_MET", "NOT_ESTABLISHED", "CRITERIA_NOT_MET"]);
+      readinessOver(b, shuffle([...is, ...bs.map((x) => x.id)], rand), classification);
+      return {
+        b,
+        // Written here: a value must be the rule's answer for every balance with every price. And for readiness, assess_vault_readiness over every identity with every balance.
+        usdFails: bs.some((x) => ps.some((p) => usdOf(x.atomic, p.price) !== value)),
+        readinessFails: is.some((i) => bs.some((x) => (readiness(b, i, x.id) as { classification: string }).classification !== classification)),
+        several: bs.length > 1 || ps.length > 1 || is.length > 1,
+      };
+    }
+
+    test("BUG: over worlds of several readings, a value fails exactly when some reading gives another, and no listing of any list inside a record moves a verdict", () => {
+      const rand = mulberry32(20261104);
+      let several = 0;
+      let failing = 0;
+      const WORLDS = 150;
+      for (let n = 0; n < WORLDS; n++) {
+        const world = readingsWorld(rand);
+        if (world.several) several++;
+        const listed = verdicts(world.b);
+        const codes = violations(world.b);
+        assert.equal(codes.includes("a-usd INV-00 RECOMPUTATION_MISMATCH"), world.usdFails, `world ${String(n)} USD: ${JSON.stringify(world.b.derivations)}`);
+        assert.equal(codes.includes("a-ready INV-00 RECOMPUTATION_MISMATCH"), world.readinessFails, `world ${String(n)} readiness: ${JSON.stringify(world.b.derivations)}`);
+        if (world.usdFails || world.readinessFails) failing++;
+        for (let k = 0; k < 4; k++) assert.equal(verdicts(shuffledInside(world.b, rand)), listed, `world ${String(n)}, shuffle ${String(k)}`);
+      }
+      // The worlds are not trivial: most hold several readings, and a good part fail.
+      assert.ok(several >= 90, `${String(several)} of ${String(WORLDS)} worlds hold several readings`);
+      assert.ok(failing >= 40, `${String(failing)} of ${String(WORLDS)} worlds hold a value some reading does not give`);
+    });
+  });
+});
+
 /** Everything every tool answers, leaving out only the digest of the records as listed, which follows their order by design. */
 function answers(b: Bundle): string {
   const ids = [...new Set(b.assertions.map((a) => a.id))].sort();
@@ -1477,6 +1690,13 @@ describe("the published contract says so", () => {
     assert.equal(rules()["recordOrder"], "The order of the records in any list of a bundle the schema accepts changes no answer of inspect_evidence, check_invariants, assess_vault_readiness or trace_provenance. Only bundleDigest follows it.");
   });
 
+  test("BUG: walletwall://schemas/claims says a derived value is recomputed under every reading of its inputs, and what the order of the inputs moves", () => {
+    assert.equal(
+      rules()["derivedValues"],
+      "check_invariants recomputes a derived USD value under every balance and every price among its inputs, and a derived readiness classification under every identity and every balance, and reports INV-00 RECOMPUTATION_MISMATCH if any reading gives another value. The order of inputAssertionIds changes no verdict; trace_provenance still lists what it walks in that order.",
+    );
+  });
+
   test("BUG: walletwall://schemas/claims says what a dependency cycle reads, lifecycle included", () => {
     assert.equal(rules()["dependencyCycles"], "A derived assertion that depends on itself, directly or through others, has no basis: each assertion on the cycle reports DEPENDENCY_CYCLE, is NOT_ESTABLISHED unless a supersession or conflict overrides that, and retains every limitation any of them reports.");
   });
@@ -1504,6 +1724,12 @@ describe("the specification says what a faulty supersession does", () => {
     const text = flat("spec/EVIDENCE_PROFILE.md");
     assert.ok(text.includes("detected by the engine when two assertions about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values."));
     assert.ok(text.includes("one whose two assertions are not about the same claim as `SUPERSESSION_CLAIM_IDENTITY_MISMATCH`, one whose superseding assertion is not later as `SUPERSESSION_NOT_FORWARD_IN_TIME`"));
+  });
+
+  test("BUG: spec/EVIDENCE_PROFILE.md says what a list inside one record moves, and what it does not, and how a derived value is recomputed", () => {
+    const text = flat("spec/EVIDENCE_PROFILE.md");
+    assert.ok(text.includes("A list inside one record is part of that record, and this does not cover it. It moves no state, limitation or violation, because a derived value is recomputed under every reading of its inputs, but it is what `trace_provenance` walks and what `dependencies` echo, in that order."));
+    assert.ok(text.includes("A derived value that recomputation does not reproduce is reported here as `RECOMPUTATION_MISMATCH`: the rule is applied to every balance with every price among the inputs of a USD value, and to every identity with every balance among those of a readiness claim, and one reading that gives another value is a mismatch."));
   });
 
   test("BUG: spec/SUPPORT_STATES.md says a faulty record still marks the assertion and does not take it out of conflict detection", () => {
@@ -1585,6 +1811,16 @@ describe("WallPrint", () => {
       evidence.put(clone(b));
       assert.equal(replayWallPrint(r, { evidence }).outcome, "REPRODUCED", to);
     }
+  });
+
+  test("BUG: a record over a derivation with two balances says the same of every state and violation, in every order of its inputs", () => {
+    const readingOf = (b: Bundle): string => {
+      const r = snapshot(b, "a-usd");
+      return JSON.stringify([r.violations, r.claims.map((c) => [c.assertionId, c.supportState, c.freshnessState, c.finalityState, c.limitations, c.conflictsWith, c.supersededBy])]);
+    };
+    const answers = new Set(permutations(["a-balance", "a-balance-cur", "a-price"]).map((inputs) => readingOf(usdOver(twoBalances(), inputs, USD_OF.firstBalanceFirstPrice))));
+    assert.equal(answers.size, 1);
+    assert.deepEqual(snapshot(usdOver(twoBalances(), ["a-balance", "a-balance-cur", "a-price"], USD_OF.firstBalanceFirstPrice), "a-usd").violations, [{ invariant: "INV-00", code: "RECOMPUTATION_MISMATCH", assertionId: "a-usd" }]);
   });
 
   test("CONTROL: a record over a supersession that names nothing is refused, as it has been, whichever of the two it is about", () => {
