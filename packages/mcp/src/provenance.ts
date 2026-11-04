@@ -54,6 +54,9 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
     return { target: assertionId, lineage, prov, issues: [{ code: "TARGET_NOT_FOUND", id: null }] };
   }
 
+  // Walked by the id they supersede: what one assertion supersedes must not come out in the order it was listed.
+  const supersessions = [...(bundle.supersessions ?? [])].sort((x, y) => (x.supersededAssertionId < y.supersededAssertionId ? -1 : x.supersededAssertionId > y.supersededAssertionId ? 1 : 0));
+
   const addObservation = (id: string, depth: number): void => {
     const o = idx.observations.get(id);
     if (o === undefined) {
@@ -131,7 +134,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
         }
       }
     }
-    for (const s of bundle.supersessions ?? []) {
+    for (const s of supersessions) {
       if (s.supersedingAssertionId === id && idx.assertions.has(s.supersededAssertionId)) {
         prov.wasRevisionOf[rel("rev")] = {
           "prov:generatedEntity": key,

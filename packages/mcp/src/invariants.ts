@@ -165,18 +165,22 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
     if (!sameIdentity) push("INV-12", "SUPERSESSION_CLAIM_IDENTITY_MISMATCH", oldA.id);
     if (Date.parse(newA.assertedAt) <= Date.parse(oldA.assertedAt)) push("INV-12", "SUPERSESSION_NOT_FORWARD_IN_TIME", oldA.id);
   }
-  const chain = new Map((bundle.supersessions ?? []).map((s) => [s.supersededAssertionId, s.supersedingAssertionId]));
-  for (const start of chain.keys()) {
-    const seen = new Set<string>([start]);
-    let cur = chain.get(start);
-    while (cur !== undefined) {
-      if (seen.has(cur)) {
-        push("INV-12", "SUPERSESSION_CYCLE", start);
-        break;
-      }
-      seen.add(cur);
-      cur = chain.get(cur);
-    }
+  // Every supersession counts: a chain that comes back on itself by any of them is a cycle, whichever record comes first or last.
+  const successors = new Map<string, string[]>();
+  for (const s of bundle.supersessions ?? []) successors.set(s.supersededAssertionId, [...(successors.get(s.supersededAssertionId) ?? []), s.supersedingAssertionId]);
+  const onChain = new Set<string>();
+  const endsCleanly = new Set<string>();
+  const reachesCycle = (id: string): boolean => {
+    if (onChain.has(id)) return true;
+    if (endsCleanly.has(id)) return false;
+    onChain.add(id);
+    const found = (successors.get(id) ?? []).some(reachesCycle);
+    onChain.delete(id);
+    if (!found) endsCleanly.add(id);
+    return found;
+  };
+  for (const start of successors.keys()) {
+    if (reachesCycle(start)) push("INV-12", "SUPERSESSION_CYCLE", start);
   }
 
   const seenKey = new Set<string>();

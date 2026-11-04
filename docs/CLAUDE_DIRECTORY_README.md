@@ -112,6 +112,7 @@ WalletWall preserves uncertainty rather than smoothing it away.
 - A derived claim gets no support from dependencies about another subject.
 - Hex case does not change an address's identity, so it cannot hide a conflict. Records keep the spelling supplied.
 - A reused assertion, source, observation or derivation ID names no record: every assertion in the bundle and readiness are `NOT_ESTABLISHED`, whichever record comes first.
+- The order of a bundle's records changes no evaluation answer. A dependency cycle gives no basis: no assertion on it is established.
 - `PINNED` does not excuse an observation dated after the evaluation time.
 
 Vault technical readiness is reported exactly as one of:
