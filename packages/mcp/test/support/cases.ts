@@ -731,16 +731,20 @@ base(
     ...b,
     supersessions: [{ id: "s-1", supersededAssertionId: "a-balance-2", supersedingAssertionId: to, effectiveAt: T("2026-10-23T12:00:20Z"), reason: "CORRECTED" }],
   });
-  /** The rival still reads SUPERSEDED, as CNF-006 says of a record that is not later, and stays compared, so the conflict stays, and readiness cannot be met. */
+  /**
+   * The rival stays compared, so the conflict stays and readiness cannot be met, and it reads CONFLICTING too: a record that cannot be valid
+   * never raises what it names. It still carries the record's limitation and supersededBy, and the record is reported (CNF-006 pins what it
+   * reads when it is in no conflict: SUPERSEDED).
+   */
   const stays = (to: string, codes: string[]): Expectation => ({
     assertions: {
       "a-balance": { supportState: "CONFLICTING", conflictsWith: ["a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] },
-      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: to, conflictsWith: ["a-balance"] },
+      "a-balance-2": { supportState: "CONFLICTING", supersededBy: to, conflictsWith: ["a-balance"], limitationsInclude: ["SUPERSEDED", "CONFLICT_DETECTED"] },
     },
     violations: { include: codes.map((code) => ({ invariant: "INV-12", code })) },
     readiness: { ...READINESS_INPUTS, classification: "NOT_ESTABLISHED" },
   });
-  base("CNF-032", "conflict", "supersession", "A supersession that names nothing cannot hide a conflict: the rival still reads SUPERSEDED and stays compared, so both are CONFLICTING and readiness is not established.", record(world(), "a-missing"), stays("a-missing", ["SUPERSESSION_REFERENCE_INVALID"]));
+  base("CNF-032", "conflict", "supersession", "A supersession that names nothing cannot hide a conflict: the rival stays compared and reads CONFLICTING, with the record's limitation and supersededBy, so both are CONFLICTING and readiness is not established.", record(world(), "a-missing"), stays("a-missing", ["SUPERSESSION_REFERENCE_INVALID"]));
   base("CNF-033", "conflict", "supersession", "A supersession of the assertion by itself cannot hide a conflict.", record(world(), "a-balance-2"), stays("a-balance-2", ["SUPERSESSION_REFERENCE_INVALID", "SUPERSESSION_CYCLE"]));
   base("CNF-034", "conflict", "supersession", "A supersession by an assertion of another claim cannot hide a conflict.", record(world(), "a-identity"), stays("a-identity", ["SUPERSESSION_CLAIM_IDENTITY_MISMATCH"]));
   base("CNF-035", "conflict", "supersession", "A supersession by an assertion that is not later in time cannot hide a conflict.", record(world(), "a-balance"), stays("a-balance", ["SUPERSESSION_NOT_FORWARD_IN_TIME"]));

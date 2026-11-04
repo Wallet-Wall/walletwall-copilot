@@ -69,6 +69,9 @@ const byId = (b: Bundle, id: string): Evaluated => {
 };
 const violations = (b: Bundle): string[] => invariants(b).violations.map((v) => `${v.assertionId ?? "-"} ${v.invariant} ${v.code}`);
 const listing = (b: Bundle): string => b.assertions.map((a) => a.id).join();
+/** The strength order of spec/SUPPORT_STATES.md, weakest first. */
+const WEAKEST_FIRST = ["NOT_ESTABLISHED", "CONFLICTING", "UNKNOWN", "SUPERSEDED", "STALE", "PARTIAL", "SUPPORTED", "ESTABLISHED"];
+const weaker = (x: string, y: string): string => (WEAKEST_FIRST.indexOf(x) <= WEAKEST_FIRST.indexOf(y) ? x : y);
 
 /** What a claim reads apart from its limitations and its lifecycle. */
 const readingOf = (e: Evaluated): unknown => ({ supportState: e.supportState, freshnessState: e.freshnessState, finalityState: e.finalityState, satisfied: e.authority?.satisfied, corroboration: e.independentCorroboration });
@@ -590,11 +593,12 @@ describe("a dependency cycle is read the same from every side", () => {
       }
     });
 
-    test("CONTROL: a claim on a cycle superseded by an id that resolves to nothing is SUPERSEDED, as any claim is", () => {
+    test("BUG: a claim on a cycle superseded by an id that resolves to nothing stays NOT_ESTABLISHED, with the record's limitation: a record that cannot be valid raises nothing", () => {
       const b = cycleOfTwo();
       b.supersessions = [{ id: "s-1", supersededAssertionId: "a-usd-2", supersedingAssertionId: "z-nothing", effectiveAt: EVALUATED_AT, reason: "CORRECTED" }];
       for (const ordered of everyAssertionOrder(b)) {
-        assert.equal(byId(ordered, "a-usd-2").supportState, "SUPERSEDED", listing(ordered));
+        assert.equal(byId(ordered, "a-usd-2").supportState, "NOT_ESTABLISHED", listing(ordered));
+        assert.ok(byId(ordered, "a-usd-2").limitations.includes("SUPERSEDED"), listing(ordered));
         assert.equal(byId(ordered, "a-usd-2").supersededBy, "z-nothing", listing(ordered));
         assert.ok(violations(ordered).includes("a-usd-2 INV-12 SUPERSESSION_REFERENCE_INVALID"), listing(ordered));
       }
@@ -982,15 +986,16 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
       for (const f of faulty(victim, survivor)) {
         const world = (): Bundle => supersede(rivals(), [victim, f.to]);
 
-        test(`BUG: it ${f.label}: ${survivor} is CONFLICTING, not ESTABLISHED, and ${victim} still reads SUPERSEDED`, () => {
+        test(`BUG: it ${f.label}: ${survivor} is CONFLICTING, not ESTABLISHED, and so is ${victim}, which still carries the record's limitation and supersededBy`, () => {
           const b = world();
           const s = byId(b, survivor);
           assert.equal(s.supportState, "CONFLICTING");
           assert.deepEqual(s.conflictsWith, [victim]);
           assert.ok(s.limitations.includes("CONFLICT_DETECTED"), s.limitations.join());
           const v = byId(b, victim);
-          assert.equal(v.supportState, "SUPERSEDED", "the published reading of a record that is invalid: CNF-006");
+          assert.equal(v.supportState, "CONFLICTING", "a record that cannot be valid never raises what it names, and an assertion in a conflict reads CONFLICTING");
           assert.equal(v.supersededBy, f.to);
+          assert.ok(v.limitations.includes("SUPERSEDED") && v.limitations.includes("CONFLICT_DETECTED"), v.limitations.join());
           assert.deepEqual(v.conflictsWith, [survivor], "it stays among those compared");
         });
 
@@ -1034,11 +1039,12 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
     }
   });
 
-  test("BUG: three faulty records, about both of the two, in every order: both stay in detection, and each reads SUPERSEDED", () => {
+  test("BUG: three faulty records, about both of the two, in every order: both stay in detection, and each reads CONFLICTING, with the record's limitation", () => {
     const records = [supersession("s-1", "a-rival", "a-ghost"), supersession("s-2", "a-balance", "a-balance"), supersession("s-3", "a-rival", "a-identity")];
     for (const b of everySupersessionOrder({ ...rivals(), supersessions: records })) {
       for (const [id, other] of [["a-balance", "a-rival"], ["a-rival", "a-balance"]] as const) {
-        assert.equal(byId(b, id).supportState, "SUPERSEDED", `${id} in ${supersessionIds(b)}`);
+        assert.equal(byId(b, id).supportState, "CONFLICTING", `${id} in ${supersessionIds(b)}`);
+        assert.ok(byId(b, id).limitations.includes("SUPERSEDED"), `${id} in ${supersessionIds(b)}`);
         assert.deepEqual(byId(b, id).conflictsWith, [other], `${id} in ${supersessionIds(b)}`);
       }
     }
@@ -1093,7 +1099,7 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
       assert.ok(faultyChoices >= 900, `${String(faultyChoices)} of ${String(total)} choices hold a faulty record`);
     });
 
-    test("BUG: an assertion that no faulty record names reads exactly as it does without them, and one that one names reads SUPERSEDED", () => {
+    test("BUG: an assertion that no faulty record names reads exactly as it does without them, and one that only they name reads the weaker of that and SUPERSEDED, carrying the limitation", () => {
       for (const pairs of choices()) {
         const b = supersede(rivals(), ...pairs);
         const faultyRecords = (b.supersessions ?? []).filter((s) => !wellFormed(b, s));
@@ -1103,7 +1109,10 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
         for (const e of inspect(b).assertions) {
           const alone = inspect(without).assertions.find((x) => x.assertionId === e.assertionId) as Evaluated;
           if (!named.has(e.assertionId)) assert.deepEqual(e, alone, `${e.assertionId} with ${pairs.map((p) => p.join(">")).join(" ")}`);
-          else if (!retired.has(e.assertionId)) assert.equal(e.supportState, "SUPERSEDED", `${e.assertionId} with ${pairs.map((p) => p.join(">")).join(" ")}`);
+          else if (!retired.has(e.assertionId)) {
+            assert.equal(e.supportState, weaker(alone.supportState, "SUPERSEDED"), `${e.assertionId} with ${pairs.map((p) => p.join(">")).join(" ")}`);
+            assert.ok(e.limitations.includes("SUPERSEDED"), `${e.assertionId} with ${pairs.map((p) => p.join(">")).join(" ")}`);
+          }
         }
       }
     });
@@ -1408,13 +1417,69 @@ describe("what a supersession record does not do, which the specification and th
     assert.equal(classificationIn(hidden, "a-rival"), "CRITERIA_MET");
   });
 
-  test("CHARACTERIZATION: a record marks an assertion whatever state it had, valid or not: one with no basis reads SUPERSEDED, above NOT_ESTABLISHED in the strength order, and a value derived from it reads STALE", () => {
+  test("CHARACTERIZATION: nor does it matter whether the superseding assertion has evidence: one that cites the rival's own reading retires its target as well, and nothing reports it", () => {
+    const b = rivals();
+    b.assertions.push(balanceAssertion({ id: "a-agrees", observationIds: ["obs-rival"], value: { balanceAtomic: "1400000", decimals: "6" }, assertedAt: EVALUATED_AT }));
+    const hidden = supersede(b, ["a-balance", "a-agrees"]);
+    assert.equal(byId(hidden, "a-balance").supportState, "SUPERSEDED");
+    assert.equal(byId(hidden, "a-rival").supportState, "ESTABLISHED");
+    assert.deepEqual(violations(hidden), [], "nothing reports it");
+    assert.equal(classificationIn(hidden, "a-rival"), "CRITERIA_MET");
+  });
+
+  /** FAULTY_SUCCESSORS name, for a-balance: nothing, itself, another claim, a later assertion of another holder, an earlier assertion of the same claim. */
+  const FAULTY_SUCCESSORS = ["a-ghost", "a-balance", "a-identity", "a-other", "a-older"] as const;
+
+  test("BUG: a record that cannot be valid never raises what it names: an assertion with no basis stays NOT_ESTABLISHED, and so does a value derived from it, and the record is still reported", () => {
     assert.deepEqual([byId(sourceless(), "a-balance").supportState, byId(sourceless(), "a-usd").supportState], ["NOT_ESTABLISHED", "NOT_ESTABLISHED"]);
     for (const to of ["a-ghost", "a-balance", "a-identity"]) {
       const b = supersede(sourceless(), ["a-balance", to]);
-      assert.deepEqual([byId(b, "a-balance").supportState, byId(b, "a-usd").supportState], ["SUPERSEDED", "STALE"], to);
+      assert.deepEqual([byId(b, "a-balance").supportState, byId(b, "a-usd").supportState], ["NOT_ESTABLISHED", "NOT_ESTABLISHED"], to);
+      assert.ok(byId(b, "a-balance").limitations.includes("SUPERSEDED"), `${to}: it still carries the record's limitation`);
+      assert.equal(byId(b, "a-balance").supersededBy, to);
       assert.ok(violations(b).some((v) => v.startsWith("a-balance INV-12")), `${to}: the record is reported`);
     }
+  });
+
+  test("BUG: nor does it hide a conflict from its target, or from a value derived from its target: they read CONFLICTING as they do with no record", () => {
+    const world = (): Bundle => {
+      const b = rivals();
+      addUsd(b, "a-usd", ["a-balance", "a-price"], [...USD_LIMITATIONS, "CONFLICT_DETECTED"]);
+      return b;
+    };
+    const states = (b: Bundle): string[] => ["a-balance", "a-rival", "a-usd"].map((id) => byId(b, id).supportState);
+    assert.deepEqual(states(world()), ["CONFLICTING", "CONFLICTING", "CONFLICTING"], "with no record");
+    for (const to of FAULTY_SUCCESSORS) {
+      const b = supersede(world(), ["a-balance", to]);
+      assert.deepEqual(states(b), ["CONFLICTING", "CONFLICTING", "CONFLICTING"], to);
+      const target = byId(b, "a-balance");
+      assert.equal(target.supersededBy, to, to);
+      assert.deepEqual(target.conflictsWith, ["a-rival"], to);
+      assert.ok(target.limitations.includes("SUPERSEDED") && target.limitations.includes("CONFLICT_DETECTED"), `${to}: ${target.limitations.join()}`);
+      assert.ok(byId(b, "a-usd").limitations.includes("CONFLICT_DETECTED"), `${to}: the value derived from it keeps the conflict`);
+    }
+  });
+
+  test("CONTROL: it lowers an assertion that has a basis and is in no conflict to SUPERSEDED, as CNF-006 says, and a value derived from it counts it as STALE", () => {
+    const healthy = (): Bundle => {
+      const b = golden();
+      addUsd(b, "a-usd", ["a-balance", "a-price"], [...USD_LIMITATIONS]);
+      return b;
+    };
+    assert.deepEqual([byId(healthy(), "a-balance").supportState, byId(healthy(), "a-usd").supportState], ["ESTABLISHED", "SUPPORTED"]);
+    for (const to of ["a-ghost", "a-balance", "a-identity"]) {
+      const b = supersede(healthy(), ["a-balance", to]);
+      assert.deepEqual([byId(b, "a-balance").supportState, byId(b, "a-usd").supportState], ["SUPERSEDED", "STALE"], to);
+    }
+  });
+
+  test("CHARACTERIZATION: a record that can be valid marks an assertion whatever state it had: one it retires with no basis reads SUPERSEDED, above NOT_ESTABLISHED in the strength order, and a value derived from it STALE", () => {
+    const b = balances("a-newer");
+    b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, observationIds: [] } : a));
+    addUsd(b, "a-usd", ["a-balance", "a-price"], [...USD_LIMITATIONS, "NO_SOURCE"]);
+    assert.deepEqual([byId(b, "a-balance").supportState, byId(b, "a-usd").supportState], ["NOT_ESTABLISHED", "NOT_ESTABLISHED"]);
+    const retired = supersede(b, ["a-balance", "a-newer"]);
+    assert.deepEqual([byId(retired, "a-balance").supportState, byId(retired, "a-usd").supportState], ["SUPERSEDED", "STALE"]);
   });
 
   test("CHARACTERIZATION: an assertion a record that cannot be valid leaves in conflict reads as it does in a visible conflict, whatever state it had, and a CONFLICTING it declared no longer exceeds that", () => {
@@ -2027,7 +2092,7 @@ describe("the published contract says so", () => {
   test("BUG: walletwall://schemas/claims says what trace_provenance reports as issues, and what a record may carry", () => {
     assert.equal(
       rules()["provenanceIssues"],
-      "trace_provenance reports each record a walked record names that resolves to nothing, whether an assertion, an observation, a source or a derivation, once, as DANGLING_REFERENCE naming its id, then each dependency cycle in the graph it walks once, as DEPENDENCY_CYCLE naming its smallest id, each in order of code unit. Two such records of different kinds that share an id are two issues. How many it reports follows the records it reaches, never where the walk enters them, how they are listed or how their ids are spelled. Every member of a cycle stays in lineage and in the PROV relations. WallPrint refuses a record whose trace reports more than 640, and does not truncate it.",
+      "trace_provenance reports each record that resolves to nothing among those the assertions it walks cite, an observation they rest on, the source of an observation, the derivation they name and the assertions it takes as inputs, once, as DANGLING_REFERENCE naming its id, then each dependency cycle in the graph it walks once, as DEPENDENCY_CYCLE naming its smallest id, each in order of code unit. Two such records of different kinds that share an id are two identical entries. How many it reports follows the records it reaches, never where the walk enters them, how they are listed or how their ids are spelled. Every member of a cycle stays in lineage and in the PROV relations. WallPrint refuses a record whose trace reports more than 640, and does not truncate it.",
     );
   });
 
@@ -2038,7 +2103,7 @@ describe("the published contract says so", () => {
   test("BUG: walletwall://schemas/claims says what overlapping supersessions read", () => {
     assert.equal(
       rules()["supersessions"],
-      "An assertion superseded more than once is SUPERSEDED. supersededBy names the smallest of the other assertions its records name that resolve, otherwise the assertion itself if a record names it, otherwise the smallest id named, whichever record comes first. check_invariants reports INV-12 SUPERSEDED_MULTIPLE_TIMES for more than one record that names another assertion, SUPERSESSION_REFERENCE_INVALID for a record that names nothing or its own assertion, SUPERSESSION_CLAIM_IDENTITY_MISMATCH for one whose assertions are not about the same claim, SUPERSESSION_NOT_FORWARD_IN_TIME for one whose superseding assertion is not later, and SUPERSESSION_CYCLE for a chain that comes back on itself by any of them. Only a record that names two different assertions that resolve, of one claim identity, the superseding one asserted later, takes an assertion out of conflict detection. An assertion that any other record supersedes still reads SUPERSEDED but stays among those compared, so a record that cannot be valid cannot hide a conflict. A record that can be valid is the author's claim that the later assertion replaces the earlier, taken as made: nothing asks whether the later assertion has evidence of its own.",
+      "An assertion superseded more than once is SUPERSEDED. supersededBy names the smallest of the other assertions its records name that resolve, otherwise the assertion itself if a record names it, otherwise the smallest id named, whichever record comes first. check_invariants reports INV-12 SUPERSEDED_MULTIPLE_TIMES for more than one record that names another assertion, SUPERSESSION_REFERENCE_INVALID for a record that names nothing or its own assertion, SUPERSESSION_CLAIM_IDENTITY_MISMATCH for one whose assertions are not about the same claim, SUPERSESSION_NOT_FORWARD_IN_TIME for one whose superseding assertion is not later, and SUPERSESSION_CYCLE for a chain that comes back on itself by any of them. Only a record that names two different assertions that resolve, of one claim identity, the superseding one asserted later, takes an assertion out of conflict detection. An assertion that only other records supersede still carries SUPERSEDED and its supersededBy and stays among those compared, and reads the weaker of what it computes, a conflict included, and SUPERSEDED, so a record that cannot be valid never raises what it names and cannot hide a conflict from it or from what is derived from it. A record that can be valid is the author's claim that the later assertion replaces the earlier, taken as made: nothing asks whether the later assertion has evidence of its own, or whether it settles what the earlier one disagreed about.",
     );
   });
 });
@@ -2049,7 +2114,7 @@ describe("the specification says what a faulty supersession does", () => {
   test("BUG: spec/EVIDENCE_PROFILE.md says only a well-formed record takes an assertion out of conflict detection, and what a faulty one leaves", () => {
     assert.ok(
       flat("spec/EVIDENCE_PROFILE.md").includes(
-        "A supersession record is well-formed when it names two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed record takes an assertion out of conflict detection: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the later assertion has evidence of its own (the residual risks in `THREAT_MODEL.md` say so). An assertion that a faulty record supersedes (one `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) still reads `SUPERSEDED`, whatever state it had, and stays among those compared, so a record that cannot be valid cannot hide a conflict. Being compared can only add a conflict, and an assertion in a conflict reads `CONFLICTING` whatever state it had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the computed state. No readiness answer is more favourable.",
+        "A supersession record is well-formed when it names two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks in `THREAT_MODEL.md` say so). An assertion that only faulty records supersede (records `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the computed state. No readiness answer is more favourable.",
       ),
     );
   });
@@ -2069,7 +2134,7 @@ describe("the specification says what a faulty supersession does", () => {
   test("BUG: spec/EVIDENCE_PROFILE.md says what the issues of a provenance trace are, and what they follow", () => {
     assert.ok(
       flat("spec/EVIDENCE_PROFILE.md").includes(
-        "Its issues are a set: each record a walked record names that resolves to nothing, whether an assertion, an observation, a source or a derivation, once, as `DANGLING_REFERENCE` naming its id (two of different kinds that share an id are two issues), then each cycle of the graph it walks, a set of assertions that all reach one another or one that names itself, once, as `DEPENDENCY_CYCLE` naming its smallest id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are listed or how their ids are spelled. Every member of a cycle stays in `lineage` and in the PROV relations.",
+        "Its issues are one for each record that resolves to nothing among those the assertions it walks cite (an observation they rest on, the source of an observation, the derivation they name, the assertions that derivation takes as inputs), as `DANGLING_REFERENCE` naming its id (two of different kinds that share an id give two identical entries), then one for each cycle of the graph it walks, a set of assertions that all reach one another or one that names itself, as `DEPENDENCY_CYCLE` naming its smallest id by code unit. How many it reports follows the records it reaches, never where the walk entered them, how they are listed or how their ids are spelled. Every member of a cycle stays in `lineage` and in the PROV relations.",
       ),
     );
   });
@@ -2083,19 +2148,19 @@ describe("the specification says what a faulty supersession does", () => {
   });
 
   test("BUG: spec/SUPPORT_STATES.md says a faulty record still marks the assertion and does not take it out of conflict detection", () => {
-    assert.ok(flat("spec/SUPPORT_STATES.md").includes("A faulty record, one that names nothing, the assertion itself, another claim or an assertion that is not later, still marks it, and does not take it out of conflict detection. A record marks an assertion whatever state it had, whether the record is valid or not: one with no basis reads `SUPERSEDED`, above `NOT_ESTABLISHED` in the strength order below, and a claim derived from it reads `STALE`."));
+    assert.ok(flat("spec/SUPPORT_STATES.md").includes("A record that can be valid marks an assertion whatever state it had: one with no basis reads `SUPERSEDED`, above `NOT_ESTABLISHED` in the strength order below. A faulty record, one that names nothing, the assertion itself, another claim or an assertion that is not later, marks it only if that lowers it, and does not take it out of conflict detection: an assertion that would otherwise read `NOT_ESTABLISHED`, `CONFLICTING` or `UNKNOWN` reads that still, and carries the `SUPERSEDED` limitation either way."));
   });
 
   test("BUG: THREAT_MODEL.md says a record that fails the checks takes nothing out of conflict detection, and cites the vectors", () => {
     const text = flat("THREAT_MODEL.md");
-    assert.ok(text.includes("and a record that fails them, or names nothing, takes nothing out of conflict detection, so it cannot hide a conflict (a record that can be valid is the author's claim, taken as made: see the residual risks);"));
+    assert.ok(text.includes("and a record that fails them, or names nothing, takes nothing out of conflict detection and raises nothing, so it cannot hide a conflict (a record that can be valid is the author's claim, taken as made: see the residual risks);"));
     assert.ok(text.includes("`CNF-005..009`, `CNF-013..015`, `CNF-017..036`"));
   });
 
   test("BUG: THREAT_MODEL.md names, among the residual risks, that a record that can be valid is taken as made, and what that leaves open", () => {
     assert.ok(
       flat("THREAT_MODEL.md").includes(
-        "A supersession record is the author's claim that a later assertion replaces an earlier one, and the engine takes it as made: nothing asks whether the later assertion has evidence of its own. A record that names two different assertions of one claim identity, the later asserted later, therefore still takes its target out of conflict detection when the later assertion has no source and no value, so an author who supplies two readings that disagree can retire one with an empty successor, and `inspect_evidence`, `check_invariants` and `assess_vault_readiness` then read the other as if it stood alone. A record that cannot be valid hides nothing (T9). Measured and not yet closed: what a successor must carry, and what becomes of the conflicts of an assertion it retires, are open design questions.",
+        "A supersession record is the author's claim that a later assertion replaces an earlier one, and the engine takes it as made: nothing asks whether the later assertion has evidence of its own, or whether it settles what the earlier one disagreed about. A record that names two different assertions of one claim identity, the later asserted later, therefore takes its target out of conflict detection whatever the later assertion is, empty or evidenced and agreeing with the rival, so an author who supplies two readings that disagree can retire one with a later assertion of their own, and `inspect_evidence`, `check_invariants` and `assess_vault_readiness` then read the other as if it stood alone. A record that cannot be valid hides nothing (T9). Measured and not yet closed: what becomes of the conflicts of an assertion a successor retires, and whether a successor must settle them, are open design questions.",
       ),
     );
   });

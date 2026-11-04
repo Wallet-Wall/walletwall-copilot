@@ -2,7 +2,7 @@
   "id": "CNF-032",
   "category": "conflict",
   "claimCategory": "supersession",
-  "description": "A supersession that names nothing cannot hide a conflict: the rival still reads SUPERSEDED and stays compared, so both are CONFLICTING and readiness is not established.",
+  "description": "A supersession that names nothing cannot hide a conflict: the rival stays compared and reads CONFLICTING, with the record's limitation and supersededBy, so both are CONFLICTING and readiness is not established.",
   "evaluatedAt": "2026-10-23T12:00:30Z",
   "bundle": {
     "wwepVersion": "0.1",
@@ -237,10 +237,14 @@
         ]
       },
       "a-balance-2": {
-        "supportState": "SUPERSEDED",
+        "supportState": "CONFLICTING",
         "supersededBy": "a-missing",
         "conflictsWith": [
           "a-balance"
+        ],
+        "limitationsInclude": [
+          "SUPERSEDED",
+          "CONFLICT_DETECTED"
         ]
       }
     },

@@ -237,10 +237,14 @@
         ]
       },
       "a-balance-2": {
-        "supportState": "SUPERSEDED",
+        "supportState": "CONFLICTING",
         "supersededBy": "a-balance-2",
         "conflictsWith": [
           "a-balance"
+        ],
+        "limitationsInclude": [
+          "SUPERSEDED",
+          "CONFLICT_DETECTED"
         ]
       }
     },
