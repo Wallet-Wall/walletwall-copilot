@@ -1,14 +1,14 @@
-import { canonicalize } from "./canonical.ts";
 import { parseAtomic, parseDecimals, parsePriceScaled18, usdValueScaled18 } from "./quantity.ts";
 import { getPolicy } from "./registry.ts";
 import { assessReadiness, READINESS_RULE_ID } from "./readiness.ts";
 import type { Assertion, Bundle } from "./schemas.ts";
-import { subjectIdentityKey, subjectKeyEqual } from "./subject.ts";
+import { subjectKeyEqual } from "./subject.ts";
 import {
   ORIGIN_SOURCE_KINDS,
   SUPPORT_RANK,
   evaluateBundle,
   indexEvidence,
+  supersessionFaults,
   type AssertionEvaluation,
   type EvidenceIndex,
   type Evaluation,
@@ -149,21 +149,19 @@ export function checkInvariants(bundle: Bundle, evaluation: Evaluation): Violati
     }
   }
 
+  // What makes a record faulty is one rule, supersessionFaults, which evaluation also reads: a faulty record is reported here and takes
+  // nothing out of conflict detection there.
   const supersededIds = new Set<string>();
   for (const s of bundle.supersessions ?? []) {
+    const faults = supersessionFaults(idx, s);
     const oldA = idx.assertions.get(s.supersededAssertionId);
-    const newA = idx.assertions.get(s.supersedingAssertionId);
-    if (oldA === undefined || newA === undefined || s.supersededAssertionId === s.supersedingAssertionId) {
+    if (oldA === undefined || faults.includes("SUPERSESSION_REFERENCE_INVALID")) {
       push("INV-12", "SUPERSESSION_REFERENCE_INVALID", s.supersededAssertionId);
       continue;
     }
     if (supersededIds.has(oldA.id)) push("INV-12", "SUPERSEDED_MULTIPLE_TIMES", oldA.id);
     supersededIds.add(oldA.id);
-    const pol = getPolicy(oldA.claimType);
-    const identityOf = (a: Assertion): string => (pol ? subjectIdentityKey(a.subject, pol.supersessionKeys) : canonicalize(a.subject));
-    const sameIdentity = oldA.claimType === newA.claimType && identityOf(oldA) === identityOf(newA);
-    if (!sameIdentity) push("INV-12", "SUPERSESSION_CLAIM_IDENTITY_MISMATCH", oldA.id);
-    if (Date.parse(newA.assertedAt) <= Date.parse(oldA.assertedAt)) push("INV-12", "SUPERSESSION_NOT_FORWARD_IN_TIME", oldA.id);
+    for (const fault of faults) push("INV-12", fault, oldA.id);
   }
   // Every supersession counts: a chain that comes back on itself by any of them is a cycle, whichever record comes first or last.
   const successors = new Map<string, string[]>();

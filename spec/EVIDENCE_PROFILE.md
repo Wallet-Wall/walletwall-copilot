@@ -74,8 +74,9 @@ keep them in the record's digest; the claim contract says how they are treated.
   assertion's `subject` and each supporting observation's `subject` share one shape; an assertion's `value` and each
   supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.
 - **SupportState**, **FreshnessState**, **FinalityState** — section 5.
-- **Conflict** — `{id, assertionIds, reason}` declared by an author, or detected by the engine when two
-  non-superseded assertions about the same claim identity carry different values. Conflicts are never auto-resolved.
+- **Conflict** — `{id, assertionIds, reason}` declared by an author, or detected by the engine when two assertions
+  about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values.
+  Conflicts are never auto-resolved.
 - **Limitation** — a code from a closed enumeration attached to a result that explains why it is weaker than it
   might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).
 - **Supersession** — `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion
@@ -114,7 +115,9 @@ These are enforced by `check_invariants` and by executable conformance tests. Ea
 12. **INV-12** Historical assertions are superseded, never silently rewritten. A reused assertion id is reported here
     as `DUPLICATE_ASSERTION_ID`, an assertion superseded by more than one record that names another assertion as
     `SUPERSEDED_MULTIPLE_TIMES`, a record that names nothing or its own assertion as `SUPERSESSION_REFERENCE_INVALID`,
-    and a chain of supersessions that comes back on itself by any of them as `SUPERSESSION_CYCLE`.
+    one whose two assertions are not about the same claim as `SUPERSESSION_CLAIM_IDENTITY_MISMATCH`, one whose superseding
+    assertion is not later as `SUPERSESSION_NOT_FORWARD_IN_TIME`, and a chain of supersessions that comes back on itself by
+    any of them as `SUPERSESSION_CYCLE`.
 13. **INV-13** Source transport and source authority are separate concepts. `retrievedVia = Alchemy` does not imply
     `authority = Alchemy` for Ethereum state.
 
@@ -160,10 +163,17 @@ does not cover it. Procedure and per-claim policies are in `AUTHORITY_MODEL.md` 
    input as `NOT_ESTABLISHED`, not as superseded, so it inherits `SUPERSEDED` but does not report `DEPENDENCY_SUPERSEDED`,
    and its freshness is worked out as if the input were not superseded. An id is unique within its kind, so a source and
    an observation may share one. Nothing resolves through a conflict or supersession id.
-3. Mark superseded assertions; detect declared and value-disagreement conflicts among non-superseded assertions. An
-   assertion superseded more than once is `SUPERSEDED`. `supersededBy` names the smallest id, by code unit, among the other
-   assertions its records name that resolve; if there is none, the assertion itself if a record names it; otherwise the
-   smallest of the ids, which resolve to nothing.
+3. Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed
+   supersession retires. An assertion superseded more than once is `SUPERSEDED`. `supersededBy` names the smallest id, by
+   code unit, among the other assertions its records name that resolve; if there is none, the assertion itself if a record
+   names it; otherwise the smallest of the ids, which resolve to nothing. A supersession record is well-formed when it names
+   two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed
+   record takes an assertion out of conflict detection, because only then does a later assertion carry the claim forward. An
+   assertion that a faulty record supersedes (one `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`,
+   `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) still reads `SUPERSEDED`, and stays among
+   those compared, so a record that cannot be valid cannot hide a conflict. This only ever adds a conflict: an assertion it
+   changes reads `CONFLICTING`, a fall from any state that was a basis and no gain for one that was not (`NOT_ESTABLISHED`),
+   and no readiness answer is more favourable.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
    assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject
    differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`. A derived assertion that

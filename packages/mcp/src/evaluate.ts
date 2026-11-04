@@ -191,6 +191,30 @@ export function indexEvidence(bundle: Bundle): EvidenceIndex {
   return { ...index, ambiguousAssertions, reusedIdCode: reused.find(([size]) => size > 0)?.[1] ?? null };
 }
 
+/** A supersession record as a bundle lists it. */
+export type SupersessionRecord = NonNullable<Bundle["supersessions"]>[number];
+
+/** The ways a supersession record can be faulty, by the code check_invariants reports each under (INV-12). */
+export type SupersessionFault = "SUPERSESSION_REFERENCE_INVALID" | "SUPERSESSION_CLAIM_IDENTITY_MISMATCH" | "SUPERSESSION_NOT_FORWARD_IN_TIME";
+
+/**
+ * What is wrong with a supersession record, if anything. A well-formed record names two different assertions that resolve, of one claim
+ * identity, and the superseding one was asserted later. Evaluation reads this to decide which records may take an assertion out of
+ * conflict detection and check_invariants reads it to report them, so what is reported as invalid and what cannot retire an assertion are
+ * one rule. A record that names nothing, or its own assertion, has no other fault to report: the other two need two assertions.
+ */
+export function supersessionFaults(idx: EvidenceIndex, s: SupersessionRecord): SupersessionFault[] {
+  const older = idx.assertions.get(s.supersededAssertionId);
+  const newer = idx.assertions.get(s.supersedingAssertionId);
+  if (older === undefined || newer === undefined || s.supersededAssertionId === s.supersedingAssertionId) return ["SUPERSESSION_REFERENCE_INVALID"];
+  const faults: SupersessionFault[] = [];
+  const policy = getPolicy(older.claimType);
+  const identityOf = (a: Assertion): string => (policy ? subjectIdentityKey(a.subject, policy.supersessionKeys) : canonicalize(a.subject));
+  if (older.claimType !== newer.claimType || identityOf(older) !== identityOf(newer)) faults.push("SUPERSESSION_CLAIM_IDENTITY_MISMATCH");
+  if (Date.parse(newer.assertedAt) <= Date.parse(older.assertedAt)) faults.push("SUPERSESSION_NOT_FORWARD_IN_TIME");
+  return faults;
+}
+
 export function pick(rec: FlatRecordValue | null, keys: readonly string[]): Record<string, string | boolean | null> | null {
   if (rec === null) return null;
   const out: Record<string, string | boolean | null> = {};
@@ -291,6 +315,11 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     if (named === undefined || rank(superseded, by) < rank(superseded, named) || (rank(superseded, by) === rank(superseded, named) && by < named)) supersededBy.set(superseded, by);
   }
 
+  // Only a well-formed record takes an assertion out of conflict detection: its superseding assertion carries the claim forward. A faulty
+  // one still reads SUPERSEDED, below, but the assertion stays among those compared, so a record that cannot be valid hides no conflict.
+  const retired = new Set<string>();
+  for (const s of bundle.supersessions ?? []) if (supersessionFaults(idx, s).length === 0) retired.add(s.supersededAssertionId);
+
   const conflictsWith = new Map<string, Set<string>>();
   const conflictCause = new Map<string, LimitationCode>();
   const link = (ids: readonly string[], cause: LimitationCode): void => {
@@ -307,7 +336,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
   for (const c of bundle.conflicts ?? []) link(c.assertionIds, "CONFLICT_DECLARED");
   const groups = new Map<string, Assertion[]>();
   for (const a of idx.assertions.values()) {
-    if (supersededBy.has(a.id)) continue;
+    if (retired.has(a.id)) continue;
     const policy = getPolicy(a.claimType);
     const subjectKey = policy ? subjectIdentityKey(a.subject, policy.subjectKeys) : canonicalize(a.subject);
     const key = `${a.claimType}|${a.temporality}|${subjectKey}`;
