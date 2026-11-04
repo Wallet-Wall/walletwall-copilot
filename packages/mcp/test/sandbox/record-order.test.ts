@@ -2113,13 +2113,13 @@ describe("the published contract says so", () => {
   });
 
   test("BUG: walletwall://schemas/claims says what a dependency cycle reads, lifecycle included", () => {
-    assert.equal(rules()["dependencyCycles"], "A derived assertion that depends on itself, directly or through others, has no basis: each assertion on the cycle reports DEPENDENCY_CYCLE, is NOT_ESTABLISHED unless a supersession or conflict overrides that, and retains every limitation any of them reports.");
+    assert.equal(rules()["dependencyCycles"], "A derived assertion that depends on itself, directly or through others, has no basis: each assertion on the cycle reports DEPENDENCY_CYCLE, is NOT_ESTABLISHED unless a well-formed supersession or a conflict overrides that, and retains every limitation any of them reports.");
   });
 
   test("BUG: walletwall://schemas/claims says what overlapping supersessions read", () => {
     assert.equal(
       rules()["supersessions"],
-      "An assertion superseded more than once is SUPERSEDED. supersededBy names the smallest of the other assertions its records name that resolve, otherwise the assertion itself if a record names it, otherwise the smallest id named, whichever record comes first. check_invariants reports INV-12 SUPERSEDED_MULTIPLE_TIMES for more than one record that names another assertion, SUPERSESSION_REFERENCE_INVALID for a record that names nothing or its own assertion, SUPERSESSION_CLAIM_IDENTITY_MISMATCH for one whose assertions are not about the same claim, SUPERSESSION_NOT_FORWARD_IN_TIME for one whose superseding assertion is not later, and SUPERSESSION_CYCLE for a chain that comes back on itself by any of them. Only a record that names two different assertions that resolve, of one claim identity, the superseding one asserted later, takes an assertion out of conflict detection. An assertion that only other records supersede still carries SUPERSEDED and its supersededBy and stays among those compared, and reads the weaker of what it computes, a conflict included, and SUPERSEDED, so a record that cannot be valid never raises what it names and cannot hide a conflict from it or from what is derived from it. A record that can be valid is the author's claim that the later assertion replaces the earlier, taken as made: nothing asks whether the later assertion has evidence of its own, or whether it settles what the earlier one disagreed about.",
+      "An assertion that a well-formed record supersedes, once or more than once, is SUPERSEDED. supersededBy names the smallest of the other assertions its records name that resolve, otherwise the assertion itself if a record names it, otherwise the smallest id named, whichever record comes first. check_invariants reports INV-12 SUPERSEDED_MULTIPLE_TIMES for more than one record that names another assertion, SUPERSESSION_REFERENCE_INVALID for a record that names nothing or its own assertion, SUPERSESSION_CLAIM_IDENTITY_MISMATCH for one whose assertions are not about the same claim, SUPERSESSION_NOT_FORWARD_IN_TIME for one whose superseding assertion is not later, and SUPERSESSION_CYCLE for a chain that comes back on itself by any of them. Only a record that names two different assertions that resolve, of one claim identity, the superseding one asserted later, takes an assertion out of conflict detection. An assertion that only other records supersede still carries SUPERSEDED and its supersededBy and stays among those compared, and reads the weaker of what it computes, a conflict included, and SUPERSEDED, so a record that cannot be valid never raises what it names and cannot hide a conflict from it or from what is derived from it. A record that can be valid is the author's claim that the later assertion replaces the earlier, taken as made: nothing asks whether the later assertion has evidence of its own, or whether it settles what the earlier one disagreed about.",
     );
   });
 });
@@ -2133,6 +2133,27 @@ describe("the specification says what a faulty supersession does", () => {
         "A supersession record is well-formed when it names two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks in `THREAT_MODEL.md` say so). An assertion that only faulty records supersede (records `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the computed state. No readiness answer is more favourable.",
       ),
     );
+  });
+
+  // The same sentences the published rules say, in the files a reader reads first: an assertion that only faulty records name is not "superseded"
+  // in the sense of the strength order (it can read NOT_ESTABLISHED or CONFLICTING), so none of them may say a supersession or a superseded one
+  // without saying which.
+  test("BUG: spec/EVIDENCE_PROFILE.md says an assertion a well-formed record supersedes is SUPERSEDED, not one any record names", () => {
+    assert.ok(
+      flat("spec/EVIDENCE_PROFILE.md").includes(
+        "Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed supersession retires. An assertion that a well-formed record supersedes, once or more than once, is `SUPERSEDED`. `supersededBy` names the smallest id, by code unit, among the other assertions its records name that resolve;",
+      ),
+    );
+  });
+
+  test("BUG: spec/EVIDENCE_PROFILE.md says what a dependency cycle reads, and that only a well-formed supersession or a conflict overrides it", () => {
+    const text = flat("spec/EVIDENCE_PROFILE.md");
+    assert.ok(text.includes("Each reads the others on it as inputs with no basis: `NOT_ESTABLISHED` unless a well-formed supersession or a conflict overrides that, with `DEPENDENCY_CYCLE`, unknown finality, and unknown freshness unless `PINNED`."));
+    assert.ok(text.includes("except that its own support is `NOT_ESTABLISHED` whatever those inputs read, and a well-formed supersession and a conflict override that as they override any state."));
+  });
+
+  test("BUG: spec/AUTHORITY_MODEL.md says a derived claim on a dependency cycle is NOT_ESTABLISHED unless a well-formed supersession or a conflict overrides that", () => {
+    assert.ok(flat("spec/AUTHORITY_MODEL.md").includes("on a dependency cycle, which has no basis, it is `NOT_ESTABLISHED` unless a well-formed supersession or a conflict overrides that. It inherits every dependency limitation."));
   });
 
   test("BUG: spec/EVIDENCE_PROFILE.md defines a conflict among the assertions no well-formed supersession retires, and names the codes INV-12 reports", () => {
