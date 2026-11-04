@@ -27,6 +27,9 @@ export interface ProvenanceTrace {
 
 const byCodeUnit = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0);
 
+/** What a walked record can name that may resolve to nothing. An id is unique within its kind only, so a source and an observation may share one. */
+type RecordKind = "assertion" | "observation" | "source" | "derivation";
+
 /**
  * The cycles of a graph, each once: a strongly connected set of nodes, or a node that names itself, reported by its smallest id, in order
  * of code unit. A set of nodes does not change with where a walk entered it, how its records were listed or how its ids are spelled, so
@@ -70,10 +73,12 @@ function cycleIds(edges: ReadonlyMap<string, readonly string[]>): string[] {
  * Builds a W3C PROV-JSON-shaped provenance graph for one assertion and its ancestors.
  * Transport (ww:retrievedVia) is recorded as an attribute and never as an agent or authority.
  *
- * The issues are a set of what the walk reaches, not a count of how it got there: each id a walked record names that resolves to nothing,
- * once, then each cycle of the graph walked, once, each in order of code unit. How many there are follows the records reached, never the
- * assertion the walk entered at, the order the records or a list inside one are in, or how the ids are spelled; and the count is never
- * more than the walk's own per-reference, per-back-edge count was, so a record that fitted under that fits under this.
+ * The issues are a set of what the walk reaches, not a count of how it got there: each record a walked record names that resolves to
+ * nothing, once, then each cycle of the graph walked, once, each in order of code unit. A missing record is told apart by its kind as well
+ * as its id, so a missing source and a missing observation that share an id are two issues, as they are two records. How many there are
+ * follows the records reached, never the assertion the walk entered at, the order the records or a list inside one are in, or how the ids
+ * are spelled; and the count is never more than the walk's own per-reference, per-back-edge count was, so a record that fitted under that
+ * fits under this.
  */
 export function traceProvenance(bundle: Bundle, assertionId: string): ProvenanceTrace {
   const idx = indexEvidence(bundle);
@@ -90,8 +95,13 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
   };
   const lineage: ProvenanceTrace["lineage"] = [];
   const visited = new Set<string>();
-  /** Every id a walked record names that resolves to nothing, and what each walked assertion leads to, for the issues the walk ends with. */
-  const dangling = new Set<string>();
+  /** Every record a walked record names that resolves to nothing, as the kinds it is missing in under each id, and what each walked assertion leads to, for the issues the walk ends with. */
+  const missing = new Map<string, Set<RecordKind>>();
+  const miss = (kind: RecordKind, id: string): void => {
+    const kinds = missing.get(id) ?? new Set<RecordKind>();
+    kinds.add(kind);
+    missing.set(id, kinds);
+  };
   const edges = new Map<string, string[]>();
   let relCounter = 0;
   const rel = (p: string): string => `${NS}:${p}${++relCounter}`;
@@ -107,7 +117,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
   const addObservation = (id: string, depth: number): void => {
     const o = idx.observations.get(id);
     if (o === undefined) {
-      dangling.add(id);
+      miss("observation", id);
       return;
     }
     const key = `${NS}:obs/${o.id}`;
@@ -122,7 +132,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
     };
     const s = idx.sources.get(o.sourceId);
     if (s === undefined) {
-      dangling.add(o.sourceId);
+      miss("source", o.sourceId);
       return;
     }
     const agentKey = `${NS}:source/${s.id}`;
@@ -139,7 +149,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
   const walk = (id: string, depth: number): void => {
     const a = idx.assertions.get(id);
     if (a === undefined) {
-      dangling.add(id);
+      miss("assertion", id);
       return;
     }
     if (visited.has(id)) return;
@@ -164,7 +174,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
     if (a.derivationId !== undefined) {
       const d = idx.derivations.get(a.derivationId);
       if (d === undefined) {
-        dangling.add(a.derivationId);
+        miss("derivation", a.derivationId);
       } else {
         const actKey = `${NS}:derivation/${d.id}`;
         prov.activity[actKey] = { "prov:type": "ww:Derivation", "ww:ruleId": d.ruleId, "ww:rulesVersion": d.rulesVersion };
@@ -193,7 +203,7 @@ export function traceProvenance(bundle: Bundle, assertionId: string): Provenance
 
   walk(assertionId, 0);
   const issues: ProvenanceTrace["issues"] = [
-    ...[...dangling].sort(byCodeUnit).map((id) => ({ code: "DANGLING_REFERENCE" as const, id })),
+    ...[...missing.keys()].sort(byCodeUnit).flatMap((id) => Array.from(missing.get(id) ?? [], () => ({ code: "DANGLING_REFERENCE" as const, id }))),
     ...cycleIds(edges).map((id) => ({ code: "DEPENDENCY_CYCLE" as const, id })),
   ];
   return { target: assertionId, lineage, prov, issues };

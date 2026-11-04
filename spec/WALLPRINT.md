@@ -371,8 +371,8 @@ It is `UNREPLAYABLE` (`WWEP_VERSION_MISMATCH`, `MISSING_POLICY_VERSION`, `MISSIN
 a required historical input is not the committed one, the record is invalid, the store fails, or the admission rules of the
 record's version refuse to rebuild from the record's own inputs; then nothing is recomputed: replay never evaluates
 historical evidence under present-day policy and never fills in evidence. A record carries at most 640 provenance issues.
-A trace reports each id that resolves to nothing once and each cycle once, so a bundle is refused for it (`TOO_MANY` on
-`provenance.issues` when a record is built, `REBUILD_REFUSED` when one is replayed) only when the ids that resolve to
+A trace reports each record that resolves to nothing once and each cycle once, so a bundle is refused for it (`TOO_MANY` on
+`provenance.issues` when a record is built, `REBUILD_REFUSED` when one is replayed) only when the records that resolve to
 nothing, with its cycles, number more than 640: never because of how its records are listed, how its ids are spelled or how
 dense a cycle is. A record is never truncated to fit. The rule versions a bundle's derivations
 declare are evidence (the engine flags them with `RULES_VERSION_MISMATCH`) and do not gate replay; only the engine's
