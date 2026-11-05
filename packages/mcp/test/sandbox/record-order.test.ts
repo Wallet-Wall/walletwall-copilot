@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import { claimContracts } from "../../src/claims.ts";
-import { type Assertion, type Bundle, type LimitationCode } from "../../src/schemas.ts";
+import { evaluateBundle } from "../../src/evaluate.ts";
+import { BundleSchema, type Assertion, type Bundle, type LimitationCode, type Observation } from "../../src/schemas.ts";
 import { callTool } from "../../src/tools.ts";
 import { WallPrintError } from "../../src/wallprint/errors.ts";
 import { buildWallPrintSnapshot, externalAssessmentAdmissionFindings, wallPrintDigest, wallPrintPayload } from "../../src/wallprint/record.ts";
@@ -986,15 +987,15 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
     assert.deepEqual(violations(b), []);
   });
 
-  test("CONTROL: a well-formed supersession retires either: it is SUPERSEDED and out of detection, and the other reads as if alone", () => {
+  test("BUG: a well-formed supersession retires either, and the disagreement stays: it is SUPERSEDED and lists the other, which reads CONFLICTING and is not met", () => {
     for (const [victim, survivor] of [["a-rival", "a-balance"], ["a-balance", "a-rival"]] as const) {
       const b = supersede(rivals(), [victim, "a-newer"]);
       assert.equal(byId(b, victim).supportState, "SUPERSEDED", victim);
       assert.equal(byId(b, victim).supersededBy, "a-newer", victim);
-      assert.deepEqual(byId(b, victim).conflictsWith, [], victim);
-      assert.equal(byId(b, survivor).supportState, "ESTABLISHED", victim);
-      assert.deepEqual(byId(b, survivor).conflictsWith, [], victim);
-      assert.equal(readinessOver(b, survivor).classification, "CRITERIA_MET", victim);
+      assert.deepEqual(byId(b, victim).conflictsWith, [survivor], victim);
+      assert.equal(byId(b, survivor).supportState, "CONFLICTING", victim);
+      assert.deepEqual(byId(b, survivor).conflictsWith, [victim], victim);
+      assert.equal(readinessOver(b, survivor).classification, "NOT_ESTABLISHED", victim);
       assert.deepEqual(violations(b), [], victim);
     }
   });
@@ -1038,22 +1039,24 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
     });
   }
 
-  test("CONTROL: beside a well-formed record for the same assertion, a faulty one changes nothing: the well-formed one retires it, in either order", () => {
+  test("BUG: beside a well-formed record for the same assertion, a faulty one changes nothing: the well-formed one retires it, and the disagreement it leaves stays, in either order", () => {
     for (const b of everySupersessionOrder({ ...rivals(), supersessions: [supersession("s-1", "a-rival", "a-newer"), supersession("s-2", "a-rival", "a-ghost")] })) {
       assert.equal(byId(b, "a-rival").supportState, "SUPERSEDED", supersessionIds(b));
       assert.equal(byId(b, "a-rival").supersededBy, "a-newer", supersessionIds(b));
-      assert.deepEqual(byId(b, "a-rival").conflictsWith, [], supersessionIds(b));
-      assert.equal(byId(b, "a-balance").supportState, "ESTABLISHED", supersessionIds(b));
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance"], supersessionIds(b));
+      assert.equal(byId(b, "a-balance").supportState, "CONFLICTING", supersessionIds(b));
     }
   });
 
-  test("CONTROL: a record is judged for the assertion it names: a faulty one beside a well-formed one for the other leaves the other out, and the first compared with nothing", () => {
+  test("BUG: a record is judged for the assertion it names: a faulty one beside a well-formed one for the other leaves its assertion among those compared, and the retired one is compared with it", () => {
     for (const b of everySupersessionOrder({ ...rivals(), supersessions: [supersession("s-1", "a-rival", "a-ghost"), supersession("s-2", "a-balance", "a-newer")] })) {
-      // a-balance is retired by a well-formed record, so a-rival, whose record is not, is compared with nothing and has no conflict.
+      // a-balance is retired by a well-formed record, so it is SUPERSEDED, and a-rival, whose record is not, is live: it stays compared, with a-balance,
+      // which dissents. It reads the weaker of that conflict and SUPERSEDED, which is CONFLICTING, and carries the faulty record's limitation.
       assert.equal(byId(b, "a-balance").supportState, "SUPERSEDED", supersessionIds(b));
-      assert.deepEqual(byId(b, "a-balance").conflictsWith, [], supersessionIds(b));
-      assert.deepEqual(byId(b, "a-rival").conflictsWith, [], supersessionIds(b));
-      assert.equal(byId(b, "a-rival").supportState, "SUPERSEDED", supersessionIds(b));
+      assert.deepEqual(byId(b, "a-balance").conflictsWith, ["a-rival"], supersessionIds(b));
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance"], supersessionIds(b));
+      assert.equal(byId(b, "a-rival").supportState, "CONFLICTING", supersessionIds(b));
+      assert.ok(byId(b, "a-rival").limitations.includes("SUPERSEDED"), supersessionIds(b));
     }
   });
 
@@ -1133,6 +1136,606 @@ describe("a supersession that cannot be valid takes nothing out of conflict dete
           }
         }
       }
+    });
+  });
+});
+
+/**
+ * A retirement ends the standing of the assertion it names, not a disagreement that assertion was part of. a-balance (1,500,000) and a-rival (1,400,000)
+ * are two readings of one block, each ESTABLISHED alone and both CONFLICTING together. Whichever one a record that can be valid retires, whatever its
+ * superseding assertion carries (nothing, the other reading, a copy of its observation, weak evidence, a later block), the other is still compared with it:
+ * it reads CONFLICTING, and the retired one reads SUPERSEDED and lists it, as a declared conflict leaves an assertion that is retired. Every expectation is
+ * written by hand from the published contract (spec/EVIDENCE_PROFILE.md, section 8, step 3), or relates two of the engine's own answers.
+ */
+describe("a retirement ends the standing of what it retires, not a disagreement it was part of", () => {
+  type Victim = "a-balance" | "a-rival";
+  const READING: Readonly<Record<Victim, { obs: string; atomic: string }>> = { "a-balance": { obs: "obs-balance", atomic: "1500000" }, "a-rival": { obs: "obs-rival", atomic: "1400000" } };
+  const BOTH: readonly Victim[] = ["a-rival", "a-balance"];
+  const survivorOf = (v: Victim): Victim => (v === "a-rival" ? "a-balance" : "a-rival");
+  const amount = (atomic: string): { balanceAtomic: string; decimals: string } => ({ balanceAtomic: atomic, decimals: "6" });
+  const NEXT_BLOCK = balanceSubject({ blockNumber: "21000009", blockHash: `0x${"cd".repeat(31)}09` });
+  const BLOCK_AFTER = balanceSubject({ blockNumber: "21000010", blockHash: `0x${"cd".repeat(31)}10` });
+  interface Readiness {
+    classification: string;
+    criteria: { id: string; outcome: string; reason: string }[];
+  }
+  const readinessFor = (b: Bundle, balanceId: string): Readiness => readiness(b, "a-identity", balanceId) as Readiness;
+  const withoutRecords = (b: Bundle): Bundle => ({ ...clone(b), supersessions: [] });
+  /** rivals() and a successor named a-succ, of the shape `over` gives, and one record that retires `victim` with it. */
+  const retiredBy = (victim: Victim, over: Partial<Assertion>, observations: Observation[] = []): Bundle => {
+    const b = rivals();
+    b.observations.push(...observations);
+    b.assertions.push(balanceAssertion({ id: "a-succ", assertedAt: EVALUATED_AT, ...over }));
+    return supersede(b, [victim, "a-succ"]);
+  };
+
+  interface Shape {
+    label: string;
+    victims: readonly Victim[];
+    build: (victim: Victim) => Bundle;
+    /** What the record makes the retired assertion read as superseded by. */
+    to: string;
+    /** The live assertions of the retired one's group, which it stays compared with: the survivor, and a superseding assertion of the same block. */
+    group: (victim: Victim) => readonly string[];
+  }
+  const SHAPES: readonly Shape[] = [
+    { label: "an empty successor at a later block", victims: BOTH, to: "a-succ", group: (v) => [survivorOf(v)], build: (v) => retiredBy(v, { subject: NEXT_BLOCK, observationIds: [], value: null }) },
+    { label: "an empty CURRENT successor of the same block", victims: BOTH, to: "a-succ", group: (v) => [survivorOf(v)], build: (v) => retiredBy(v, { temporality: "CURRENT", observationIds: [], value: null }) },
+    {
+      label: "a successor of the same block that cites the survivor's own observation, which agrees with the survivor and brings nothing",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v), "a-succ"],
+      build: (v) => retiredBy(v, { observationIds: [READING[survivorOf(v)].obs], value: amount(READING[survivorOf(v)].atomic) }),
+    },
+    { label: "a successor of the same block with a value and no source", victims: BOTH, to: "a-succ", group: (v) => [survivorOf(v), "a-succ"], build: (v) => retiredBy(v, { observationIds: [], value: amount(READING[survivorOf(v)].atomic) }) },
+    {
+      label: "a chain of successors that carry nothing",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v)],
+      build: (v) => {
+        const b = rivals();
+        b.assertions.push(balanceAssertion({ id: "a-succ", subject: NEXT_BLOCK, observationIds: [], value: null, assertedAt: EVALUATED_AT }));
+        b.assertions.push(balanceAssertion({ id: "a-succ-2", subject: BLOCK_AFTER, observationIds: [], value: null, assertedAt: "2026-10-23T12:00:31Z" }));
+        return supersede(b, [v, "a-succ"], ["a-succ", "a-succ-2"]);
+      },
+    },
+    {
+      label: "a provider-reported successor of the same block that agrees with the survivor, whose evidence is weak",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v), "a-succ"],
+      build: (v) =>
+        retiredBy(v, { origin: "PROVIDER_OBSERVED", observationIds: ["obs-weak"], value: amount(READING[survivorOf(v)].atomic) }, [
+          balanceObservation({ id: "obs-weak", sourceId: "src-prov-a", origin: "PROVIDER_OBSERVED", payload: amount(READING[survivorOf(v)].atomic) }),
+        ]),
+    },
+    { label: "an evidenced successor at a later block", victims: BOTH, to: "a-newer", group: (v) => [survivorOf(v)], build: (v) => supersede(rivals(), [v, "a-newer"]) },
+    {
+      label: "an evidenced CURRENT successor of the same block",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v)],
+      build: (v) => retiredBy(v, { temporality: "CURRENT", observationIds: ["obs-succ"], value: amount(READING[survivorOf(v)].atomic) }, [balanceObservation({ id: "obs-succ", payload: amount(READING[survivorOf(v)].atomic) })]),
+    },
+    {
+      label: "a successor that cites the survivor's observation and a copy of it under a new id",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v), "a-succ"],
+      build: (v) =>
+        retiredBy(v, { observationIds: [READING[survivorOf(v)].obs, "obs-copy"], value: amount(READING[survivorOf(v)].atomic) }, [balanceObservation({ id: "obs-copy", payload: amount(READING[survivorOf(v)].atomic) })]),
+    },
+    {
+      label: "a retired assertion whose own observations disagree, because it also cites the survivor's",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v)],
+      build: (v) => {
+        const b = retiredBy(v, { subject: NEXT_BLOCK, observationIds: [], value: null });
+        b.assertions = b.assertions.map((a) => (a.id === v ? { ...a, observationIds: [READING[v].obs, READING[survivorOf(v)].obs] } : a));
+        return b;
+      },
+    },
+    {
+      label: "a retired assertion whose own observations disagree, because it cites the survivor's first",
+      victims: BOTH,
+      to: "a-succ",
+      group: (v) => [survivorOf(v)],
+      build: (v) => {
+        const b = retiredBy(v, { subject: NEXT_BLOCK, observationIds: [], value: null });
+        b.assertions = b.assertions.map((a) => (a.id === v ? { ...a, observationIds: [READING[survivorOf(v)].obs, READING[v].obs] } : a));
+        return b;
+      },
+    },
+    {
+      label: "three live assertions that agree, against the one retired",
+      victims: ["a-balance"],
+      to: "a-succ",
+      group: () => ["a-rival", "a-rival-2", "a-rival-3"],
+      build: (v) => {
+        const b = retiredBy(v, { subject: NEXT_BLOCK, observationIds: [], value: null });
+        for (const id of ["a-rival-2", "a-rival-3"]) {
+          b.observations.push(balanceObservation({ id: `obs-${id}`, payload: amount("1400000") }));
+          b.assertions.push(balanceAssertion({ id, observationIds: [`obs-${id}`], value: amount("1400000") }));
+        }
+        return b;
+      },
+    },
+  ];
+
+  for (const shape of SHAPES) {
+    for (const victim of shape.victims) {
+      const survivor = survivorOf(victim);
+      describe(`${shape.label}, retiring ${victim}`, () => {
+        test(`BUG: ${victim} reads SUPERSEDED and lists what it stays compared with, which reads CONFLICTING and lists it`, () => {
+          const b = shape.build(victim);
+          const group = [...shape.group(victim)].sort();
+          const retired = byId(b, victim);
+          assert.equal(retired.supportState, "SUPERSEDED");
+          assert.equal(retired.supersededBy, shape.to);
+          assert.deepEqual(retired.conflictsWith, group);
+          assert.ok(retired.limitations.includes("SUPERSEDED"), retired.limitations.join());
+          assert.ok(!retired.limitations.includes("CONFLICT_DETECTED"), "as a declared conflict leaves an assertion that is retired");
+          for (const id of group) {
+            const e = byId(b, id);
+            assert.equal(e.supportState, "CONFLICTING", id);
+            assert.deepEqual(e.conflictsWith, [victim, ...group.filter((x) => x !== id)].sort(), id);
+            assert.ok(e.limitations.includes("CONFLICT_DETECTED"), `${id}: ${e.limitations.join()}`);
+          }
+        });
+
+        test(`BUG: readiness over ${survivor} is NOT_ESTABLISHED, because of the conflict`, () => {
+          const r = readinessFor(shape.build(victim), survivor);
+          assert.equal(r.classification, "NOT_ESTABLISHED");
+          const c5 = r.criteria.find((c) => c.id === "C5");
+          assert.equal(c5?.outcome, "INDETERMINATE");
+          assert.equal(c5?.reason, "CONFLICT_OR_SUPERSESSION");
+        });
+
+        test("CONTROL: the record is well formed and the conflict was there, so check_invariants reports what it reports without the record, and no more", () => {
+          const b = shape.build(victim);
+          assert.deepEqual(violations(b), violations(withoutRecords(b)));
+        });
+
+        test("CONTROL: the assertions that are not in the group read as they do without the record", () => {
+          const b = shape.build(victim);
+          const group = new Set([victim, ...shape.group(victim)]);
+          const without = inspect(withoutRecords(b)).assertions;
+          for (const e of inspect(b).assertions) {
+            if (group.has(e.assertionId) || e.assertionId === shape.to) continue;
+            const alone = without.find((x) => x.assertionId === e.assertionId) as Evaluated;
+            assert.deepEqual({ ...e, supersededBy: null }, { ...alone, supersededBy: null }, e.assertionId);
+          }
+        });
+      });
+    }
+  }
+
+  for (const victim of BOTH) {
+    const survivor = survivorOf(victim);
+    test(`BUG: ${survivor} declared ESTABLISHED is INV-03, which it could not be while the conflict was hidden`, () => {
+      const b = retiredBy(victim, { subject: NEXT_BLOCK, observationIds: [], value: null });
+      b.assertions = b.assertions.map((a) => (a.id === survivor ? { ...a, declared: { supportState: "ESTABLISHED" as const } } : a));
+      assert.deepEqual(violations(b), [`${survivor} INV-03 CONFLICT_SATISFIES_ESTABLISHED`]);
+    });
+  }
+
+  describe("what ends the standing of a retired assertion and what does not end its disagreement", () => {
+    test("CONTROL: both disagreeing assertions retired by one evidenced assertion leave nothing to disagree: both are SUPERSEDED and in no conflict, and the assertion that replaces them reads as if alone", () => {
+      const b = supersede(rivals(), ["a-rival", "a-newer"], ["a-balance", "a-newer"]);
+      for (const id of BOTH) {
+        assert.equal(byId(b, id).supportState, "SUPERSEDED", id);
+        assert.deepEqual(byId(b, id).conflictsWith, [], id);
+      }
+      assert.equal(byId(b, "a-newer").supportState, "ESTABLISHED");
+      assert.deepEqual(byId(b, "a-newer").conflictsWith, []);
+      assert.equal(readinessFor(b, "a-newer").classification, "CRITERIA_MET");
+      assert.deepEqual(violations(b), []);
+    });
+
+    test("CONTROL: a reading with no rival, retired by a later one, is SUPERSEDED and in no conflict: the designed use", () => {
+      const b = supersede(balances("a-newer"), ["a-balance", "a-newer"]);
+      assert.equal(byId(b, "a-balance").supportState, "SUPERSEDED");
+      assert.deepEqual(byId(b, "a-balance").conflictsWith, []);
+      assert.equal(byId(b, "a-newer").supportState, "ESTABLISHED");
+      assert.deepEqual(violations(b), []);
+    });
+
+    test("CONTROL: naming the live assertion as the successor is the explicit way to say that it replaces the retired one: it reads as if alone, and the retired one points at it", () => {
+      const b = rivals();
+      b.assertions = b.assertions.map((a) => (a.id === "a-rival" ? { ...a, assertedAt: EVALUATED_AT } : a));
+      const named = supersede(b, ["a-balance", "a-rival"]);
+      assert.equal(byId(named, "a-balance").supportState, "SUPERSEDED");
+      assert.equal(byId(named, "a-balance").supersededBy, "a-rival");
+      assert.deepEqual(byId(named, "a-balance").conflictsWith, []);
+      assert.equal(byId(named, "a-rival").supportState, "ESTABLISHED");
+      assert.deepEqual(byId(named, "a-rival").conflictsWith, []);
+      assert.equal(readinessFor(named, "a-rival").classification, "CRITERIA_MET");
+      assert.deepEqual(violations(named), []);
+    });
+
+    test("CONTROL: a successor reached through a chain of records counts as a successor: naming the live assertion at the end of the chain says the same", () => {
+      const b = rivals();
+      b.assertions = b.assertions.map((a) => (a.id === "a-rival" ? { ...a, assertedAt: "2026-10-23T12:00:31Z" } : a));
+      const chain = supersede(b, ["a-balance", "a-newer"], ["a-newer", "a-rival"]);
+      assert.equal(byId(chain, "a-rival").supportState, "ESTABLISHED", "a-rival is the end of the chain from a-balance");
+      assert.deepEqual(byId(chain, "a-rival").conflictsWith, []);
+      assert.deepEqual(byId(chain, "a-balance").conflictsWith, []);
+    });
+
+    test("CONTROL: a retired assertion that no observation supports dissents from nothing: its value is its own, and the live one reads as if alone", () => {
+      const junk: Partial<Assertion>[] = [{ value: amount("7") }, { observationIds: [] }, { observationIds: ["obs-ghost"] }];
+      for (const over of junk) {
+        const b = supersede(rivals(), ["a-balance", "a-newer"]);
+        b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, ...over } : a));
+        assert.equal(byId(b, "a-rival").supportState, "ESTABLISHED", JSON.stringify(over));
+        assert.deepEqual(byId(b, "a-rival").conflictsWith, [], JSON.stringify(over));
+        assert.deepEqual(byId(b, "a-balance").conflictsWith, [], JSON.stringify(over));
+      }
+    });
+
+    test("CONTROL: a live assertion with no evidence of its own is not one the retired assertion disagrees with: nothing is linked", () => {
+      const bare: Partial<Assertion>[] = [{ observationIds: [], value: null }, { observationIds: [] }, { observationIds: ["obs-ghost"] }];
+      for (const over of bare) {
+        const b = supersede(rivals(), ["a-balance", "a-newer"]);
+        b.assertions = b.assertions.map((a) => (a.id === "a-rival" ? { ...a, ...over } : a));
+        assert.deepEqual(byId(b, "a-rival").conflictsWith, [], JSON.stringify(over));
+        assert.deepEqual(byId(b, "a-balance").conflictsWith, [], JSON.stringify(over));
+      }
+    });
+
+    test("CONTROL: live assertions that already disagree are in conflict already: the retired one is not added to it", () => {
+      const b = retiredBy("a-balance", { observationIds: ["obs-balance"], value: amount("1500000") });
+      // a-succ (1,500,000, citing a-balance's observation) retires a-balance and disagrees with a-rival: the live group a-rival, a-succ is in conflict
+      // without the retired a-balance, which is linked to neither.
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-succ"]);
+      assert.deepEqual(byId(b, "a-succ").conflictsWith, ["a-rival"]);
+      assert.deepEqual(byId(b, "a-balance").conflictsWith, []);
+    });
+
+    test("CONTROL: a pair that a declared conflict already links keeps its cause, and nothing else is added to it", () => {
+      const b = supersede(rivals(), ["a-rival", "a-newer"]);
+      b.conflicts = [{ id: "c-1", assertionIds: ["a-balance", "a-rival"], reason: "VALUE_DISAGREEMENT" }];
+      const survivor = byId(b, "a-balance");
+      assert.equal(survivor.supportState, "CONFLICTING");
+      assert.deepEqual(survivor.conflictsWith, ["a-rival"]);
+      assert.ok(survivor.limitations.includes("CONFLICT_DECLARED"), survivor.limitations.join());
+      assert.ok(!survivor.limitations.includes("CONFLICT_DETECTED"), "the declared cause is the first, and stays");
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance"]);
+    });
+
+    test("CONTROL: a retired assertion that reads what the live one reads dissents from nothing: they are not in conflict", () => {
+      const b = golden();
+      b.observations.push(balanceObservation({ id: "obs-balance-dup" }));
+      b.assertions.push(balanceAssertion({ id: "a-balance-dup", observationIds: ["obs-balance-dup"] }));
+      b.assertions.push(balanceAssertion({ id: "a-next", subject: NEXT_BLOCK, observationIds: [], value: null, assertedAt: EVALUATED_AT }));
+      const retired = supersede(b, ["a-balance-dup", "a-next"]);
+      assert.equal(byId(retired, "a-balance-dup").supportState, "SUPERSEDED");
+      assert.deepEqual(byId(retired, "a-balance-dup").conflictsWith, []);
+      assert.equal(byId(retired, "a-balance").supportState, "ESTABLISHED");
+      assert.deepEqual(byId(retired, "a-balance").conflictsWith, []);
+    });
+
+    test("CONTROL: a pair that a declared conflict already links leaves nothing to add: a live assertion with no evidence stays out of it", () => {
+      const b = supersede(rivals(), ["a-rival", "a-newer"]);
+      b.assertions.push(balanceAssertion({ id: "a-twin", observationIds: [], value: amount("1500000") }));
+      b.conflicts = [{ id: "c-1", assertionIds: ["a-balance", "a-rival"], reason: "VALUE_DISAGREEMENT" }];
+      assert.deepEqual(byId(b, "a-twin").conflictsWith, [], "a-twin has no evidence, and the one that has is linked already");
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance"]);
+    });
+
+    test("BUG: weak evidence is evidence: a live assertion that one provider reports is still the partner of a retired one that disagrees", () => {
+      const b = supersede(rivals(), ["a-balance", "a-newer"]);
+      b.observations = b.observations.map((o) => (o.id === "obs-rival" ? { ...o, sourceId: "src-prov-a", origin: "PROVIDER_OBSERVED" as const } : o));
+      b.assertions = b.assertions.map((a) => (a.id === "a-rival" ? { ...a, origin: "PROVIDER_OBSERVED" as const } : a));
+      assert.equal(byId(b, "a-rival").supportState, "CONFLICTING");
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance"]);
+    });
+    describe("how much evidence is evidence", () => {
+      /** golden(), and two CURRENT balances of one block that disagree, the first retired by a later one: the observations are as old or as empty as `over` says. */
+      const currentPair = (retiredObs: Partial<Observation>, liveObs: Partial<Observation>, retiredOver: Partial<Assertion> = {}, liveOver: Partial<Assertion> = {}): Bundle => {
+        const b = golden();
+        b.observations.push(balanceObservation({ id: "obs-t", payload: amount("1400000"), ...retiredObs }), balanceObservation({ id: "obs-p", payload: amount("1500000"), ...liveObs }));
+        b.assertions.push(
+          balanceAssertion({ id: "a-cur-t", temporality: "CURRENT", observationIds: ["obs-t"], value: amount("1400000"), ...retiredOver }),
+          balanceAssertion({ id: "a-cur-p", temporality: "CURRENT", observationIds: ["obs-p"], value: amount("1500000"), ...liveOver }),
+          balanceAssertion({ id: "a-cur-n", temporality: "CURRENT", subject: NEXT_BLOCK, observationIds: [], value: null, assertedAt: EVALUATED_AT }),
+        );
+        return supersede(b, ["a-cur-t", "a-cur-n"]);
+      };
+      const OLD = { observedAt: "2026-10-22T00:00:00Z" };
+      const NO_RESULT = { result: "NO_RESULT" as const, payload: {} };
+
+      test("BUG: a stale reading is still evidence: a retired one and a live one that only STALE evidence supports stay in conflict", () => {
+        const b = currentPair(OLD, OLD);
+        assert.equal(byId(b, "a-cur-p").supportState, "CONFLICTING");
+        assert.deepEqual(byId(b, "a-cur-p").conflictsWith, ["a-cur-t"]);
+        assert.deepEqual(byId(b, "a-cur-t").conflictsWith, ["a-cur-p"]);
+      });
+
+      test("CONTROL: a reading that only a NO_RESULT supports is no evidence, retired or live", () => {
+        for (const [label, b] of [["retired", currentPair(NO_RESULT, OLD, { value: null })], ["live", currentPair(OLD, NO_RESULT, {}, { value: null })]] as const) {
+          assert.deepEqual(byId(b, "a-cur-t").conflictsWith, [], label);
+          assert.deepEqual(byId(b, "a-cur-p").conflictsWith, [], label);
+        }
+      });
+
+      test("CONTROL: a live assertion whose own observations disagree has no evidence taken whole: it is not the partner", () => {
+        const b = supersede(rivals(), ["a-balance", "a-newer"]);
+        b.assertions = b.assertions.map((a) => (a.id === "a-rival" ? { ...a, observationIds: ["obs-rival", "obs-balance"] } : a));
+        assert.deepEqual(byId(b, "a-rival").conflictsWith, []);
+        assert.deepEqual(byId(b, "a-balance").conflictsWith, []);
+      });
+
+      test("CONTROL: a claim that may not be derived has no derivation to rest on: the retired one dissents from nothing", () => {
+        const b = supersede(rivals(), ["a-balance", "a-newer"]);
+        b.derivations.push({ id: "d-bal", ...USD_RULE, inputAssertionIds: ["a-price"], outputAssertionId: "a-balance" });
+        b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, derivationId: "d-bal" } : a));
+        assert.deepEqual(byId(b, "a-rival").conflictsWith, []);
+      });
+
+      test("BUG: a derived assertion with one input that resolves and one that does not has evidence of its own", () => {
+        const b = golden();
+        addUsd(b, "a-usd-t", ["a-balance", "a-ghost"], [...USD_LIMITATIONS]);
+        addUsd(b, "a-usd-p", ["a-balance", "a-price"], [...USD_LIMITATIONS], { value: { usdScaled18: "2000200000000000000", rounding: "FLOOR_SCALED_18" } });
+        addUsd(b, "a-usd-s", ["a-balance", "a-price"], [...USD_LIMITATIONS], { subject: NEXT_BLOCK, assertedAt: "2026-10-23T12:00:31Z" });
+        const kept = supersede(b, ["a-usd-t", "a-usd-s"]);
+        assert.deepEqual(byId(kept, "a-usd-t").conflictsWith, ["a-usd-p"]);
+      });
+    });
+    test("BUG: a record that cannot be valid names no successor: the assertion it names is compared with the retired one like any other", () => {
+      // s-1 retires a-rival with a-newer. s-2 names a-balance, which is not later than a-rival, so it is faulty and replaces nothing.
+      const b = supersede(rivals(), ["a-rival", "a-newer"], ["a-rival", "a-balance"]);
+      assert.ok(violations(b).includes("a-rival INV-12 SUPERSESSION_NOT_FORWARD_IN_TIME"), violations(b).join());
+      assert.equal(byId(b, "a-balance").supportState, "CONFLICTING");
+      assert.deepEqual(byId(b, "a-balance").conflictsWith, ["a-rival"]);
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance"]);
+    });
+
+    test("BUG: a retired assertion that cites an observation that does not exist is reported once for it, and what its other observation supports stays in conflict", () => {
+      const b = supersede(rivals(), ["a-balance", "a-newer"]);
+      b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, observationIds: ["obs-ghost", "obs-balance"] } : a));
+      assert.equal(byId(b, "a-rival").supportState, "CONFLICTING");
+      assert.deepEqual(violations(b).filter((v) => v.startsWith("a-balance ")), ["a-balance INV-00 DANGLING_REFERENCE"]);
+      const found = evaluateBundle(BundleSchema.parse(b), EVALUATED_AT).violations.filter((v) => v.assertionId === "a-balance");
+      assert.equal(found.length, 1, "the read that finds what its observations support adds nothing of its own: " + JSON.stringify(found));
+    });
+
+    test("BUG: among live assertions the one with evidence of its own is the partner, however many without it are listed before it", () => {
+      const b = supersede(rivals(), ["a-balance", "a-newer"]);
+      b.assertions.unshift(balanceAssertion({ id: "a-bare", observationIds: [], value: amount("1400000") }));
+      assert.equal(byId(b, "a-rival").supportState, "CONFLICTING");
+      assert.deepEqual(byId(b, "a-rival").conflictsWith, ["a-balance", "a-bare"]);
+      assert.deepEqual(byId(b, "a-bare").conflictsWith, ["a-balance", "a-rival"], "the group is linked with the live assertion that has no evidence too");
+    });
+
+    describe("a derived assertion", () => {
+      const NEXT_USD = { subject: NEXT_BLOCK, assertedAt: "2026-10-23T12:00:31Z" };
+      /** golden(), and two USD values of its block that disagree, the first retired by a later USD value of the next block. */
+      const usdPair = (over: Partial<Assertion> = {}, partner: Partial<Assertion> = {}): Bundle => {
+        const b = golden();
+        addUsd(b, "a-usd-t", ["a-balance", "a-price"], [...USD_LIMITATIONS], over);
+        addUsd(b, "a-usd-p", ["a-balance", "a-price"], [...USD_LIMITATIONS], { value: { usdScaled18: "2000200000000000000", rounding: "FLOOR_SCALED_18" }, ...partner });
+        addUsd(b, "a-usd-s", ["a-balance", "a-price"], [...USD_LIMITATIONS], NEXT_USD);
+        return supersede(b, ["a-usd-t", "a-usd-s"]);
+      };
+
+      test("BUG: has evidence of its own where its derivation resolves and an input does, so a retired one stays in conflict with a live one that is not its successor", () => {
+        const b = usdPair();
+        assert.equal(byId(b, "a-usd-t").supportState, "SUPERSEDED");
+        assert.deepEqual(byId(b, "a-usd-t").conflictsWith, ["a-usd-p"]);
+        assert.equal(byId(b, "a-usd-p").supportState, "CONFLICTING");
+        assert.deepEqual(byId(b, "a-usd-p").conflictsWith, ["a-usd-t"]);
+      });
+
+      test("CONTROL: has none where its derivation does not resolve, does not name it as its output, or has no input that resolves: it neither dissents nor is dissented from", () => {
+        for (const [label, retired, live] of [
+          ["the retired one's derivation resolves to nothing", { derivationId: "d-missing" }, {}],
+          ["the live one's derivation resolves to nothing", {}, { derivationId: "d-missing" }],
+        ] as const) {
+          const b = usdPair(retired, live);
+          assert.deepEqual(byId(b, "a-usd-t").conflictsWith, [], label);
+          assert.deepEqual(byId(b, "a-usd-p").conflictsWith, [], label);
+        }
+        for (const [label, id] of [["the retired one", "a-usd-t"], ["the live one", "a-usd-p"]] as const) {
+          const b = usdPair();
+          b.derivations = b.derivations.map((d) => (d.outputAssertionId === id ? { ...d, inputAssertionIds: ["a-ghost-1", "a-ghost-2"] } : d));
+          assert.deepEqual(byId(b, "a-usd-t").conflictsWith, [], `inputs of ${label} resolve to nothing`);
+          assert.deepEqual(byId(b, "a-usd-p").conflictsWith, [], `inputs of ${label} resolve to nothing`);
+        }
+        const other = usdPair();
+        other.derivations = other.derivations.map((d) => (d.outputAssertionId === "a-usd-t" ? { ...d, outputAssertionId: "a-usd-p" } : d));
+        assert.deepEqual(byId(other, "a-usd-t").conflictsWith, [], "a derivation that names another assertion as its output is no evidence for this one");
+      });
+    });
+
+    test("BUG: a correction that retires only the wrong reading leaves the other in conflict with it, until it is retired too", () => {
+      const only = retiredBy("a-rival", { observationIds: ["obs-succ"], value: amount("1500000") }, [balanceObservation({ id: "obs-succ", payload: amount("1500000") })]);
+      assert.equal(byId(only, "a-balance").supportState, "CONFLICTING", "a-balance agrees with the correction but is not its successor");
+      assert.deepEqual(byId(only, "a-rival").conflictsWith, ["a-balance", "a-succ"]);
+      const both = supersede(only, ["a-rival", "a-succ"], ["a-balance", "a-succ"]);
+      assert.equal(byId(both, "a-succ").supportState, "ESTABLISHED", "retiring both leaves one reading");
+      for (const id of BOTH) assert.deepEqual(byId(both, id).conflictsWith, [], id);
+      assert.equal(readinessFor(both, "a-succ").classification, "CRITERIA_MET");
+    });
+  });
+
+  describe("over every successor shape, what is compared is what the contract says", () => {
+    const lower = (v: unknown): string => String(v).toLowerCase();
+    const groupOf = (a: Assertion): string => [a.temporality, ...["chainId", "token", "holder", "blockNumber", "blockHash"].map((k) => lower(a.subject[k]))].join("|");
+    const identityOf = (a: Assertion): string => ["chainId", "token", "holder"].map((k) => lower(a.subject[k])).join("|");
+    const valueOf = (a: Assertion): string => (a.value === null || a.value === undefined ? "null" : `${String(a.value["balanceAtomic"])}|${String(a.value["decimals"])}`);
+    /** Written from the contract for this file's own count: whether a record is well formed. */
+    const wellFormed = (b: Bundle, s: Supersession): boolean => {
+      const older = b.assertions.find((a) => a.id === s.supersededAssertionId);
+      const newer = b.assertions.find((a) => a.id === s.supersedingAssertionId);
+      if (older === undefined || newer === undefined || older === newer || older.claimType !== newer.claimType) return false;
+      return identityOf(older) === identityOf(newer) && Date.parse(newer.assertedAt) > Date.parse(older.assertedAt);
+    };
+    /** What an assertion's observations give it, read by the engine on a bundle with no record and no other assertion: the engine's own answer about its evidence. */
+    const readAlone = (b: Bundle, a: Assertion, observationIds: readonly string[]): string => {
+      const alone: Bundle = { ...clone(b), assertions: [{ ...clone(a), observationIds: [...observationIds] }], supersessions: [], conflicts: [], derivations: [] };
+      return byId(alone, a.id).supportState;
+    };
+    const atLeastStale = (state: string): boolean => WEAKEST_FIRST.indexOf(state) >= WEAKEST_FIRST.indexOf("STALE");
+    const edgesOf = (b: Bundle): string[] =>
+      inspect(b).assertions
+        .flatMap((e) => e.conflictsWith.map((o) => `${e.assertionId}>${o}`))
+        .sort();
+    /** The conflicts the contract gives: the live assertions of a group that disagree are linked, and a retired assertion that something supports stays linked with live ones that agree and are not its successors. */
+    const expectedEdges = (b: Bundle): string[] => {
+      const balances = b.assertions.filter((a) => a.claimType === "TOKEN_BALANCE_AT_BLOCK");
+      const retired = new Set(b.supersessions?.filter((s) => wellFormed(b, s)).map((s) => s.supersededAssertionId));
+      const successorsOf = (id: string): Set<string> => {
+        const seen = new Set<string>();
+        const todo = (b.supersessions ?? []).filter((s) => wellFormed(b, s) && s.supersededAssertionId === id).map((s) => s.supersedingAssertionId);
+        for (let x = todo.pop(); x !== undefined; x = todo.pop()) {
+          if (seen.has(x)) continue;
+          seen.add(x);
+          todo.push(...(b.supersessions ?? []).filter((s) => wellFormed(b, s) && s.supersededAssertionId === x).map((s) => s.supersedingAssertionId));
+        }
+        return seen;
+      };
+      const edges = new Set<string>();
+      const clique = (ids: readonly string[]): void => {
+        for (const x of ids) for (const y of ids) if (x !== y) edges.add(`${x}>${y}`);
+      };
+      for (const key of new Set(balances.map(groupOf))) {
+        const members = balances.filter((a) => groupOf(a) === key);
+        const live = members.filter((a) => !retired.has(a.id));
+        if (new Set(live.map(valueOf)).size > 1) clique(live.map((a) => a.id));
+        else if (live.length > 0) {
+          const dissenters = members.filter(
+            (t) =>
+              retired.has(t.id) &&
+              [...new Set(t.observationIds)].some((o) => atLeastStale(readAlone(b, t, [o]))) &&
+              live.some((p) => !successorsOf(t.id).has(p.id) && valueOf(p) !== valueOf(t) && atLeastStale(readAlone(b, p, p.observationIds))),
+          );
+          if (dissenters.length > 0) clique([...live, ...dissenters].map((a) => a.id));
+        }
+      }
+      return [...edges].sort();
+    };
+
+    interface Variation {
+      victim: Victim;
+      block: "same" | "later";
+      temporality: "PINNED" | "CURRENT";
+      evidence: "none" | "cites the survivor" | "fresh" | "provider" | "copy";
+      value: "none" | "survivor's" | "retired's";
+      records: "T>S" | "T>S and P>S" | "T>S and S>S2";
+      forward: boolean;
+      pill: boolean;
+    }
+    const worlds = (): Variation[] => {
+      const out: Variation[] = [];
+      for (const victim of BOTH)
+        for (const block of ["same", "later"] as const)
+          for (const temporality of ["PINNED", "CURRENT"] as const)
+            for (const evidence of ["none", "cites the survivor", "fresh", "provider", "copy"] as const)
+              for (const value of ["none", "survivor's", "retired's"] as const)
+                for (const records of ["T>S", "T>S and P>S", "T>S and S>S2"] as const)
+                  for (const forward of [true, false])
+                    for (const pill of [false, true]) out.push({ victim, block, temporality, evidence, value, records, forward, pill });
+      return out;
+    };
+    const build = (w: Variation): Bundle => {
+      const survivor = survivorOf(w.victim);
+      const b = rivals();
+      const subject = w.block === "same" ? balanceSubject() : NEXT_BLOCK;
+      const atomic = w.value === "none" ? null : w.value === "survivor's" ? READING[survivor].atomic : READING[w.victim].atomic;
+      const observations: Observation[] = [];
+      let observationIds: string[] = [];
+      if (w.evidence === "cites the survivor") observationIds = [READING[survivor].obs];
+      else if (w.evidence === "fresh") observationIds = ["obs-succ"];
+      else if (w.evidence === "provider") observationIds = ["obs-succ"];
+      else if (w.evidence === "copy") observationIds = [READING[survivor].obs, "obs-succ"];
+      if (w.evidence === "fresh" || w.evidence === "copy") observations.push(balanceObservation({ id: "obs-succ", subject, payload: amount(w.evidence === "copy" ? READING[survivor].atomic : (atomic ?? "1")) }));
+      if (w.evidence === "provider") observations.push(balanceObservation({ id: "obs-succ", sourceId: "src-prov-a", origin: "PROVIDER_OBSERVED", subject, payload: amount(atomic ?? "1") }));
+      b.observations.push(...observations);
+      b.assertions.push(
+        balanceAssertion({ id: "a-succ", subject, temporality: w.temporality, observationIds, value: atomic === null ? null : amount(atomic), assertedAt: EVALUATED_AT, ...(w.evidence === "provider" ? { origin: "PROVIDER_OBSERVED" as const } : {}) }),
+      );
+      if (w.pill) b.assertions = b.assertions.map((a) => (a.id === w.victim ? { ...a, observationIds: [READING[w.victim].obs, READING[survivor].obs] } : a));
+      const pairs: [string, string][] = [[w.victim, "a-succ"]];
+      if (w.records === "T>S and P>S") pairs.push([survivor, "a-succ"]);
+      if (w.records === "T>S and S>S2") {
+        b.assertions.push(balanceAssertion({ id: "a-succ-2", subject: BLOCK_AFTER, observationIds: [], value: null, assertedAt: "2026-10-23T12:00:31Z" }));
+        pairs.push(["a-succ", "a-succ-2"]);
+      }
+      const out = supersede(b, ...pairs);
+      // A record asserted earlier than what it supersedes is not forward in time: a faulty record, which hides nothing and retires nothing.
+      if (!w.forward) out.assertions = out.assertions.map((a) => (a.id === "a-succ" ? { ...a, assertedAt: "2026-10-23T11:00:00Z" } : a));
+      return out;
+    };
+
+    test("BUG: over every combination of block, temporality, evidence, value and records of the successor, the conflicts are the contract's", () => {
+      let kept = 0;
+      let cleared = 0;
+      for (const w of worlds()) {
+        const b = build(w);
+        const expected = expectedEdges(b);
+        assert.deepEqual(edgesOf(b), expected, JSON.stringify(w));
+        if (expected.some((e) => e.startsWith(`${w.victim}>`))) kept++;
+        else cleared++;
+      }
+      // The population is not trivial: the retired assertion stays linked in a good many of them, and in a good many it does not.
+      assert.ok(kept >= 200, `${String(kept)} worlds keep a disagreement`);
+      assert.ok(cleared >= 200, `${String(cleared)} worlds do not`);
+    });
+
+    test("BUG: the answers do not depend on the order of the records or of the assertions", () => {
+      for (const w of worlds().filter((x) => x.records === "T>S and S>S2" && x.forward && !x.pill && x.value !== "none" && x.temporality === "PINNED")) {
+        const b = build(w);
+        const answer = (x: Bundle): string => JSON.stringify([inspect(x).assertions.map((e) => [e.assertionId, e.supportState, e.limitations, e.conflictsWith, e.supersededBy]), violations(x)]);
+        const first = answer(b);
+        for (const x of everySupersessionOrder(b)) assert.equal(answer(x), first, `${JSON.stringify(w)} ${supersessionIds(x)}`);
+        for (const x of eachListedFirst(b)) assert.equal(answer(x), first, `${JSON.stringify(w)} ${listing(x)}`);
+      }
+    });
+  });
+
+  describe("WallPrint", () => {
+    const snapshot = (bundle: Bundle, focalAssertionId: string): ReturnType<typeof buildWallPrintSnapshot> => buildWallPrintSnapshot({ id: "rec-order", bundle: clone(bundle), evaluatedAt: EVALUATED_AT, focalAssertionId });
+    const refused = (bundle: Bundle, focal: string): string[] => {
+      try {
+        snapshot(bundle, focal);
+        return [];
+      } catch (e) {
+        assert.ok(e instanceof WallPrintError, String(e));
+        return e.findings.map((f) => `${f.code} ${f.path}`);
+      }
+    };
+
+    test("BUG: a record about the survivor carries the conflict the retirement leaves, lists the retired assertion, and replays as REPRODUCED", () => {
+      for (const victim of BOTH) {
+        const survivor = survivorOf(victim);
+        const b = retiredBy(victim, { subject: NEXT_BLOCK, observationIds: [], value: null });
+        const r = snapshot(b, survivor);
+        const claim = r.claims.find((c) => c.assertionId === survivor);
+        assert.equal(claim?.supportState, "CONFLICTING", victim);
+        assert.deepEqual(claim?.conflictsWith, [victim], victim);
+        assert.ok(claim?.limitations.includes("CONFLICT_DETECTED"), victim);
+        assert.deepEqual(r.conflicts, [{ assertionIds: [survivor, victim].sort(), cause: "CONFLICT_DETECTED" }], victim);
+        const retired = r.claims.find((c) => c.assertionId === victim);
+        assert.equal(retired?.supportState, "SUPERSEDED", victim);
+        assert.deepEqual(retired?.conflictsWith, [survivor], victim);
+        const evidence = createEvidenceStore();
+        evidence.put(clone(b));
+        assert.equal(replayWallPrint(r, { evidence }).outcome, "REPRODUCED", victim);
+      }
+    });
+
+    test("BUG: a derived claim over a reading that is in conflict is refused by the builder, whether the conflict is plain or left by a retirement: the same refusal, which is fail-closed", () => {
+      const over = (b: Bundle): Bundle => {
+        addUsd(b, "a-usd", ["a-balance", "a-price"], [...USD_LIMITATIONS, "CONFLICT_DETECTED"]);
+        return b;
+      };
+      const plain = refused(over(rivals()), "a-usd");
+      assert.ok(plain.length > 0, "a derived claim over a plain conflict is refused");
+      assert.deepEqual(refused(over(supersede(rivals(), ["a-rival", "a-newer"])), "a-usd"), plain);
     });
   });
 });
@@ -1422,27 +2025,28 @@ describe("what a supersession record does not do, which the specification and th
     return b;
   };
 
-  test("CHARACTERIZATION: a record that can be valid retires its target whatever its superseding assertion carries: with no source and no value it still hides the conflict, and nothing reports it (THREAT_MODEL.md, residual risks)", () => {
+  test("BUG: a record that can be valid retires its target whatever its superseding assertion carries, and the disagreement it leaves stays: with no source and no value, the rival still reads CONFLICTING and readiness is not met (THREAT_MODEL.md, residual risks)", () => {
     const plain = withAnEmptySuccessor();
     assert.equal(byId(plain, "a-rival").supportState, "CONFLICTING", "without the record the two disagree");
-    const hidden = supersede(plain, ["a-balance", "a-empty"]);
-    assert.equal(byId(hidden, "a-balance").supportState, "SUPERSEDED");
-    assert.equal(byId(hidden, "a-empty").supportState, "NOT_ESTABLISHED");
-    const alone = byId(hidden, "a-rival");
-    assert.equal(alone.supportState, "ESTABLISHED");
-    assert.deepEqual(alone.conflictsWith, []);
-    assert.deepEqual(violations(hidden), [], "nothing reports it");
-    assert.equal(classificationIn(hidden, "a-rival"), "CRITERIA_MET");
+    const kept = supersede(plain, ["a-balance", "a-empty"]);
+    assert.equal(byId(kept, "a-balance").supportState, "SUPERSEDED");
+    assert.equal(byId(kept, "a-empty").supportState, "NOT_ESTABLISHED");
+    const rival = byId(kept, "a-rival");
+    assert.equal(rival.supportState, "CONFLICTING");
+    assert.deepEqual(rival.conflictsWith, ["a-balance"]);
+    assert.deepEqual(violations(kept), [], "it is a conflict, which is not a violation");
+    assert.equal(classificationIn(kept, "a-rival"), "NOT_ESTABLISHED");
   });
 
-  test("CHARACTERIZATION: nor does it matter whether the superseding assertion has evidence: one that cites the rival's own reading retires its target as well, and nothing reports it", () => {
+  test("BUG: nor does it matter whether the superseding assertion has evidence: one that cites the rival's own reading retires its target, and the rival is still in conflict with it", () => {
     const b = rivals();
     b.assertions.push(balanceAssertion({ id: "a-agrees", observationIds: ["obs-rival"], value: { balanceAtomic: "1400000", decimals: "6" }, assertedAt: EVALUATED_AT }));
-    const hidden = supersede(b, ["a-balance", "a-agrees"]);
-    assert.equal(byId(hidden, "a-balance").supportState, "SUPERSEDED");
-    assert.equal(byId(hidden, "a-rival").supportState, "ESTABLISHED");
-    assert.deepEqual(violations(hidden), [], "nothing reports it");
-    assert.equal(classificationIn(hidden, "a-rival"), "CRITERIA_MET");
+    const kept = supersede(b, ["a-balance", "a-agrees"]);
+    assert.equal(byId(kept, "a-balance").supportState, "SUPERSEDED");
+    assert.equal(byId(kept, "a-rival").supportState, "CONFLICTING");
+    assert.deepEqual(byId(kept, "a-rival").conflictsWith, ["a-agrees", "a-balance"], "the superseding assertion is of the same block, so the group is linked with it");
+    assert.deepEqual(violations(kept), [], "it is a conflict, which is not a violation");
+    assert.equal(classificationIn(kept, "a-rival"), "NOT_ESTABLISHED");
   });
 
   /** FAULTY_SUCCESSORS name, for a-balance: nothing, itself, another claim, a later assertion of another holder, an earlier assertion of the same claim. */
@@ -1528,14 +2132,14 @@ describe("what a supersession record does not do, which the specification and th
     for (const to of ["a-ghost", "a-balance", "a-identity", "a-other"]) assert.deepEqual(reading(supersede(declaresConflicting(), ["a-balance", to])), reading(visible), to);
   });
 
-  test("CONTROL: INV-12 reports a chain that comes back on itself and an assertion superseded twice, and neither stops a record that can be valid from retiring: what retires is the three faults", () => {
+  test("BUG: INV-12 reports a chain that comes back on itself and an assertion superseded twice, and neither stops a record that can be valid from retiring: what retires is the three faults, and what the retired one dissents from stays in conflict with it", () => {
     const cycle = supersede(rivals(), ["a-rival", "a-newer"], ["a-newer", "a-rival"]);
     assert.ok(violations(cycle).some((v) => v.includes("SUPERSESSION_CYCLE")));
     assert.equal(byId(cycle, "a-rival").supportState, "SUPERSEDED");
-    assert.equal(byId(cycle, "a-balance").supportState, "ESTABLISHED", "a-rival is retired by the record that can be valid");
+    assert.equal(byId(cycle, "a-balance").supportState, "CONFLICTING", "a-rival is retired by the record that can be valid, and a-balance is not its successor");
     const twice = supersede(rivals(), ["a-rival", "a-newer"], ["a-rival", "a-newer"]);
     assert.ok(violations(twice).some((v) => v.includes("SUPERSEDED_MULTIPLE_TIMES")));
-    assert.equal(byId(twice, "a-balance").supportState, "ESTABLISHED");
+    assert.equal(byId(twice, "a-balance").supportState, "CONFLICTING");
   });
 });
 
@@ -2137,7 +2741,7 @@ describe("the published contract says so", () => {
   test("BUG: walletwall://schemas/claims says what overlapping supersessions read", () => {
     assert.equal(
       rules()["supersessions"],
-      "An assertion that a well-formed record supersedes, once or more than once, is SUPERSEDED. supersededBy names the smallest of the other assertions its records name that resolve, otherwise the assertion itself if a record names it, otherwise the smallest id named, whichever record comes first. check_invariants reports INV-12 SUPERSEDED_MULTIPLE_TIMES for more than one record that names another assertion, SUPERSESSION_REFERENCE_INVALID for a record that names nothing or its own assertion, SUPERSESSION_CLAIM_IDENTITY_MISMATCH for one whose assertions are not about the same claim, SUPERSESSION_NOT_FORWARD_IN_TIME for one whose superseding assertion is not later, and SUPERSESSION_CYCLE for a chain that comes back on itself by any of them. Only a record that names two different assertions that resolve, of one claim identity, the superseding one asserted later, takes an assertion out of conflict detection. An assertion that only other records supersede still carries SUPERSEDED and its supersededBy and stays among those compared, and reads the weaker of what it computes, a conflict included, and SUPERSEDED, so a record that cannot be valid never raises what it names and cannot hide a conflict from it or from what is derived from it. A record that can be valid is the author's claim that the later assertion replaces the earlier, taken as made: nothing asks whether the later assertion has evidence of its own, or whether it settles what the earlier one disagreed about.",
+      "An assertion that a well-formed record supersedes, once or more than once, is SUPERSEDED. supersededBy names the smallest of the other assertions its records name that resolve, otherwise the assertion itself if a record names it, otherwise the smallest id named, whichever record comes first. check_invariants reports INV-12 SUPERSEDED_MULTIPLE_TIMES for more than one record that names another assertion, SUPERSESSION_REFERENCE_INVALID for a record that names nothing or its own assertion, SUPERSESSION_CLAIM_IDENTITY_MISMATCH for one whose assertions are not about the same claim, SUPERSESSION_NOT_FORWARD_IN_TIME for one whose superseding assertion is not later, and SUPERSESSION_CYCLE for a chain that comes back on itself by any of them. Only a record that names two different assertions that resolve, of one claim identity, the superseding one asserted later, takes an assertion out of conflict detection. An assertion that only other records supersede still carries SUPERSEDED and its supersededBy and stays among those compared, and reads the weaker of what it computes, a conflict included, and SUPERSEDED, so a record that cannot be valid never raises what it names and cannot hide a conflict from it or from what is derived from it. A record that can be valid is the author's claim that the later assertion replaces the earlier, taken as made: it ends the standing of the earlier assertion, and nothing asks whether the later assertion has evidence of its own. It does not end a disagreement the earlier assertion was part of. A superseded assertion that one of its own observations supports, and that reads another value than the live assertions of its group, which agree with one another and of which one has evidence of its own and is not a successor of it, stays compared with them: all of them read CONFLICTING, with evidence or without, and it keeps reading SUPERSEDED and lists them in conflictsWith, as a declared conflict leaves it. A successor is an assertion a record that can be valid names as replacing it, directly or through a chain of records. The group is linked whole, a successor in it included, and the disagreement ends when the live assertion that is not a successor is named as one (a record that can be valid needs it asserted later) or is superseded too.",
     );
   });
 });
@@ -2148,7 +2752,7 @@ describe("the specification says what a faulty supersession does", () => {
   test("BUG: spec/EVIDENCE_PROFILE.md says only a well-formed record takes an assertion out of conflict detection, and what a faulty one leaves", () => {
     assert.ok(
       flat("spec/EVIDENCE_PROFILE.md").includes(
-        "A supersession record is well-formed when it names two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks in `THREAT_MODEL.md` say so). An assertion that only faulty records supersede (records `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the computed state. No readiness answer is more favourable.",
+        "A supersession record is well-formed when it names two different assertions that resolve, of one claim identity, the superseding one asserted later. Only a well-formed record takes an assertion out of the comparison of its group, and only it makes the assertion read `SUPERSEDED` whatever state it had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the later assertion has evidence of its own. It ends the standing of the earlier assertion, not a disagreement the earlier assertion was part of: a superseded assertion that one of its own observations supports (STALE or better, each of its observations read alone, so a citation added to contradict the others does not take its evidence away), and that reads another value than the live assertions of its group, which agree with one another and of which one has evidence of its own (a derived assertion has it where its derivation resolves and one of its inputs resolves) and is not a successor of it, stays compared with them. The group is linked as a group that disagrees is: all the live assertions of the group, whatever they carry, read `CONFLICTING` with `CONFLICT_DETECTED`, and the superseded one keeps reading `SUPERSEDED` and lists them in `conflictsWith`, as a declared conflict already leaves it. A pair that a declared conflict already links is left as it is. A successor is an assertion a well-formed record names as replacing it, directly or through a chain of well-formed records. The group is linked whole, a successor in it included, and the disagreement ends when the live assertion that is not a successor is named as one (a well-formed record needs it asserted later) or is superseded too (the residual risks in `THREAT_MODEL.md` say what an author can still do). An assertion that only faulty records supersede (records `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had: a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the computed state. No readiness answer is more favourable.",
       ),
     );
   });
@@ -2159,7 +2763,7 @@ describe("the specification says what a faulty supersession does", () => {
   test("BUG: spec/EVIDENCE_PROFILE.md says an assertion a well-formed record supersedes is SUPERSEDED, not one any record names", () => {
     assert.ok(
       flat("spec/EVIDENCE_PROFILE.md").includes(
-        "Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed supersession retires. An assertion that a well-formed record supersedes, once or more than once, is `SUPERSEDED`. `supersededBy` names the smallest id, by code unit, among the other assertions its records name that resolve;",
+        "Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed supersession retires, and keep the disagreement that a retired assertion that something supports leaves. An assertion that a well-formed record supersedes, once or more than once, is `SUPERSEDED`. `supersededBy` names the smallest id, by code unit, among the other assertions its records name that resolve;",
       ),
     );
   });
@@ -2176,7 +2780,7 @@ describe("the specification says what a faulty supersession does", () => {
 
   test("BUG: spec/EVIDENCE_PROFILE.md defines a conflict among the assertions no well-formed supersession retires, and names the codes INV-12 reports", () => {
     const text = flat("spec/EVIDENCE_PROFILE.md");
-    assert.ok(text.includes("detected by the engine when two assertions about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values."));
+    assert.ok(text.includes("detected by the engine when two assertions about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values. A retired assertion that something supports also stays in conflict with live assertions that agree with one another and are not its successors (section 8)."));
     assert.ok(text.includes("one whose two assertions are not about the same claim as `SUPERSESSION_CLAIM_IDENTITY_MISMATCH`, one whose superseding assertion is not later as `SUPERSESSION_NOT_FORWARD_IN_TIME`"));
   });
 
@@ -2203,19 +2807,30 @@ describe("the specification says what a faulty supersession does", () => {
   });
 
   test("BUG: spec/SUPPORT_STATES.md says a faulty record still marks the assertion and does not take it out of conflict detection", () => {
-    assert.ok(flat("spec/SUPPORT_STATES.md").includes("A record that can be valid marks an assertion whatever state it had: one with no basis reads `SUPERSEDED`, above `NOT_ESTABLISHED` in the strength order below. A faulty record, one that names nothing, the assertion itself, another claim or an assertion that is not later, marks it only if that lowers it, and does not take it out of conflict detection: an assertion that would otherwise read `NOT_ESTABLISHED`, `CONFLICTING` or `UNKNOWN` reads that still, and carries the `SUPERSEDED` limitation either way."));
+    assert.ok(flat("spec/SUPPORT_STATES.md").includes("A record that can be valid marks an assertion whatever state it had: one with no basis reads `SUPERSEDED`, above `NOT_ESTABLISHED` in the strength order below. A faulty record, one that names nothing, the assertion itself, another claim or an assertion that is not later, marks it only if that lowers it, and does not take it out of conflict detection: an assertion that would otherwise read `NOT_ESTABLISHED`, `CONFLICTING` or `UNKNOWN` reads that still, and carries the `SUPERSEDED` limitation either way. A record that can be valid ends the standing of the assertion, not a disagreement it was part of: where the assertion has a reading that something supports and live assertions that agree with one another read another value, one of which has evidence of its own and is not a successor of the assertion, it keeps reading `SUPERSEDED` and lists them in `conflictsWith`, and they read `CONFLICTING` (`EVIDENCE_PROFILE.md`, section 8)."));
   });
 
   test("BUG: THREAT_MODEL.md says a record that fails the checks takes nothing out of conflict detection, and cites the vectors", () => {
     const text = flat("THREAT_MODEL.md");
-    assert.ok(text.includes("and a record that fails them, or names nothing, takes nothing out of conflict detection and raises nothing, so it cannot hide a conflict (a record that can be valid is the author's claim, taken as made: see the residual risks);"));
-    assert.ok(text.includes("`CNF-005..009`, `CNF-013..015`, `CNF-017..036`"));
+    assert.ok(text.includes("and a record that fails them, or names nothing, takes nothing out of conflict detection and raises nothing, so it cannot hide a conflict (a record that can be valid ends the standing of what it supersedes, and a disagreement it was part of unless the live assertion is its successor or is superseded too: see the residual risks);"));
+    assert.ok(text.includes("`CNF-005..009`, `CNF-013..015`, `CNF-017..048`"));
   });
 
+  test("BUG: spec/VERSIONING.md says a change in how a bundle is read, with no schema change, is made without a version change, and names the retirement", () => {
+    assert.ok(
+      flat("spec/VERSIONING.md").includes(
+        "During `0.x` a change to how a bundle is read, with no change to its schema, is made without changing `wwepVersion`, and is visible in the changed served text (`security/tool-manifest.json`) and in the conformance corpus. A supersession that ends the standing of an assertion but not a disagreement it was part of (`EVIDENCE_PROFILE.md`, section 8, step 3) is one: a bundle that read as settled can read as in conflict, and a WallPrint record built before it replays as `MISMATCH` rather than `REPRODUCED`, or as `UNREPLAYABLE` where a derived claim sits downstream of the conflict (the builder refuses those, as it refuses a derived claim over any conflict).",
+      ),
+    );
+  });
+
+  test("BUG: conformance/README.md says the conflict vectors cover the supersessions that end the standing of an assertion and not a disagreement it was part of", () => {
+    assert.ok(flat("conformance/README.md").includes("supersessions that cannot be valid and cannot hide a conflict, supersessions that end the standing of an assertion and not a disagreement it was part of, overlapping supersessions in either record order"));
+  });
   test("BUG: THREAT_MODEL.md names, among the residual risks, that a record that can be valid is taken as made, and what that leaves open", () => {
     assert.ok(
       flat("THREAT_MODEL.md").includes(
-        "A supersession record is the author's claim that a later assertion replaces an earlier one, and the engine takes it as made: nothing asks whether the later assertion has evidence of its own, or whether it settles what the earlier one disagreed about. A record that names two different assertions of one claim identity, the later asserted later, therefore takes its target out of conflict detection whatever the later assertion is, empty or evidenced and agreeing with the rival, so an author who supplies two readings that disagree can retire one with a later assertion of their own, and `inspect_evidence`, `check_invariants` and `assess_vault_readiness` then read the other as if it stood alone. A record that cannot be valid hides nothing (T9). Measured and not yet closed: what becomes of the conflicts of an assertion a successor retires, and whether a successor must settle them, are open design questions.",
+        "A supersession record is the author's claim that a later assertion replaces an earlier one, and the engine takes it as made: it retires the earlier assertion, and nothing asks whether the later assertion has evidence of its own. It does not end a disagreement the earlier assertion was part of: a retired assertion that something supports stays compared with live assertions that agree with one another and are not its successors, so they read `CONFLICTING` and the conflict reaches `inspect_evidence`, `assess_vault_readiness` and WallPrint (a record that main built over it replays as `MISMATCH`, or is refused where a derived claim sits downstream of the conflict, as the builder refuses a derived claim over any conflict), whatever the later assertion carries (T9). What is left is what the engine cannot see. An author can name the live assertion as the successor (if it was asserted later), which says that it replaces the retired one and shows as `supersededBy`; can supersede every assertion that disagrees; can leave a contradicting assertion, or the observation behind it, out of the bundle, or cite it only from assertions that are not live; and can supply an observation that reads as evidence, because the engine evaluates what is presented against the published policies and verifies none of it. A record that cannot be valid hides nothing (T9).",
       ),
     );
   });

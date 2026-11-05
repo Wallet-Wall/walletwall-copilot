@@ -749,32 +749,185 @@ base(
   base("CNF-034", "conflict", "supersession", "A supersession by an assertion of another claim cannot hide a conflict.", record(world(), "a-identity"), stays("a-identity", ["SUPERSESSION_CLAIM_IDENTITY_MISMATCH"]));
   base("CNF-035", "conflict", "supersession", "A supersession by an assertion that is not later in time cannot hide a conflict.", record(world(), "a-balance"), stays("a-balance", ["SUPERSESSION_NOT_FORWARD_IN_TIME"]));
 
-  const retired = world();
-  retired.observations.push(
-    balanceObservation({
-      id: "obs-balance-new",
-      subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` },
-      payload: { balanceAtomic: "1400000", decimals: "6" },
-      observedAt: T("2026-10-23T12:00:20Z"),
-    }),
-  );
-  retired.assertions.push(
-    balanceAssertion({
-      id: "a-balance-new",
-      subject: { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` },
-      value: { balanceAtomic: "1400000", decimals: "6" },
-      observationIds: ["obs-balance-new"],
-      assertedAt: T("2026-10-23T12:00:20Z"),
-    }),
-  );
-  base("CNF-036", "conflict", "supersession", "CONTROL: a well-formed supersession retires the rival, so it leaves conflict detection and the balance it disagreed with is ESTABLISHED and readiness is met.", record(retired, "a-balance-new"), {
+  // A well-formed supersession ends the standing of the rival, not the disagreement it was part of. The same world, and one record that retires
+  // a-balance-2 with a superseding assertion that can be valid, whatever it carries: the conflict is not settled by it, so a-balance, which a-balance-2
+  // disagreed with, still reads CONFLICTING and readiness is not established, while a-balance-2 reads SUPERSEDED and lists a-balance in conflictsWith,
+  // as a declared conflict leaves an assertion that is retired (CNF-013).
+  const LATER = T("2026-10-23T12:00:20Z");
+  const LATEST = T("2026-10-23T12:00:25Z");
+  const nextBlock = { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000001", blockHash: `0x${"cd".repeat(32)}` };
+  const blockAfter = { chainId: "1", token: USDC, holder: HOLDER, blockNumber: "21000002", blockHash: `0x${"ef".repeat(32)}` };
+  const survivor = { balanceAtomic: "1500000", decimals: "6" };
+  /** The rival retired by what is added to the world: a successor named a-succ, of the given shape. */
+  const withSuccessor = (over: Partial<Assertion>, observations: Observation[] = []): Bundle => {
+    const b = world();
+    b.observations.push(...observations);
+    b.assertions.push(balanceAssertion({ id: "a-succ", assertedAt: LATER, ...over }));
+    return record(b, "a-succ");
+  };
+  /**
+   * The disagreement stays whatever the superseding assertion is, and nothing new is reported: the record is well formed and the conflict was
+   * there. A superseding assertion of the same block and temporality is in the group, so the group is linked with it, as any group that disagrees is.
+   */
+  const persists = (to: string, successor: AssertionExpectation | null = null, inGroup = false): Expectation => ({
     assertions: {
-      "a-balance": { supportState: "ESTABLISHED", conflictsWith: [] },
-      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: "a-balance-new", conflictsWith: [] },
+      "a-balance": { supportState: "CONFLICTING", conflictsWith: inGroup ? ["a-balance-2", to] : ["a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] },
+      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: to, conflictsWith: inGroup ? ["a-balance", to] : ["a-balance"], limitationsInclude: ["SUPERSEDED"], limitationsExclude: ["CONFLICT_DETECTED"] },
+      ...(successor === null ? {} : { [to]: successor }),
     },
     violations: { none: true },
-    readiness: { ...READINESS_INPUTS, classification: "CRITERIA_MET" },
+    readiness: { ...READINESS_INPUTS, classification: "NOT_ESTABLISHED" },
   });
+  /** The superseding assertion of the same block, linked into the group with the other two. */
+  const linkedIn: AssertionExpectation = { supportState: "CONFLICTING", conflictsWith: ["a-balance", "a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] };
+  const later = (): Bundle => {
+    const b = world();
+    b.observations.push(balanceObservation({ id: "obs-balance-new", subject: nextBlock, payload: { balanceAtomic: "1400000", decimals: "6" }, observedAt: LATER }));
+    b.assertions.push(balanceAssertion({ id: "a-balance-new", subject: nextBlock, value: { balanceAtomic: "1400000", decimals: "6" }, observationIds: ["obs-balance-new"], assertedAt: LATER }));
+    return b;
+  };
+  base("CNF-036", "conflict", "supersession", "A well-formed supersession ends the standing of the rival, not the disagreement it was part of: a-balance-new, a later block's reading of the rival's value, retires a-balance-2, and a-balance is still CONFLICTING with it, so readiness is not established. A later block says nothing about which reading of the earlier block was right.", record(later(), "a-balance-new"), persists("a-balance-new", { supportState: "ESTABLISHED", conflictsWith: [] }));
+  base("CNF-037", "conflict", "supersession", "A superseding assertion with no source and no value retires the rival and leaves the conflict: a-balance is still CONFLICTING and readiness is not established.", withSuccessor({ subject: nextBlock, observationIds: [], value: null }), persists("a-succ"));
+  base("CNF-038", "conflict", "supersession", "A CURRENT assertion with no source and no value retires the PINNED rival and leaves the conflict.", withSuccessor({ temporality: "CURRENT", observationIds: [], value: null }), persists("a-succ"));
+  base(
+    "CNF-039",
+    "conflict",
+    "supersession",
+    "A superseding assertion of the same block that only cites a-balance's own observation agrees with it and brings nothing: the rival is retired, the conflict stays, and a-succ is compared with it as any assertion of the group is.",
+    withSuccessor({ observationIds: ["obs-balance"], value: survivor }),
+    persists("a-succ", linkedIn, true),
+  );
+  base(
+    "CNF-040",
+    "conflict",
+    "supersession",
+    "A copy of a-balance's observation under a new id settles nothing: a-succ cites it with the original, and the conflict stays.",
+    withSuccessor({ observationIds: ["obs-balance", "obs-balance-copy"], value: survivor }, [balanceObservation({ id: "obs-balance-copy", observedAt: LATER })]),
+    persists("a-succ", linkedIn, true),
+  );
+  base(
+    "CNF-041",
+    "conflict",
+    "supersession",
+    "A chain of retirements ends in assertions that carry nothing: the rival is retired through both, and the conflict stays.",
+    (() => {
+      const b = withSuccessor({ subject: nextBlock, observationIds: [], value: null });
+      b.assertions.push(balanceAssertion({ id: "a-succ-2", subject: blockAfter, observationIds: [], value: null, assertedAt: LATEST }));
+      b.supersessions = [...(b.supersessions ?? []), { id: "s-2", supersededAssertionId: "a-succ", supersedingAssertionId: "a-succ-2", effectiveAt: LATEST, reason: "CORRECTED" }];
+      return b;
+    })(),
+    {
+      assertions: {
+        "a-balance": { supportState: "CONFLICTING", conflictsWith: ["a-balance-2"], limitationsInclude: ["CONFLICT_DETECTED"] },
+        "a-balance-2": { supportState: "SUPERSEDED", supersededBy: "a-succ", conflictsWith: ["a-balance"], limitationsInclude: ["SUPERSEDED"] },
+      },
+      violations: { none: true },
+      readiness: { ...READINESS_INPUTS, classification: "NOT_ESTABLISHED" },
+    },
+  );
+  base(
+    "CNF-042",
+    "conflict",
+    "supersession",
+    "A single provider-reported reading of the same block that agrees with a-balance retires the rival and leaves the conflict: weak evidence of its own settles nothing.",
+    withSuccessor({ origin: "PROVIDER_OBSERVED", observationIds: ["obs-weak"], value: survivor }, [balanceObservation({ id: "obs-weak", sourceId: "src-prov-a", origin: "PROVIDER_OBSERVED", observedAt: LATER })]),
+    persists("a-succ", linkedIn, true),
+  );
+  base(
+    "CNF-043",
+    "conflict",
+    "supersession",
+    "A retired assertion whose own observations disagree still dissents: a-balance-2 also cites a-balance's observation, which makes it read as a conflict by itself, and the conflict with a-balance stays.",
+    (() => {
+      const b = withSuccessor({ subject: nextBlock, observationIds: [], value: null });
+      b.assertions = b.assertions.map((a) => (a.id === "a-balance-2" ? { ...a, observationIds: ["obs-balance-2", "obs-balance"] } : a));
+      return b;
+    })(),
+    persists("a-succ"),
+  );
+  const both = (successor: Partial<Assertion>, extra: Observation[] = []): Bundle => {
+    const b = world();
+    b.observations.push(...extra);
+    b.assertions.push(balanceAssertion({ id: "a-succ", assertedAt: LATER, ...successor }));
+    b.supersessions = [
+      { id: "s-1", supersededAssertionId: "a-balance-2", supersedingAssertionId: "a-succ", effectiveAt: LATER, reason: "CORRECTED" },
+      { id: "s-2", supersededAssertionId: "a-balance", supersedingAssertionId: "a-succ", effectiveAt: LATER, reason: "CORRECTED" },
+    ];
+    return b;
+  };
+  const cleared = (successorBalance: string): Expectation => ({
+    assertions: {
+      "a-balance": { supportState: "SUPERSEDED", supersededBy: "a-succ", conflictsWith: [] },
+      "a-balance-2": { supportState: "SUPERSEDED", supersededBy: "a-succ", conflictsWith: [] },
+      "a-succ": { supportState: "ESTABLISHED", conflictsWith: [] },
+    },
+    violations: { none: true },
+    readiness: { identityAssertionId: "a-identity", balanceAssertionId: successorBalance, classification: "CRITERIA_MET" },
+  });
+  base(
+    "CNF-044",
+    "conflict",
+    "supersession",
+    "CONTROL: both disagreeing assertions retired by one evidenced assertion leave nothing to disagree: both are SUPERSEDED with no conflict, and the assertion that replaces them is ESTABLISHED and readiness is met.",
+    both({ subject: nextBlock, value: { balanceAtomic: "1400000", decimals: "6" }, observationIds: ["obs-succ"] }, [balanceObservation({ id: "obs-succ", subject: nextBlock, payload: { balanceAtomic: "1400000", decimals: "6" }, observedAt: LATER })]),
+    cleared("a-succ"),
+  );
+  base(
+    "CNF-045",
+    "conflict",
+    "supersession",
+    "CONTROL: a supersession with no rival is the designed use: a later reading retires the only reading, which is SUPERSEDED, and there is no conflict.",
+    (() => {
+      const b = golden();
+      b.observations.push(balanceObservation({ id: "obs-succ", subject: nextBlock, observedAt: LATER }));
+      b.assertions.push(balanceAssertion({ id: "a-succ", subject: nextBlock, observationIds: ["obs-succ"], assertedAt: LATER }));
+      b.supersessions = [{ id: "s-1", supersededAssertionId: "a-balance", supersedingAssertionId: "a-succ", effectiveAt: LATER, reason: "CORRECTED" }];
+      return b;
+    })(),
+    {
+      assertions: {
+        "a-balance": { supportState: "SUPERSEDED", supersededBy: "a-succ", conflictsWith: [] },
+        "a-succ": { supportState: "ESTABLISHED", conflictsWith: [] },
+      },
+      violations: { none: true },
+      readiness: { identityAssertionId: "a-identity", balanceAssertionId: "a-succ", classification: "CRITERIA_MET" },
+    },
+  );
+  base(
+    "CNF-046",
+    "conflict",
+    "supersession",
+    "CONTROL: naming the assertion that stands as the superseding one is the explicit way to say that it replaces the other: a-balance-2 is retired by a-balance, there is no conflict, and readiness is met.",
+    (() => {
+      const b = world();
+      b.assertions = b.assertions.map((a) => (a.id === "a-balance" ? { ...a, assertedAt: LATER } : a));
+      return record(b, "a-balance");
+    })(),
+    {
+      assertions: {
+        "a-balance": { supportState: "ESTABLISHED", conflictsWith: [] },
+        "a-balance-2": { supportState: "SUPERSEDED", supersededBy: "a-balance", conflictsWith: [] },
+      },
+      violations: { none: true },
+      readiness: { ...READINESS_INPUTS, classification: "CRITERIA_MET" },
+    },
+  );
+  base(
+    "CNF-047",
+    "conflict",
+    "supersession",
+    "A correction that retires only the wrong reading leaves the other in conflict with it: a-succ, a new reading of the block that agrees with a-balance, retires a-balance-2, and a-balance (not its successor) still disagrees with the retired reading, so all three are linked until a-balance is retired too.",
+    withSuccessor({ value: survivor, observationIds: ["obs-corrected"] }, [balanceObservation({ id: "obs-corrected", observedAt: LATER })]),
+    persists("a-succ", linkedIn, true),
+  );
+  base(
+    "CNF-048",
+    "conflict",
+    "supersession",
+    "CONTROL: retiring both readings by the correction clears the conflict: a-succ is ESTABLISHED, both are SUPERSEDED, and readiness is met for a-succ.",
+    both({ value: survivor, observationIds: ["obs-corrected"] }, [balanceObservation({ id: "obs-corrected", observedAt: LATER })]),
+    cleared("a-succ"),
+  );
 }
 
 // --------------------------------------------------------------- authority

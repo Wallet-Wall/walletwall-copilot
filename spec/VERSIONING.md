@@ -30,6 +30,7 @@ Release integrity is versioned independently from WWEP. `security/integrity-poli
   `security/*.sha512` paths; release-specific historical records live under `security/history/<version>/`.
 - WWEP 0.1 `evidenceDigest()` remains SHA-256. Changing evidence canonicalization/digest semantics requires an explicit
   evidence-profile version change rather than a silent release-integrity migration.
+- During `0.x` a change to how a bundle is read, with no change to its schema, is made without changing `wwepVersion`, and is visible in the changed served text (`security/tool-manifest.json`) and in the conformance corpus. A supersession that ends the standing of an assertion but not a disagreement it was part of (`EVIDENCE_PROFILE.md`, section 8, step 3) is one: a bundle that read as settled can read as in conflict, and a WallPrint record built before it replays as `MISMATCH` rather than `REPRODUCED`, or as `UNREPLAYABLE` where a derived claim sits downstream of the conflict (the builder refuses those, as it refuses a derived claim over any conflict).
 - A bundle whose `wwepVersion` differs from the engine's is rejected, not coerced.
 - A bundle whose `registryVersion` or `rulesVersion` differs from the engine's is evaluated with the engine's data
   and reported with `REGISTRY_VERSION_MISMATCH` / `RULES_VERSION_MISMATCH` where it applies. A derivation that names

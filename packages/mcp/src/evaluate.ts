@@ -315,11 +315,22 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     if (named === undefined || rank(superseded, by) < rank(superseded, named) || (rank(superseded, by) === rank(superseded, named) && by < named)) supersededBy.set(superseded, by);
   }
 
-  // Only a well-formed record takes an assertion out of conflict detection, and makes it read SUPERSEDED whatever it was: it is the author's
-  // claim that the superseding assertion replaces it, taken as made. A faulty one marks the assertion (its limitation and supersededBy,
+  // Only a well-formed record takes an assertion out of the comparison of its group, and makes it read SUPERSEDED whatever it was: it is the author's
+  // claim that the superseding assertion replaces it, taken as made. It does not end a disagreement the assertion was part of (keepRetiredDissent, below). A faulty one marks the assertion (its limitation and supersededBy,
   // below) but the assertion stays among those compared, and never reads higher for it, so a record that cannot be valid hides no conflict.
   const retired = new Set<string>();
   for (const s of bundle.supersessions ?? []) if (supersessionFaults(idx, s).length === 0) retired.add(s.supersededAssertionId);
+
+  /** What is compared with what: the claim type, the temporality and the subject keys the policy names, which for a balance include the block. */
+  const groupKey = (a: Assertion): string => {
+    const policy = getPolicy(a.claimType);
+    return `${a.claimType}|${a.temporality}|${policy ? subjectIdentityKey(a.subject, policy.subjectKeys) : canonicalize(a.subject)}`;
+  };
+  /** What a reading says, as conflict detection compares it. */
+  const valueKey = (a: Assertion): string => {
+    const policy = getPolicy(a.claimType);
+    return canonicalize(policy ? pick(a.value, policy.valueKeys) : a.value);
+  };
 
   const conflictsWith = new Map<string, Set<string>>();
   const conflictCause = new Map<string, LimitationCode>();
@@ -338,18 +349,14 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
   const groups = new Map<string, Assertion[]>();
   for (const a of idx.assertions.values()) {
     if (retired.has(a.id)) continue;
-    const policy = getPolicy(a.claimType);
-    const subjectKey = policy ? subjectIdentityKey(a.subject, policy.subjectKeys) : canonicalize(a.subject);
-    const key = `${a.claimType}|${a.temporality}|${subjectKey}`;
+    const key = groupKey(a);
     const arr = groups.get(key) ?? [];
     arr.push(a);
     groups.set(key, arr);
   }
   for (const members of groups.values()) {
     if (members.length < 2) continue;
-    const policy = getPolicy(members[0]?.claimType ?? "ASSET_IDENTITY");
-    const values = new Set(members.map((m) => canonicalize(policy ? pick(m.value, policy.valueKeys) : m.value)));
-    if (values.size > 1) link(members.map((m) => m.id), "CONFLICT_DETECTED");
+    if (new Set(members.map(valueKey)).size > 1) link(members.map((m) => m.id), "CONFLICT_DETECTED");
   }
 
   const memo = new Map<string, AssertionEvaluation>();
@@ -462,7 +469,11 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     return result;
   };
 
-  const evalDirect = (a: Assertion, policy: Policy): Core => {
+  /**
+   * What an assertion's own observations give it. `report` is where a reference that resolves to nothing is recorded; a read made only to learn
+   * what some observations support passes a list of its own, so that it adds nothing to the violations of the bundle.
+   */
+  const evalDirect = (a: Assertion, policy: Policy, report: Violation[] = violations): Core => {
     const core = emptyCore(policy);
     const lim = core.limitations;
     const obs: Observation[] = [];
@@ -472,7 +483,7 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
         obs.push(o);
       } else {
         lim.add("DANGLING_REFERENCE");
-        violations.push({ invariant: "INV-00", code: "DANGLING_REFERENCE", assertionId: a.id });
+        report.push({ invariant: "INV-00", code: "DANGLING_REFERENCE", assertionId: a.id });
       }
     }
     core.observationIds = obs.map((o) => o.id);
@@ -816,6 +827,92 @@ export function evaluateBundle(bundle: Bundle, evaluatedAt: string): Evaluation 
     core.limitations.add("NO_SOURCE");
     return { ...finish(label, policy, core, true), digest: evidenceDigest(ordered) };
   };
+
+  /**
+   * A retirement ends the standing of the assertion it names, not a disagreement that assertion was part of. Detection leaves a retired
+   * assertion out of its group, so a record whose superseding assertion carries nothing, or only the rival's own reading, would leave the
+   * live assertion it disagreed with reading as if it stood alone. A retired assertion that one of its own observations supports (a
+   * dissenter), and that disagrees with the live assertions of its group, all of which agree and one of which has evidence of its own
+   * and is not a successor of it, therefore stays compared with them: the group is linked as detection links any group that disagrees,
+   * so the live assertions read CONFLICTING, and the retired one keeps reading SUPERSEDED and lists them in conflictsWith, as a declared
+   * conflict already leaves it. A successor is an assertion a well-formed record names as replacing it, directly or through a chain of
+   * records, so naming the live assertion, when it was asserted later, is the explicit way to say that it replaces the retired one. A pair a declared conflict
+   * already links is left as it is. Nothing here asks whether a successor has evidence of its own: what such a test reads, an author can
+   * supply, and a retirement that settled the disagreement only when it did would hide it from whoever supplied it.
+   */
+  const keepRetiredDissent = (): void => {
+    const replacedBy = new Map<string, string[]>();
+    for (const s of bundle.supersessions ?? []) {
+      if (supersessionFaults(idx, s).length > 0) continue;
+      replacedBy.set(s.supersededAssertionId, [...(replacedBy.get(s.supersededAssertionId) ?? []), s.supersedingAssertionId]);
+    }
+    const successorsOf = (id: string): Set<string> => {
+      const found = new Set<string>();
+      const todo = [...(replacedBy.get(id) ?? [])];
+      for (let next = todo.pop(); next !== undefined; next = todo.pop()) {
+        if (found.has(next)) continue;
+        found.add(next);
+        todo.push(...(replacedBy.get(next) ?? []));
+      }
+      return found;
+    };
+    // What an assertion's own evidence reaches, read alone: no conflict, no lifecycle, and nothing the read reports is the bundle's.
+    const readAlone = (a: Assertion, policy: Policy, observationIds: readonly string[]): number => SUPPORT_RANK[evalDirect({ ...a, observationIds: [...observationIds] }, policy, []).support];
+    // A derived assertion has evidence of its own where its derivation resolves, names it as its output, is for a claim type that may be
+    // derived, and has an input that resolves: its state is only known once its inputs are, so this is the test on the records.
+    const derivedHasInputs = (a: Assertion, policy: Policy): boolean => {
+      const d = a.derivationId === undefined ? undefined : idx.derivations.get(a.derivationId);
+      return d !== undefined && d.outputAssertionId === a.id && policy.derived && d.inputAssertionIds.some((id) => idx.assertions.has(id));
+    };
+    const withEvidence = new Map<string, boolean>();
+    /** Whether a live assertion has a reading to defend: its evidence, taken whole, reaches STALE or better. */
+    const hasEvidence = (a: Assertion): boolean => {
+      const known = withEvidence.get(a.id);
+      if (known !== undefined) return known;
+      const policy = getPolicy(a.claimType);
+      const has = policy !== undefined && (a.derivationId !== undefined ? derivedHasInputs(a, policy) : readAlone(a, policy, a.observationIds) >= SUPPORT_RANK.STALE);
+      withEvidence.set(a.id, has);
+      return has;
+    };
+    const withDissent = new Map<string, boolean>();
+    /**
+     * Whether a retired assertion has a reading that something supports. Each of its observations is read alone: one that cites a second
+     * observation which contradicts the first reads CONFLICTING as a whole, but its dissent is still attested by the first, so a citation
+     * added to take its evidence away does not.
+     */
+    const dissents = (a: Assertion): boolean => {
+      const known = withDissent.get(a.id);
+      if (known !== undefined) return known;
+      const policy = getPolicy(a.claimType);
+      const dissent = policy !== undefined && (a.derivationId !== undefined ? derivedHasInputs(a, policy) : [...new Set(a.observationIds)].some((id) => readAlone(a, policy, [id]) >= SUPPORT_RANK.STALE));
+      withDissent.set(a.id, dissent);
+      return dissent;
+    };
+
+    const liveBy = new Map<string, Assertion[]>();
+    const retiredBy = new Map<string, Assertion[]>();
+    for (const a of idx.assertions.values()) {
+      const side = retired.has(a.id) ? retiredBy : liveBy;
+      const key = groupKey(a);
+      const arr = side.get(key) ?? [];
+      arr.push(a);
+      side.set(key, arr);
+    }
+    for (const [key, gone] of retiredBy) {
+      const live = liveBy.get(key) ?? [];
+      // Live assertions that disagree among themselves are already in conflict: nothing is hidden from them.
+      if (live.length === 0 || new Set(live.map(valueKey)).size !== 1) continue;
+      const hidden = (t: Assertion): boolean => {
+        if (!dissents(t)) return false;
+        const successors = successorsOf(t.id);
+        return live.some((p) => !successors.has(p.id) && valueKey(p) !== valueKey(t) && conflictsWith.get(t.id)?.has(p.id) !== true && hasEvidence(p));
+      };
+      const dissenters = gone.filter(hidden);
+      if (dissenters.length > 0) link([...live, ...dissenters].map((m) => m.id), "CONFLICT_DETECTED");
+    }
+  };
+  // After every closure it reads is defined, and before any assertion is evaluated: finish() reads the links it makes.
+  keepRetiredDissent();
 
   const results = [...[...idx.assertions.values()].map(evalAssertion), ...[...idx.ambiguousAssertions.values()].map(evalAmbiguous)].sort((x, y) => (x.assertionId < y.assertionId ? -1 : 1));
 
