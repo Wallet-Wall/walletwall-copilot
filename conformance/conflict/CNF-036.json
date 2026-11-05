@@ -2,7 +2,7 @@
   "id": "CNF-036",
   "category": "conflict",
   "claimCategory": "supersession",
-  "description": "CONTROL: a well-formed supersession retires the rival, so it leaves conflict detection and the balance it disagreed with is ESTABLISHED and readiness is met.",
+  "description": "A well-formed supersession ends the standing of the rival, not the disagreement it was part of: a-balance-new, a later block's reading of the rival's value, retires a-balance-2, and a-balance is still CONFLICTING with it, so readiness is not established. A later block says nothing about which reading of the earlier block was right.",
   "evaluatedAt": "2026-10-23T12:00:30Z",
   "bundle": {
     "wwepVersion": "0.1",
@@ -268,12 +268,29 @@
   "expect": {
     "assertions": {
       "a-balance": {
-        "supportState": "ESTABLISHED",
-        "conflictsWith": []
+        "supportState": "CONFLICTING",
+        "conflictsWith": [
+          "a-balance-2"
+        ],
+        "limitationsInclude": [
+          "CONFLICT_DETECTED"
+        ]
       },
       "a-balance-2": {
         "supportState": "SUPERSEDED",
         "supersededBy": "a-balance-new",
+        "conflictsWith": [
+          "a-balance"
+        ],
+        "limitationsInclude": [
+          "SUPERSEDED"
+        ],
+        "limitationsExclude": [
+          "CONFLICT_DETECTED"
+        ]
+      },
+      "a-balance-new": {
+        "supportState": "ESTABLISHED",
         "conflictsWith": []
       }
     },
@@ -283,7 +300,7 @@
     "readiness": {
       "identityAssertionId": "a-identity",
       "balanceAssertionId": "a-balance",
-      "classification": "CRITERIA_MET"
+      "classification": "NOT_ESTABLISHED"
     }
   }
 }
