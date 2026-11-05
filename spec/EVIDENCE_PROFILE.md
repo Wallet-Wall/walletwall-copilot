@@ -75,8 +75,9 @@ keep them in the record's digest; the claim contract says how they are treated.
   supporting observation's `payload` share one shape. The engine serves the contract as `walletwall://schemas/claims`.
 - **SupportState**, **FreshnessState**, **FinalityState** — section 5.
 - **Conflict** — `{id, assertionIds, reason}` declared by an author, or detected by the engine when two assertions
-  about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values.
-  Conflicts are never auto-resolved.
+  about the same claim identity, neither retired by a well-formed supersession (section 8), carry different values. A
+  retired assertion that something supports also stays in conflict with live assertions that agree with one another
+  and are not its successors (section 8). Conflicts are never auto-resolved.
 - **Limitation** — a code from a closed enumeration attached to a result that explains why it is weaker than it
   might look (for example `TRANSPORT_FIDELITY_NOT_VERIFIED`, `NOT_FINALIZED`, `REGISTRY_VERIFIED_POINT_IN_TIME`).
 - **Supersession** — `{id, supersededAssertionId, supersedingAssertionId, effectiveAt, reason}`. A newer assertion
@@ -169,22 +170,33 @@ per-claim policies are in `AUTHORITY_MODEL.md` and `SUPPORT_STATES.md`. In outli
    and its freshness is worked out as if the input were not superseded. An id is unique within its kind, so a source and
    an observation may share one. Nothing resolves through a conflict or supersession id.
 3. Mark superseded assertions; detect declared and value-disagreement conflicts among the assertions that no well-formed
-   supersession retires. An assertion that a well-formed record supersedes, once or more than once, is `SUPERSEDED`.
-   `supersededBy` names the smallest id, by code unit, among the other assertions its records name that resolve;
-   if there is none, the assertion itself if a record names it; otherwise the smallest of the ids, which resolve to
-   nothing. A supersession record is well-formed when it names two different assertions that resolve, of one claim
-   identity, the superseding one asserted later. Only a well-formed
-   record takes an assertion out of conflict detection, and only it makes the assertion read `SUPERSEDED` whatever state it
-   had: it is the author's claim that the later assertion replaces the earlier, taken as made, and nothing asks whether the
-   later assertion has evidence of its own or whether it settles what the earlier one disagreed about (the residual risks
-   in `THREAT_MODEL.md` say so). An assertion that only faulty records supersede (records `check_invariants` reports as
-   `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries
-   the `SUPERSEDED` limitation and its `supersededBy`, stays among those compared, and reads the weaker of what it
-   computes, a conflict included, and `SUPERSEDED`: a record that cannot be valid never raises what it names, and hides no
-   conflict from it or from what is derived from it. An assertion in a conflict reads `CONFLICTING` whatever state it had:
-   a fall from any state that was a basis and, from `NOT_ESTABLISHED`, a step up the strength order of
-   `SUPPORT_STATES.md` that is no gain in basis, after which a `CONFLICTING` the author declared no longer exceeds the
-   computed state. No readiness answer is more favourable.
+   supersession retires, and keep the disagreement that a retired assertion that something supports leaves. An assertion
+   that a well-formed record supersedes, once or more than once, is `SUPERSEDED`. `supersededBy` names the smallest id,
+   by code unit, among the other assertions its records name that resolve; if there is none, the assertion itself if a
+   record names it; otherwise the smallest of the ids, which resolve to nothing. A supersession record is well-formed
+   when it names two different assertions that resolve, of one claim identity, the superseding one asserted later. Only
+   a well-formed record takes an assertion out of the comparison of its group, and only it makes the assertion read
+   `SUPERSEDED` whatever state it had: it is the author's claim that the later assertion replaces the earlier, taken as
+   made, and nothing asks whether the later assertion has evidence of its own. It ends the standing of the earlier
+   assertion, not a disagreement the earlier assertion was part of: a superseded assertion that one of its own
+   observations supports (STALE or better, each of its observations read alone, so a citation added to contradict the
+   others does not take its evidence away), and that reads another value than the live assertions of its group, which
+   agree with one another and of which one has evidence of its own (a derived assertion has it where its derivation
+   resolves and one of its inputs resolves) and is not a successor of it, stays compared with them. The group is linked
+   as a group that disagrees is: all the live assertions of the group, whatever they carry, read `CONFLICTING` with
+   `CONFLICT_DETECTED`, and the superseded one keeps reading `SUPERSEDED` and lists them in `conflictsWith`, as a
+   declared conflict already leaves it. A pair that a declared conflict already links is left as it is. A successor is
+   an assertion a well-formed record names as replacing it, directly or through a chain of well-formed records. The
+   group is linked whole, a successor in it included, and the disagreement ends when the live assertion that is not a
+   successor is named as one (a well-formed record needs it asserted later) or is superseded too (the residual risks in
+   `THREAT_MODEL.md` say what an author can still do). An assertion that only faulty records supersede (records
+   `check_invariants` reports as `SUPERSESSION_REFERENCE_INVALID`, `SUPERSESSION_CLAIM_IDENTITY_MISMATCH` or
+   `SUPERSESSION_NOT_FORWARD_IN_TIME`) carries the `SUPERSEDED` limitation and its `supersededBy`, stays among those
+   compared, and reads the weaker of what it computes, a conflict included, and `SUPERSEDED`: a record that cannot be
+   valid never raises what it names, and hides no conflict from it or from what is derived from it. An assertion in a
+   conflict reads `CONFLICTING` whatever state it had: a fall from any state that was a basis and, from
+   `NOT_ESTABLISHED`, a step up the strength order of `SUPPORT_STATES.md` that is no gain in basis, after which a
+   `CONFLICTING` the author declared no longer exceeds the computed state. No readiness answer is more favourable.
 4. For each assertion, evaluate directly (observations) or by derivation (dependencies, recursively). A derived
    assertion whose subject fails the claim contract is `NOT_ESTABLISHED` with `INVALID_SUBJECT`, and one whose subject
    differs from any input's on a shared subject key is `NOT_ESTABLISHED` with `SUBJECT_MISMATCH`. A derived assertion that
