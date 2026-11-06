@@ -30,7 +30,21 @@ WalletWall does not sign, custody, trade, broadcast transactions, provide invest
 | `trace_provenance` | W3C PROV-JSON-shaped source lineage for one assertion |
 | `assess_vault_readiness` | `VAULT_TECHNICAL_READINESS` rules 0.1.0-draft |
 
-![WalletWall canvas showing a conflict](docs/img/walletwall-canvas-conflict.png)
+### The canvas
+
+Screenshots of the current canvas, rendered in a browser from its loopback page with synthetic bundles (not live data).
+
+**The Wall.** Every source, observation, claim and derivation of one bundle, with the selected claim's state, provenance and limitations beside it. Here two balance claims disagree; WalletWall marks the conflict and picks no winner.
+
+![WalletWall canvas: The Wall with a conflicting balance selected](docs/img/walletwall-canvas-conflict.png)
+
+**Readiness assembly.** Each vault-readiness criterion with its outcome and reason code, and a searchable list of every piece on The Wall.
+
+![WalletWall canvas: readiness assembly and piece list](docs/img/walletwall-canvas-readiness.png)
+
+**WallPrint disclosure record.** A bundled synthetic disclosure lineage in which three assessors disagree and all three stay on the record.
+
+![WalletWall canvas: WallPrint disclosure record](docs/img/walletwall-canvas-wallprint.png)
 
 ## What it will not say
 
