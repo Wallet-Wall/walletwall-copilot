@@ -1,7 +1,7 @@
 {
   "name": "walletwall",
   "displayName": "WalletWall Vault Readiness",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Read-only Vault technical-readiness, evidence, invariant, authority, and provenance workflows using the local WalletWall MCP engine.",
   "author": {
     "name": "WalletWall"
