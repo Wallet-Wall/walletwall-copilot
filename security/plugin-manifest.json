@@ -2,7 +2,7 @@
   "manifestVersion": "1",
   "plugin": {
     "name": "walletwall",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "format": "Agent Plugins 1.0.0",
     "schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
   },
@@ -36,7 +36,7 @@
   "files": [
     {
       "path": "plugin/.claude-plugin/plugin.json",
-      "sha512": "05797e037f944291634cdb468f5a2938348c9d4e16cf7118e4849a6a8988305a81fdc6b5052f3c3233430a5b8610f894ca2fc6d161cf36e1173cb6aa5b756b64",
+      "sha512": "305940304b3b20ed887264950e97dd2077ae64af6c7feaf73e827f18dac7188d0ffafb662520569ae14c0d3b9f6991b96cd7993cb32cefdda999a7f81424232a",
       "bytes": 962
     },
     {
@@ -51,7 +51,7 @@
     },
     {
       "path": "plugin/README.md",
-      "sha512": "f8105cd83a0490667993b6f052eefb95f596adc0e83c7f2e9030ff9bad3d4472f245f56bad39f8c8bd3be94a06499444528823380a36b0924d5e1a633991b0cf",
+      "sha512": "938ec1ceeaa4537036a3dd9029598f5f967310d7184d91fd9695a6eee6fc201d215a653d98e13c66714c9aae822095b3f18567e187938ea6ab467cacedc51f02",
       "bytes": 4240
     },
     {
@@ -156,7 +156,7 @@
     },
     {
       "path": "plugin/plugin.json",
-      "sha512": "c2654290bd34e6cc105005c5a47fea1c29d7965e9c104d98eee59490c1c588406156cfd08ec00a75e37f12155c65213b673ca64dc6e1e5020170d6d5e043d162",
+      "sha512": "50d352bbfb08ec3695b49373ae2b2c568ab764c8407b0047782533a44cd7e04928eb62fbd058cf1572be8d37bcdf561c8bfb245a27a28e176cb8937f0cbb8a83",
       "bytes": 526
     },
     {
