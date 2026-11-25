@@ -45,10 +45,10 @@ Requirements:
 ```bash
 git clone https://github.com/Wallet-Wall/walletwall-claude.git
 cd walletwall-claude
-claude --plugin-dir .
+claude --plugin-dir ./plugin
 ```
 
-The plugin launches the committed local server at `server/walletwall-mcp.mjs`. No account, API key or credential is needed.
+The plugin is the repository's `plugin/` folder. It launches its committed local server, `server/walletwall-mcp.mjs`. No account, API key or credential is needed.
 
 ## Try it
 
@@ -191,13 +191,13 @@ Skills guide tool use and interpretation. They do not create evidence or overrid
 
 This repository is a generated distribution surface, not a second WalletWall implementation.
 
-The payload is every tracked file outside `.github/`, which holds this repository's own workflows, source pin and policies. `PROVENANCE.json` records the `Wallet-Wall/walletwall-copilot` source commit the payload was generated from, and the size and SHA-512 digest of every other payload file. `node_modules/` holds unmodified copies of files from the server's three runtime dependencies as installed from npm: the MCP SDK modules the server loads, and the JavaScript files of `zod` and `zod-to-json-schema`. The one exception is the SDK's `dist/esm/validation/ajv-provider.js`, which is replaced by a stub that disables the SDK's JSON Schema validation. `assets/icon.png` is the Directory listing icon, copied from the source repository only if it matches its recorded size and SHA-512. The skills are the source skills without their Copilot-only sections. `.gitattributes` turns off line-ending conversion, so a clone keeps the recorded bytes even where Git is configured with `core.autocrlf=true`.
+The plugin is the repository's `plugin/` folder, the only folder that is installed. This repository's own workflows, source pin and policies are in `.github/`, outside the plugin. `PROVENANCE.json` records the `Wallet-Wall/walletwall-copilot` source commit the plugin was generated from, and the size and SHA-512 digest of every other file in the plugin. `node_modules/` holds unmodified copies of files from the server's three runtime dependencies as installed from npm: each package's `package.json` and license file, and only the modules of the MCP SDK, `zod` and `zod-to-json-schema` that the server can load. They are private implementation dependencies of this server, not general-purpose copies of those npm packages: export targets the server does not import, such as zod-to-json-schema's CommonJS build, are intentionally absent, so nothing else should load packages from this folder. The one exception to the unmodified copies is the SDK's `dist/esm/validation/ajv-provider.js`, which is replaced by a stub that disables the SDK's JSON Schema validation. `assets/icon.png` is the Directory listing icon, copied from the source repository only if it matches its recorded size and SHA-512. The skills are the source skills without their Copilot-only sections. `.gitattributes` turns off line-ending conversion, so a clone keeps the recorded bytes even where Git is configured with `core.autocrlf=true`.
 
 This repository's CI checks:
 
-- **Consistency:** every manifested file is present with its recorded size and SHA-512 digest, every tracked payload file is manifested, and `PROVENANCE.json` names the commit pinned in `.github/source-pin.json`, lists at most 512 files and lists no non-media file over 256 KiB.
-- **Shape:** a fixed set of root entries and exactly the four skills, regular non-executable files, a metadata-only `.claude-plugin/plugin.json`, one local `walletwall` server in `.mcp.json` with no environment variables or remote URL, and the Ajv stub in place.
-- **Origin:** it regenerates the package from the pinned source commit, which must be reachable from the source repository's `main` branch, and requires the committed payload to equal that output file for file and byte for byte.
+- **Consistency:** every manifested file is present with its recorded size and SHA-512 digest, every tracked file in `plugin/` is manifested, and `PROVENANCE.json` names the commit pinned in `.github/source-pin.json`, lists at most 512 files and lists no non-media file over 256 KiB.
+- **Shape:** exactly `.github/` and `plugin/` at the repository root, a fixed set of entries in `plugin/` and exactly the four skills, regular non-executable files, a metadata-only `.claude-plugin/plugin.json`, one local `walletwall` server in `.mcp.json` with no environment variables or remote URL, and the Ajv stub in place.
+- **Origin:** it regenerates the package from the pinned source commit, which must be reachable from the source repository's `main` branch, and requires the committed `plugin/` folder to equal that output file for file and byte for byte.
 - **Startup:** the committed server starts over stdio and lists exactly the six tools above.
 - **Drift:** a text scan of `server/`, `skills/` and `.mcp.json` rejects a short list of transaction signing, broadcast and transfer call names.
 
@@ -207,7 +207,7 @@ Changes to WalletWall evidence semantics, readiness rules, registries, or MCP be
 
 ## Security
 
-See [`.github/SECURITY.md`](.github/SECURITY.md) for the security boundary and vulnerability-reporting guidance.
+See the distribution's [security policy](https://github.com/Wallet-Wall/walletwall-claude/blob/main/.github/SECURITY.md) for the security boundary and vulnerability-reporting guidance.
 
 ## Trademarks
 
@@ -215,4 +215,4 @@ See [`.github/SECURITY.md`](.github/SECURITY.md) for the security boundary and v
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE).
+Apache-2.0. See [`LICENSE`](https://github.com/Wallet-Wall/walletwall-copilot/blob/main/LICENSE); the same text ships as `LICENSE` in the plugin.

@@ -28,7 +28,7 @@ test("Claude plugin manifest holds identity, version and Directory listing metad
   ]);
   assert.equal(manifest["name"], "walletwall");
   assert.equal(manifest["displayName"], "WalletWall Vault Readiness");
-  assert.equal(manifest["version"], "0.3.3");
+  assert.equal(manifest["version"], "0.3.4");
   assert.deepEqual(manifest["author"], { name: "WalletWall" });
   assert.equal(manifest["license"], "Apache-2.0");
   // The listing icon ships only in the generated Claude Directory package, so only that package's manifest names it.

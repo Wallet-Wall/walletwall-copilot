@@ -7,7 +7,16 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createOwnedRun } from "../packages/mcp/test/support/owned-temp.ts";
 import { ALLOWED_SDK_MODULES, bundleOptions } from "./bundle-config.ts";
-import { checkDirectoryIcon, stripCopilotOnly, unresolvedManifestReferences, withDirectoryIcon } from "./claude-directory-content.ts";
+import {
+  checkDirectoryIcon,
+  dynamicImportLines,
+  stripCopilotOnly,
+  unresolvedManifestReferences,
+  VENDORED_PACKAGES,
+  type VendoredPackage,
+  vendoredModuleSelection,
+  withDirectoryIcon,
+} from "./claude-directory-content.ts";
 import { byPath, checkedOutCommit, sourceCommit } from "./claude-directory-provenance.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -103,21 +112,29 @@ function copyRuntimeTree(source: string, destination: string, include: (relative
   }
 }
 
+type RuntimeModules = Record<VendoredPackage, ReadonlySet<string>>;
+
 /**
- * The MCP SDK modules the server can load: the module graph of the multi-host plugin bundle (same entry point, Ajv
- * replaced by the stub), held to that bundle's stdio-only allowlist. Client, auth, SSE, Streamable HTTP and example
- * modules stay out.
+ * The files of each vendored package the server can load: the module graph of the multi-host plugin bundle (same entry
+ * point, Ajv replaced by the stub). The SDK part is held to that bundle's stdio-only allowlist, so client, auth, SSE,
+ * Streamable HTTP and example modules stay out. Zod and zod-to-json-schema ship exactly their graph modules as well, so
+ * files that no import reaches (zod-to-json-schema's CommonJS build, Zod modules nothing imports) are not shipped.
  */
-async function reachableSdkModules(): Promise<Set<string>> {
+async function reachableRuntimeModules(): Promise<RuntimeModules> {
   const { metafile } = await build(bundleOptions(root));
-  const modules = Object.keys(metafile.inputs).flatMap((path) => /node_modules\/@modelcontextprotocol\/sdk\/dist\/esm\/(.+)$/.exec(path.replace(/\\/g, "/"))?.[1] ?? []);
-  const unexpected = modules.filter((module) => !ALLOWED_SDK_MODULES.includes(module));
+  const modules = vendoredModuleSelection(Object.keys(metafile.inputs));
+  const sdk = [...modules["@modelcontextprotocol/sdk"]].map((rel) => /^dist\/esm\/(.+)$/.exec(rel)?.[1] ?? rel);
+  const unexpected = sdk.filter((module) => !ALLOWED_SDK_MODULES.includes(module));
   if (unexpected.length > 0) throw new Error(`MCP SDK modules outside the stdio allowlist: ${unexpected.join(", ")}`);
-  for (const required of ["server/index.js", "server/stdio.js"]) if (!modules.includes(required)) throw new Error(`MCP SDK module graph lacks ${required}`);
-  return new Set(modules.map((module) => `dist/esm/${module}`));
+  for (const required of ["server/index.js", "server/stdio.js"]) if (!sdk.includes(required)) throw new Error(`MCP SDK module graph lacks ${required}`);
+  for (const name of ["zod", "zod-to-json-schema"] as const) {
+    if (modules[name].size === 0) throw new Error(`the server's module graph reaches no ${name} module`);
+  }
+  return modules;
 }
 
-function vendorRuntimeDependencies(sdkModules: ReadonlySet<string>): void {
+function vendorRuntimeDependencies(modules: RuntimeModules): void {
+  const sdkModules = modules["@modelcontextprotocol/sdk"];
   const sdkSource = join(root, "node_modules", "@modelcontextprotocol", "sdk");
   const sdkTarget = join(outDir, "node_modules", "@modelcontextprotocol", "sdk");
   copyRuntimeTree(sdkSource, sdkTarget, (rel) => rel === "package.json" || isLicense(rel) || rel === AJV_PROVIDER || sdkModules.has(rel));
@@ -125,16 +142,37 @@ function vendorRuntimeDependencies(sdkModules: ReadonlySet<string>): void {
   if (!statSync(ajvProvider).isFile()) throw new Error("vendored MCP SDK is missing validation/ajv-provider.js");
   writeFileSync(ajvProvider, AJV_STUB);
 
-  const zodSource = join(root, "node_modules", "zod");
-  const zodTarget = join(outDir, "node_modules", "zod");
-  copyRuntimeTree(zodSource, zodTarget, (rel) => rel === "package.json" || isLicense(rel) || rel.endsWith(".js"));
-
-  const zodToJsonSource = join(root, "node_modules", "zod-to-json-schema");
-  const zodToJsonTarget = join(outDir, "node_modules", "zod-to-json-schema");
-  copyRuntimeTree(zodToJsonSource, zodToJsonTarget, (rel) => rel === "package.json" || isLicense(rel) || rel.endsWith(".js") || rel.endsWith(".mjs"));
+  // Each package keeps its package.json (Node resolves the package through it) and its license; the code is exactly the
+  // modules the server's module graph reaches.
+  for (const name of ["zod", "zod-to-json-schema"] as const) {
+    const graph = modules[name];
+    copyRuntimeTree(join(root, "node_modules", name), join(outDir, "node_modules", name), (rel) => rel === "package.json" || isLicense(rel) || graph.has(rel));
+  }
 }
 
-function validatePackage(): { files: number; largest: string; largestBytes: number } {
+/**
+ * Fails closed unless every vendored package holds its package.json, a license file and exactly the modules the server's
+ * module graph reaches (plus the SDK's Ajv stub): no extra code file, and no reached module missing.
+ */
+function checkVendoredClosure(modules: RuntimeModules): void {
+  for (const name of VENDORED_PACKAGES) {
+    const dir = join(outDir, "node_modules", ...name.split("/"));
+    const shipped = walk(dir).map((path) => relative(dir, path).replace(/\\/g, "/"));
+    const allowedExtra = name === "@modelcontextprotocol/sdk" ? AJV_PROVIDER : undefined;
+    const extra = shipped.filter((rel) => rel !== "package.json" && !isLicense(rel) && rel !== allowedExtra && !modules[name].has(rel));
+    const missing = [...modules[name]].filter((rel) => !shipped.includes(rel));
+    if (extra.length > 0) throw new Error(`vendored ${name} holds files outside the server's module graph:\n${extra.join("\n")}`);
+    if (missing.length > 0) throw new Error(`vendored ${name} lacks modules the server's module graph reaches:\n${missing.join("\n")}`);
+    if (!shipped.includes("package.json") || !shipped.some(isLicense)) throw new Error(`vendored ${name} lacks its package.json or license file`);
+    // The selection is the static module graph: a dynamic import() or require() could load a file outside it at run time.
+    const dynamic = shipped
+      .filter((rel) => /\.(?:m|c)?js$/.test(rel))
+      .flatMap((rel) => dynamicImportLines(readFileSync(join(dir, ...rel.split("/")), "utf8")).map((hit) => `${rel}:${hit}`));
+    if (dynamic.length > 0) throw new Error(`vendored ${name} calls import() or require() outside a comment:\n${dynamic.join("\n")}`);
+  }
+}
+
+function validatePackage(modules: RuntimeModules): { files: number; largest: string; largestBytes: number } {
   const files = walk(outDir);
   if (files.length > MAX_FILES) throw new Error(`Claude Directory package has ${files.length} files; maximum is ${MAX_FILES}`);
 
@@ -160,6 +198,7 @@ function validatePackage(): { files: number; largest: string; largestBytes: numb
     .map((path) => relative(sdkDir, path).replace(/\\/g, "/"))
     .filter((rel) => rel !== "package.json" && !isLicense(rel) && rel !== AJV_PROVIDER && !allowedSdkModules.has(rel));
   if (strays.length > 0) throw new Error(`vendored MCP SDK holds files outside the stdio allowlist:\n${strays.join("\n")}`);
+  checkVendoredClosure(modules);
 
   const unresolved = unresolvedManifestReferences(outDir);
   if (unresolved.length > 0) throw new Error(`Claude Directory manifests reference files the package does not contain:\n${unresolved.join("\n")}`);
@@ -205,8 +244,8 @@ try {
   copyStatic();
   const copilotOnlySections = stripCopilotOnlySkillSections();
   const icon = copyDirectoryIcon();
-  const sdkModules = await reachableSdkModules();
-  vendorRuntimeDependencies(sdkModules);
+  const modules = await reachableRuntimeModules();
+  vendorRuntimeDependencies(modules);
 
   const result = await build({
     absWorkingDir: root,
@@ -236,10 +275,13 @@ try {
     `${JSON.stringify({ schemaVersion: "1", sourceRepository: "Wallet-Wall/walletwall-copilot", sourceCommit: commit, files }, null, 2)}\n`,
   );
 
-  const summary = validatePackage();
+  const summary = validatePackage(modules);
   await smokeArtifact();
   console.log(`Claude Directory package: ${summary.files} files; largest ${summary.largest} ${summary.largestBytes} bytes`);
-  console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; vendored MCP SDK modules: ${sdkModules.size} + Ajv stub; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
+  console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
+  console.log(
+    `vendored modules from the server's module graph: @modelcontextprotocol/sdk ${modules["@modelcontextprotocol/sdk"].size} + Ajv stub, zod ${modules.zod.size}, zod-to-json-schema ${modules["zod-to-json-schema"].size}`,
+  );
   console.log(`listing icon: ${ICON_PATH} ${icon.width}x${icon.height} PNG ${icon.bytes} bytes sha512 ${icon.digest}; copilot-only skill sections removed: ${copilotOnlySections}`);
   console.log("manifest references: every file named by .claude-plugin/plugin.json and .mcp.json is in the package");
 } finally {

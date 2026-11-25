@@ -1,7 +1,7 @@
 {
   "name": "walletwall",
   "displayName": "WalletWall Vault Readiness",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Read-only checks of blockchain evidence for WalletWall Vault technical readiness of stablecoin balances: provenance, authority, freshness, conflicts and invariants, evaluated locally.",
   "author": {
     "name": "WalletWall"

@@ -95,6 +95,50 @@ export function stripCopilotOnly(text: string): { text: string; removed: number 
   }
 }
 
+/** The npm packages the Claude Directory package vendors under `node_modules/`: the server's only runtime dependencies. */
+export const VENDORED_PACKAGES = ["@modelcontextprotocol/sdk", "zod", "zod-to-json-schema"] as const;
+export type VendoredPackage = (typeof VENDORED_PACKAGES)[number];
+
+/**
+ * The files of each vendored package that the server can load, read from the input paths of an esbuild metafile of the
+ * server's module graph: the package-relative path of every module the graph reaches. Inputs outside `node_modules/`
+ * (WalletWall's own source, a build plugin's stub namespace) are not package files and are skipped. An input from any
+ * other package throws, because the Claude Directory package would not contain it. Only the graph decides, so a file
+ * that no import resolves to (for example zod-to-json-schema's CommonJS build) is never selected.
+ */
+export function vendoredModuleSelection(graphInputs: readonly string[]): Record<VendoredPackage, Set<string>> {
+  const selection = Object.fromEntries(VENDORED_PACKAGES.map((name) => [name, new Set<string>()])) as Record<VendoredPackage, Set<string>>;
+  const strays: string[] = [];
+  for (const input of graphInputs) {
+    const path = input.replaceAll("\\", "/");
+    const match = /^(?:.*?\/)?node_modules\/((?:@[^/]+\/)?[^/]+)\/(.+)$/.exec(path);
+    if (match === null) continue;
+    const name = match[1] ?? "";
+    const rel = match[2] ?? "";
+    if ((VENDORED_PACKAGES as readonly string[]).includes(name)) selection[name as VendoredPackage].add(rel);
+    else strays.push(path);
+  }
+  if (strays.length > 0) throw new Error(`the server's module graph reaches packages the Claude Directory package does not vendor:\n${strays.join("\n")}`);
+  return selection;
+}
+
+/**
+ * The lines of a module that call `import()` or `require()` outside a comment line, as "line: code". The vendored selection
+ * is the server's static module graph, so a dynamic import could load a file the package does not ship; the builder
+ * refuses one. A line whose code starts with a comment marker is not a call, and neither `import.meta` nor `createRequire`
+ * matches.
+ */
+export function dynamicImportLines(source: string): string[] {
+  const found: string[] = [];
+  source.split("\n").forEach((line, index) => {
+    if (!/\bimport\s*\(|\brequire\s*\(/.test(line)) return;
+    const code = line.trim();
+    if (code.startsWith("//") || code.startsWith("/*") || code.startsWith("*")) return;
+    found.push(`${index + 1}: ${code.slice(0, 120)}`);
+  });
+  return found;
+}
+
 /** The directory's listing-icon rule, as `claude plugin validate` states it: a square PNG, 512 to 2048 px a side, under 2 MB. */
 export const ICON_MIN_SIDE = 512;
 export const ICON_MAX_SIDE = 2048;

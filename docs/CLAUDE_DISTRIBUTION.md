@@ -30,7 +30,7 @@ Repository tests fail if those relative server paths diverge.
 
 ### Claude Directory artifact
 
-`npm run build:claude-directory` emits `dist/claude-directory/`, a root-ready package intended to populate the dedicated public `Wallet-Wall/walletwall-claude` distribution repository.
+`npm run build:claude-directory` emits `dist/claude-directory/`, the plugin package that populates the `plugin/` folder of the dedicated public `Wallet-Wall/walletwall-claude` distribution repository.
 
 ```text
 dist/claude-directory/
@@ -60,7 +60,9 @@ The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp
 
 - `@modelcontextprotocol/sdk`: `package.json`, `LICENSE` and only the SDK modules the server can load. They are read from the module graph of the multi-host plugin bundle (`bundleOptions` in `scripts/bundle-config.ts`: the same entry point, with every dependency bundled) and must be on that bundle's stdio-only allowlist, so no client, auth, SSE, Streamable HTTP or example module is shipped.
 - `dist/esm/validation/ajv-provider.js` in the vendored SDK is replaced by a stub that throws, so Ajv, which compiles schemas with `new Function`, is neither shipped nor loaded.
-- `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`). Zod is not stubbed: it builds functions at runtime through an aliased `Function` in `v4/core/util.js`, `v4/core/doc.js` and `v4/core/compile.js` (`SECURITY.md`, "Dynamic code generation"). The server works unchanged where that is blocked.
+- `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and only the modules the server can load, read from the same module graph. Files that no import reaches, such as zod-to-json-schema's CommonJS build, are not shipped. Zod is not stubbed: it builds functions at runtime through an aliased `Function` in `v4/core/util.js`, `v4/core/doc.js` and `v4/core/compile.js` (`SECURITY.md`, "Dynamic code generation"). The server works unchanged where that is blocked.
+
+The vendored packages are private implementation dependencies of the server, not general-purpose copies of the npm packages. Export targets the server does not import are intentionally absent: for example `zod`'s `mini` and `locales` entry points and zod-to-json-schema's CommonJS `require` entry and `main` (`dist/cjs/index.js`). `zod`'s CommonJS (`.cjs`) files were never shipped. Nothing outside the server should import packages from the package's `node_modules/`. Because the selection is the server's static module graph, the builder also refuses a vendored module that calls `import()` or `require()` outside a comment, so a module loaded at run time cannot fall outside the shipped set.
 
 `assets/icon.png` is the Claude Directory listing icon. The generator adds `"icon": "./assets/icon.png"` to the generated `.claude-plugin/plugin.json`; the shared `plugin/.claude-plugin/plugin.json` does not declare it, because `plugin/` does not ship the file and `claude --plugin-dir ./plugin` must not see a reference to a missing file. It is copied from `docs/claude-directory/icon.png` only if that file's size and SHA-512 (the current integrity algorithm, `security/integrity-policy.json`) equal `docs/claude-directory/icon-provenance.json`, which also records the public source mark (repository, commit, path, size and SHA-512) and the exact transform. The directory reads the icon once, when a plugin is first saved or submitted in its developer portal, so the icon must be in the tracked branch before that.
 
@@ -73,6 +75,9 @@ The builder fails closed if:
 - `WALLETWALL_SOURCE_SHA` is set but is not a full lowercase commit SHA, or, in a Git checkout, is not the checked-out `HEAD`;
 - the server's module graph reaches an MCP SDK module outside the stdio allowlist, or does not reach the stdio server (`server/index.js`, `server/stdio.js`);
 - the vendored SDK holds anything other than `package.json`, `LICENSE`, the stub and allowlisted modules;
+- the server's module graph reaches a package other than the three vendored ones, or reaches no `zod` or `zod-to-json-schema` module;
+- a vendored package holds a code file the server's module graph does not reach, lacks a module it does reach, or lacks its `package.json` or license file;
+- a vendored module calls `import()` or `require()` outside a comment;
 - the artifact exceeds 512 files;
 - any non-image/font file exceeds 256 KiB;
 - the generated server does not start over stdio or does not list exactly the six WalletWall tools;
@@ -162,9 +167,9 @@ Record the Claude host version, Node version, reviewed source commit SHA, genera
 
 The intended public submission repository is `Wallet-Wall/walletwall-claude`. It is a distribution repository, not an independent source of truth.
 
-Its root should be replaced atomically from one reviewed `dist/claude-directory/` build. `PROVENANCE.json` records the WalletWall source repository and source commit used to produce the package. Changes to evidence semantics, readiness rules, registries, or MCP behavior must originate in `walletwall-copilot` and pass its conformance/security gates before being propagated.
+Its `plugin/` folder is replaced atomically from one reviewed `dist/claude-directory/` build; its `.github/` folder holds that repository's own workflows, source pin and policies, outside the plugin. `PROVENANCE.json` records the WalletWall source repository and source commit used to produce the package. Changes to evidence semantics, readiness rules, registries, or MCP behavior must originate in `walletwall-copilot` and pass its conformance/security gates before being propagated.
 
-That repository's CI allows only a fixed set of root entries and a fixed set of `plugin.json` keys. A generator change that adds a root entry or a manifest key needs the same entry or key allowed there, in the pull request that moves the pin. Moving the pin to a commit with the listing icon needs `assets/` allowed as a root entry and `icon`, `documentationUrl`, `supportUrl` and `privacyPolicyUrl` allowed as `plugin.json` keys.
+That repository's CI allows exactly `.github/` and `plugin/` at its root, a fixed set of entries in `plugin/` and a fixed set of `plugin.json` keys, which include the listing's `icon`, `documentationUrl`, `supportUrl` and `privacyPolicyUrl`. A generator change that adds an entry to the package or a manifest key needs the same entry or key allowed there, in the pull request that moves the pin.
 
 ## Future hosted Guardian
 
