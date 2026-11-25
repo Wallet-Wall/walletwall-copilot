@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
-import { COPILOT_ONLY_END, COPILOT_ONLY_START, checkDirectoryIcon, stripCopilotOnly, unresolvedManifestReferences, withDirectoryIcon } from "../../../../scripts/claude-directory-content.ts";
+import { build } from "esbuild";
+import { bundleOptions } from "../../../../scripts/bundle-config.ts";
+import {
+  COPILOT_ONLY_END,
+  COPILOT_ONLY_START,
+  checkDirectoryIcon,
+  stripCopilotOnly,
+  unresolvedManifestReferences,
+  VENDORED_PACKAGES,
+  vendoredModuleSelection,
+  withDirectoryIcon,
+} from "../../../../scripts/claude-directory-content.ts";
 import { byPath, checkedOutCommit, sourceCommit } from "../../../../scripts/claude-directory-provenance.ts";
 import { ROOT } from "../support/harness.ts";
 import { createOwnedRun } from "../support/owned-temp.ts";
@@ -107,6 +118,7 @@ describe("Claude Directory provenance", () => {
     assert.match(r.stdout, /Claude Directory package: \d+ files/);
     assert.match(r.stdout, /listing icon: assets\/icon\.png 1024x1024 PNG 605502 bytes sha512 15302974ac45f9e51f272d4e5241813e895423ccab9e0d71b8259d29b077873fb43047cd494d59856de2f2cac008d3c50969d110973498f43675f3b515a1f037/);
     assert.match(r.stdout, /copilot-only skill sections removed: 1\b/);
+    assert.match(r.stdout, /vendored modules from the server's module graph: @modelcontextprotocol\/sdk \d+ \+ Ajv stub, zod \d+, zod-to-json-schema \d+/);
     assert.match(r.stdout, /manifest references: every file named by \.claude-plugin\/plugin\.json and \.mcp\.json is in the package/);
   });
 });
@@ -234,5 +246,37 @@ describe("Claude Directory listing content", () => {
     for (const other of ["vault-readiness", "walletwall-authority", "walletwall-evidence-audit"]) {
       assert.equal(stripCopilotOnly(read(`plugin/skills/${other}/SKILL.md`).toString("utf8")).removed, 0, other);
     }
+  });
+});
+
+describe("the vendored runtime files are the server's module graph", () => {
+  test("a graph input selects its package-relative path; WalletWall sources and stub namespaces are skipped; separators are normalized", () => {
+    const selection = vendoredModuleSelection([
+      "packages/mcp/src/main.ts",
+      "walletwall-stub:ajv-provider-stub",
+      "node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js",
+      "node_modules\\zod\\v4\\classic\\external.js",
+      "node_modules/zod-to-json-schema/dist/esm/parsers/string.js",
+    ]);
+    assert.deepEqual([...selection["@modelcontextprotocol/sdk"]], ["dist/esm/server/index.js"]);
+    assert.deepEqual([...selection.zod], ["v4/classic/external.js"]);
+    assert.deepEqual([...selection["zod-to-json-schema"]], ["dist/esm/parsers/string.js"]);
+  });
+
+  test("a module from a package the Claude Directory package does not vendor fails closed", () => {
+    assert.throws(() => vendoredModuleSelection(["node_modules/zod/index.js", "node_modules/ajv/dist/ajv.js"]), /does not vendor:\nnode_modules\/ajv\/dist\/ajv\.js$/);
+  });
+
+  test("the server's module graph selects modules of every vendored package and none of zod-to-json-schema's CommonJS build", async () => {
+    const { metafile } = await build(bundleOptions(ROOT));
+    const selection = vendoredModuleSelection(Object.keys(metafile.inputs));
+    for (const name of VENDORED_PACKAGES) {
+      assert.ok(selection[name].size > 0, `${name}: the module graph reaches none of its modules`);
+      for (const rel of selection[name]) assert.ok(existsSync(join(ROOT, "node_modules", ...name.split("/"), ...rel.split("/"))), `${name}/${rel} is not an installed file`);
+    }
+    assert.ok(selection["zod-to-json-schema"].has("dist/esm/index.js"), "the ESM entry point is reached");
+    // Control: the installed package does have a CommonJS build, so its absence from the selection is a real exclusion.
+    assert.ok(existsSync(join(ROOT, "node_modules", "zod-to-json-schema", "dist", "cjs", "index.js")));
+    assert.deepEqual([...selection["zod-to-json-schema"]].filter((rel) => rel.startsWith("dist/cjs/")), []);
   });
 });

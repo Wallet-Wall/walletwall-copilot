@@ -109,7 +109,7 @@ describe("dynamic code generation: what is claimed and what is proved (PRIV-015)
     }
   });
 
-  test("PRIV-015 the Zod files the Claude Directory package copies (every .js file) carry the same inventory as the bundle", () => {
+  test("PRIV-015 every .js file of vendored Zod, a superset of the modules the Claude Directory package copies, carries the same inventory as the bundle", () => {
     const zodRoot = `${ROOT}node_modules/zod`;
     const found: string[] = [];
     for (const path of walk(zodRoot)) {
