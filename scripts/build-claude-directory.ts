@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createOwnedRun } from "../packages/mcp/test/support/owned-temp.ts";
 import { ALLOWED_SDK_MODULES, bundleOptions } from "./bundle-config.ts";
-import { checkDirectoryIcon, stripCopilotOnly } from "./claude-directory-content.ts";
+import { checkDirectoryIcon, stripCopilotOnly, unresolvedManifestReferences, withDirectoryIcon } from "./claude-directory-content.ts";
 import { byPath, checkedOutCommit, sourceCommit } from "./claude-directory-provenance.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -72,7 +72,10 @@ function stripCopilotOnlySkillSections(): number {
   return removed;
 }
 
-/** Copies the reviewed listing icon only if it is exactly the recorded file and meets the directory's icon rule. */
+/**
+ * Copies the reviewed listing icon only if it is exactly the recorded file and meets the directory's icon rule, and adds
+ * the `icon` key to the generated manifest. The shared plugin/ manifest never declares it: only this package ships the file.
+ */
 function copyDirectoryIcon(): ReturnType<typeof checkDirectoryIcon> {
   const bytes = readFileSync(ICON_SOURCE);
   const record = JSON.parse(readFileSync(ICON_RECORD, "utf8")) as { bytes: number; sha512: string; packagedAs: string };
@@ -82,11 +85,11 @@ function copyDirectoryIcon(): ReturnType<typeof checkDirectoryIcon> {
     throw new Error("docs/claude-directory/icon.png is not the file recorded in docs/claude-directory/icon-provenance.json");
   }
   if (record.packagedAs !== ICON_PATH) throw new Error(`icon-provenance.json packagedAs must be ${ICON_PATH}`);
-  const manifest = JSON.parse(readFileSync(join(outDir, ".claude-plugin", "plugin.json"), "utf8")) as { icon?: unknown };
-  if (manifest.icon !== `./${ICON_PATH}`) throw new Error(`.claude-plugin/plugin.json icon must be "./${ICON_PATH}"`);
   const target = join(outDir, ...ICON_PATH.split("/"));
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, bytes);
+  const manifest = join(outDir, ".claude-plugin", "plugin.json");
+  writeFileSync(manifest, withDirectoryIcon(readFileSync(manifest, "utf8"), `./${ICON_PATH}`));
   return icon;
 }
 
@@ -157,6 +160,11 @@ function validatePackage(): { files: number; largest: string; largestBytes: numb
     .map((path) => relative(sdkDir, path).replace(/\\/g, "/"))
     .filter((rel) => rel !== "package.json" && !isLicense(rel) && rel !== AJV_PROVIDER && !allowedSdkModules.has(rel));
   if (strays.length > 0) throw new Error(`vendored MCP SDK holds files outside the stdio allowlist:\n${strays.join("\n")}`);
+
+  const unresolved = unresolvedManifestReferences(outDir);
+  if (unresolved.length > 0) throw new Error(`Claude Directory manifests reference files the package does not contain:\n${unresolved.join("\n")}`);
+  const generatedManifest = JSON.parse(readFileSync(join(outDir, ".claude-plugin", "plugin.json"), "utf8")) as { icon?: unknown };
+  if (generatedManifest.icon !== `./${ICON_PATH}`) throw new Error(`the generated .claude-plugin/plugin.json must name the listing icon as ./${ICON_PATH}`);
 
   return { files: files.length, largest, largestBytes };
 }
@@ -233,6 +241,7 @@ try {
   console.log(`Claude Directory package: ${summary.files} files; largest ${summary.largest} ${summary.largestBytes} bytes`);
   console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; vendored MCP SDK modules: ${sdkModules.size} + Ajv stub; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
   console.log(`listing icon: ${ICON_PATH} ${icon.width}x${icon.height} PNG ${icon.bytes} bytes sha512 ${icon.digest}; copilot-only skill sections removed: ${copilotOnlySections}`);
+  console.log("manifest references: every file named by .claude-plugin/plugin.json and .mcp.json is in the package");
 } finally {
   ownedRun?.dispose();
 }

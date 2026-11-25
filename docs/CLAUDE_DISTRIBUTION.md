@@ -62,7 +62,7 @@ The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp
 - `dist/esm/validation/ajv-provider.js` in the vendored SDK is replaced by a stub that throws, so Ajv, which compiles schemas with `new Function`, is neither shipped nor loaded.
 - `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`). Zod is not stubbed: it builds functions at runtime through an aliased `Function` in `v4/core/util.js`, `v4/core/doc.js` and `v4/core/compile.js` (`SECURITY.md`, "Dynamic code generation"). The server works unchanged where that is blocked.
 
-`assets/icon.png` is the Claude Directory listing icon, named by `"icon": "./assets/icon.png"` in `.claude-plugin/plugin.json`. It is copied from `docs/claude-directory/icon.png` only if that file's size and SHA-512 (the current integrity algorithm, `security/integrity-policy.json`) equal `docs/claude-directory/icon-provenance.json`, which also records the public source mark (repository, commit, path, size and SHA-512) and the exact transform. The directory reads the icon once, when a plugin is first saved or submitted in its developer portal, so the icon must be in the tracked branch before that.
+`assets/icon.png` is the Claude Directory listing icon. The generator adds `"icon": "./assets/icon.png"` to the generated `.claude-plugin/plugin.json`; the shared `plugin/.claude-plugin/plugin.json` does not declare it, because `plugin/` does not ship the file and `claude --plugin-dir ./plugin` must not see a reference to a missing file. It is copied from `docs/claude-directory/icon.png` only if that file's size and SHA-512 (the current integrity algorithm, `security/integrity-policy.json`) equal `docs/claude-directory/icon-provenance.json`, which also records the public source mark (repository, commit, path, size and SHA-512) and the exact transform. The directory reads the icon once, when a plugin is first saved or submitted in its developer portal, so the icon must be in the tracked branch before that.
 
 The skills are the shared `plugin/skills/` files with every section between `<!-- copilot-only:start -->` and `<!-- copilot-only:end -->` removed (today: the Copilot canvas guidance, which Claude hosts do not have). The multi-host `plugin/` package keeps those sections.
 
@@ -77,7 +77,8 @@ The builder fails closed if:
 - any non-image/font file exceeds 256 KiB;
 - the generated server does not start over stdio or does not list exactly the six WalletWall tools;
 - the build itself cannot resolve the approved local MCP runtime dependencies;
-- the listing icon is not the recorded file, is not a square PNG of 512 to 2048 px a side under 2 MB, or `plugin.json` does not name it as `./assets/icon.png`;
+- the listing icon is not the recorded file or is not a square PNG of 512 to 2048 px a side under 2 MB, or the shared manifest already declares `icon`;
+- `.claude-plugin/plugin.json` or `.mcp.json` in the generated package references a file the package does not contain;
 - a skill has an unbalanced or nested copilot-only marker, or still refers to the Copilot canvas after those sections are removed.
 
 `dist/` is generated output and is not committed to this source repository. The dedicated Claude distribution repository should contain only a reviewed generated artifact, not a hand-maintained fork.
@@ -114,7 +115,7 @@ A Claude distribution change is not publish-ready until:
 2. `.mcp.json` exposes exactly one local `walletwall` server.
 3. Claude and Copilot local development configs resolve to the same WalletWall MCP implementation.
 4. No Claude config injects credentials, shell commands, hosted inference, or a second runtime.
-5. All four WalletWall skills are packaged and pass repository structure checks.
+5. All four WalletWall skills are packaged and pass repository structure checks, and every file a manifest references resolves inside its package (`plugin/` and the generated package).
 6. `npm run verify:claude-directory` passes on Linux and Windows.
 7. The root-ready Directory artifact stays within the 512-file and 256-KiB non-media-file limits.
 8. SHA-512 plugin manifest/artifact records for the multi-host `plugin/` package are regenerated intentionally when that package changes.

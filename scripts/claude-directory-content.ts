@@ -1,5 +1,68 @@
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import { INTEGRITY_POLICY } from "./integrity-policy.ts";
+
+/**
+ * The Directory listing icon is metadata for the generated Claude Directory package only. The shared `plugin/` manifest
+ * does not declare it (it does not ship the file), so `claude --plugin-dir ./plugin` never sees a dangling reference;
+ * the generator adds the key when it copies the file. The key goes right after `keywords` (or last), and the result is
+ * plain two-space JSON, so the output depends only on the input.
+ */
+export function withDirectoryIcon(manifestJson: string, iconPath: string): string {
+  const source = JSON.parse(manifestJson) as Record<string, unknown>;
+  if ("icon" in source) throw new Error("the shared plugin/.claude-plugin/plugin.json must not declare icon; the Claude Directory generator adds it");
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    out[key] = value;
+    if (key === "keywords") out["icon"] = iconPath;
+  }
+  if (!("icon" in out)) out["icon"] = iconPath;
+  return `${JSON.stringify(out, null, 2)}\n`;
+}
+
+/**
+ * Every file a plugin's manifests reference, checked against the package it would be installed from: `./` paths in
+ * `.claude-plugin/plugin.json` and `plugin.json` (the icon, and any component path), and `${CLAUDE_PLUGIN_ROOT}/` or
+ * `${PLUGIN_ROOT}/` paths in the command and arguments of `.mcp.json` and `mcp.json` servers. Returns one problem per
+ * reference that does not name an existing file or directory inside the package (an empty list means all resolve).
+ */
+export function unresolvedManifestReferences(packageRoot: string): string[] {
+  const root = realpathSync(packageRoot);
+  const problems: string[] = [];
+  const check = (where: string, reference: string, relativePath: string): void => {
+    const target = resolve(root, relativePath);
+    const inside = target === root || target.startsWith(`${root}${sep}`);
+    if (!inside) problems.push(`${where} ${JSON.stringify(reference)} points outside the package`);
+    else if (!existsSync(target)) problems.push(`${where} ${JSON.stringify(reference)} is not a file in the package`);
+  };
+  const strings = (value: unknown, at: string): [string, string][] => {
+    if (typeof value === "string") return [[at, value]];
+    if (Array.isArray(value)) return value.flatMap((v, i) => strings(v, `${at}[${i}]`));
+    if (value !== null && typeof value === "object") return Object.entries(value).flatMap(([k, v]) => strings(v, at === "" ? k : `${at}.${k}`));
+    return [];
+  };
+  for (const manifest of [".claude-plugin/plugin.json", "plugin.json"]) {
+    const path = join(root, ...manifest.split("/"));
+    if (!existsSync(path)) continue;
+    for (const [at, value] of strings(JSON.parse(readFileSync(path, "utf8")), "")) {
+      if (value.startsWith("./") || value.startsWith("../")) check(`${manifest} ${at}`, value, value);
+    }
+  }
+  for (const config of [".mcp.json", "mcp.json"]) {
+    const path = join(root, config);
+    if (!existsSync(path)) continue;
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+    const servers = (parsed["mcpServers"] ?? parsed) as Record<string, { command?: unknown; args?: unknown }>;
+    for (const [name, server] of Object.entries(servers)) {
+      for (const [at, value] of strings({ command: server.command, args: server.args }, "")) {
+        const m = /^\$\{(?:CLAUDE_PLUGIN_ROOT|PLUGIN_ROOT)\}\/(.*)$/.exec(value);
+        if (m) check(`${config} ${name}.${at}`, value, m[1] ?? "");
+      }
+    }
+  }
+  return problems;
+}
 
 /**
  * Skill text that only applies to another host (today: the Copilot canvas) sits between these markers in the shared

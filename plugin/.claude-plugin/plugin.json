@@ -10,7 +10,6 @@
   "repository": "https://github.com/Wallet-Wall/walletwall-copilot",
   "license": "Apache-2.0",
   "keywords": ["walletwall", "blockchain", "stablecoin", "evidence", "provenance", "vault-readiness", "read-only", "mcp"],
-  "icon": "./assets/icon.png",
   "documentationUrl": "https://github.com/Wallet-Wall/walletwall-copilot/blob/main/docs/CLAUDE_DIRECTORY_README.md",
   "supportUrl": "https://github.com/Wallet-Wall/walletwall-copilot/issues",
   "privacyPolicyUrl": "https://github.com/Wallet-Wall/walletwall-copilot/blob/main/docs/CLAUDE_DIRECTORY_README.md#privacy-and-data-flow"

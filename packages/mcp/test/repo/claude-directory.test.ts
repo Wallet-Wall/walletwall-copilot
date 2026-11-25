@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
-import { COPILOT_ONLY_END, COPILOT_ONLY_START, checkDirectoryIcon, stripCopilotOnly } from "../../../../scripts/claude-directory-content.ts";
+import { COPILOT_ONLY_END, COPILOT_ONLY_START, checkDirectoryIcon, stripCopilotOnly, unresolvedManifestReferences, withDirectoryIcon } from "../../../../scripts/claude-directory-content.ts";
 import { byPath, checkedOutCommit, sourceCommit } from "../../../../scripts/claude-directory-provenance.ts";
 import { ROOT } from "../support/harness.ts";
 import { createOwnedRun } from "../support/owned-temp.ts";
@@ -107,6 +107,57 @@ describe("Claude Directory provenance", () => {
     assert.match(r.stdout, /Claude Directory package: \d+ files/);
     assert.match(r.stdout, /listing icon: assets\/icon\.png 1024x1024 PNG 605502 bytes sha512 15302974ac45f9e51f272d4e5241813e895423ccab9e0d71b8259d29b077873fb43047cd494d59856de2f2cac008d3c50969d110973498f43675f3b515a1f037/);
     assert.match(r.stdout, /copilot-only skill sections removed: 1\b/);
+    assert.match(r.stdout, /manifest references: every file named by \.claude-plugin\/plugin\.json and \.mcp\.json is in the package/);
+  });
+});
+
+describe("manifest-referenced files resolve inside the package that ships them", () => {
+  const runs: ReturnType<typeof createOwnedRun>[] = [];
+  after(() => {
+    for (const r of runs) r.dispose();
+  });
+  const source = readFileSync(join(ROOT, "plugin", ".claude-plugin", "plugin.json"), "utf8");
+  // A package shaped like the generated one: the manifest the generator writes, the icon and the server it names.
+  const packageWith = (files: { icon?: boolean; server?: boolean; manifest?: string } = {}): string => {
+    const run = createOwnedRun();
+    runs.push(run);
+    const dir = run.mkdir("package");
+    mkdirSync(join(dir, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(dir, ".claude-plugin", "plugin.json"), files.manifest ?? withDirectoryIcon(source, "./assets/icon.png"));
+    writeFileSync(join(dir, ".mcp.json"), JSON.stringify({ walletwall: { command: "node", args: ["${CLAUDE_PLUGIN_ROOT}/server/walletwall-mcp.mjs"] } }));
+    if (files.icon !== false) {
+      mkdirSync(join(dir, "assets"), { recursive: true });
+      writeFileSync(join(dir, "assets", "icon.png"), "x");
+    }
+    if (files.server !== false) {
+      mkdirSync(join(dir, "server"), { recursive: true });
+      writeFileSync(join(dir, "server", "walletwall-mcp.mjs"), "");
+    }
+    return dir;
+  };
+
+  test("the generated manifest is the shared manifest plus icon, placed after keywords, deterministically", () => {
+    const generated = withDirectoryIcon(source, "./assets/icon.png");
+    assert.equal(generated, withDirectoryIcon(source, "./assets/icon.png"));
+    const parsed = JSON.parse(generated) as Record<string, unknown>;
+    const { icon, ...rest } = parsed;
+    assert.equal(icon, "./assets/icon.png");
+    assert.deepEqual(rest, JSON.parse(source));
+    const keys = Object.keys(parsed);
+    assert.equal(keys.indexOf("icon"), keys.indexOf("keywords") + 1);
+    assert.ok(generated.endsWith("}\n"));
+    assert.throws(() => withDirectoryIcon(generated, "./assets/icon.png"), /must not declare icon/, "a shared manifest that names the icon is refused");
+  });
+
+  test("a complete package resolves every reference", () => {
+    assert.deepEqual(unresolvedManifestReferences(packageWith()), []);
+  });
+
+  test("a missing icon, a missing server script and a path that leaves the package are each reported", () => {
+    assert.deepEqual(unresolvedManifestReferences(packageWith({ icon: false })), ['.claude-plugin/plugin.json icon "./assets/icon.png" is not a file in the package']);
+    assert.deepEqual(unresolvedManifestReferences(packageWith({ server: false })), ['.mcp.json walletwall.args[0] "${CLAUDE_PLUGIN_ROOT}/server/walletwall-mcp.mjs" is not a file in the package']);
+    const escaping = JSON.stringify({ ...JSON.parse(source), icon: "../icon.png" });
+    assert.deepEqual(unresolvedManifestReferences(packageWith({ manifest: escaping })), ['.claude-plugin/plugin.json icon "../icon.png" points outside the package']);
   });
 });
 
