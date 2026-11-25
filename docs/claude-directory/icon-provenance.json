@@ -1,0 +1,23 @@
+{
+  "note": "The Claude Directory listing icon. scripts/build-claude-directory.ts copies icon.png to assets/icon.png in the generated package only if its size and SHA-512 equal this record and it meets the directory's listing-icon rule (a square PNG, 512 to 2048 px a side, under 2 MB). SHA-512 is the only integrity authority (security/integrity-policy.json). The directory reads the icon once, when a plugin is first saved or submitted, so these bytes are deliberate and changing them is a listing decision.",
+  "file": "icon.png",
+  "packagedAs": "assets/icon.png",
+  "bytes": 605502,
+  "sha512": "15302974ac45f9e51f272d4e5241813e895423ccab9e0d71b8259d29b077873fb43047cd494d59856de2f2cac008d3c50969d110973498f43675f3b515a1f037",
+  "image": {
+    "format": "PNG",
+    "width": 1024,
+    "height": 1024,
+    "colour": "8-bit RGB, opaque"
+  },
+  "source": {
+    "repository": "Wallet-Wall/walletwall-audio-visual-docs",
+    "commit": "d013c06baf43fee8046d0eb93b03c0648c735209",
+    "path": "assets/brand/walletwall-brick-wallet.png",
+    "bytes": 322058,
+    "sha512": "0191b6d11caaeb61dacb6dfd474fcebbcf48aee7520fe517c4e4d4deceaa9a70dae5ec25f7b8d49145c278ff6a42433ce4de7fe2c3374fc1b8e0c9650f51191a",
+    "describes": "The WalletWall brick-wallet mark, 496 x 496 RGBA. The same source as canvas/brand/walletwall-brick-wallet-96.png."
+  },
+  "transform": "Alpha-composited onto an opaque WalletWall stone ground (#E9D3AD) at 496 x 496, converted to RGB, resized to 1024 x 1024 with Pillow 12.3.0 LANCZOS and saved as PNG with optimize. Not redrawn, recoloured or cropped. Running that recipe on the source reproduces these bytes exactly.",
+  "approval": "The same bytes are WalletWall's owner-approved app icon. The WalletWall owner approved them for the Claude Directory listing on 2026-11-25."
+}

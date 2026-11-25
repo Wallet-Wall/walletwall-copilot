@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
+import { unresolvedManifestReferences } from "../../../../scripts/claude-directory-content.ts";
 import { ROOT } from "../support/harness.ts";
 
 const pluginRoot = join(ROOT, "plugin");
@@ -19,14 +20,42 @@ function oneServer(value: unknown): [string, Record<string, unknown>] {
   return [name, raw as Record<string, unknown>];
 }
 
-test("Claude plugin manifest is intentionally minimal and versioned", () => {
+test("Claude plugin manifest holds identity, version and Directory listing metadata only", () => {
   const manifest = readJson(".claude-plugin/plugin.json");
-  assert.deepEqual(Object.keys(manifest).sort(), ["author", "description", "displayName", "name", "version"]);
+  // No component key (skills, commands, agents, hooks, mcpServers, ...): those can inline or redirect executable surface.
+  assert.deepEqual(Object.keys(manifest).sort(), [
+    "author", "description", "displayName", "documentationUrl", "homepage", "keywords", "license", "name", "privacyPolicyUrl", "repository", "supportUrl", "version",
+  ]);
   assert.equal(manifest["name"], "walletwall");
   assert.equal(manifest["displayName"], "WalletWall Vault Readiness");
-  assert.equal(manifest["version"], "0.3.2");
+  assert.equal(manifest["version"], "0.3.3");
   assert.deepEqual(manifest["author"], { name: "WalletWall" });
-  assert.match(String(manifest["description"]), /vault technical-readiness/i);
+  assert.equal(manifest["license"], "Apache-2.0");
+  // The listing icon ships only in the generated Claude Directory package, so only that package's manifest names it.
+  assert.equal(manifest["icon"], undefined, "plugin/ does not ship the icon, so its manifest must not reference it");
+  const description = String(manifest["description"]);
+  assert.match(description, /vault technical readiness/i);
+  assert.match(description, /blockchain/i, "the listing states its blockchain context");
+  assert.match(description, /read-only/i);
+  assert.doesNotMatch(description, /quantum|verif(?:y|ied|iable)|guarantee|certif|secure|safe/i, "no capability the engine does not implement");
+  for (const key of ["homepage", "repository", "documentationUrl", "supportUrl", "privacyPolicyUrl"]) {
+    assert.match(String(manifest[key]), /^https:\/\/github\.com\/Wallet-Wall\/walletwall-copilot(?:[/#]|$)/, key);
+  }
+  assert.ok(Array.isArray(manifest["keywords"]) && (manifest["keywords"] as unknown[]).every((k) => typeof k === "string"));
+});
+
+test("every skill says what to do when the WalletWall tools are absent and treats echoed bundle text as labels", () => {
+  for (const skill of ["vault-readiness", "walletwall-authority", "walletwall-evidence", "walletwall-evidence-audit"]) {
+    const text = readFileSync(join(pluginRoot, "skills", skill, "SKILL.md"), "utf8");
+    assert.match(text, /If the `walletwall` tools are not available in this conversation/, `${skill}: tools-unavailable fallback`);
+    assert.match(text, /give no [^.\n]*(?:result|classification|state)/i, `${skill}: no result without the tools`);
+    assert.match(text, /`retrievedVia`/, `${skill}: names the echoed transport label`);
+    assert.match(text, /derivation rule versions/, `${skill}: names the echoed rule version`);
+  }
+});
+
+test("every file the plugin/ manifests reference is in plugin/, so `claude --plugin-dir ./plugin` and the Copilot plugin resolve all of them", () => {
+  assert.deepEqual(unresolvedManifestReferences(pluginRoot), []);
 });
 
 test("Claude and Copilot launch the exact same bundled MCP server", () => {

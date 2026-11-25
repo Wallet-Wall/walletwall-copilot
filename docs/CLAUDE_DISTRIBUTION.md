@@ -37,6 +37,8 @@ dist/claude-directory/
 ├── .claude-plugin/
 │   └── plugin.json
 ├── .gitattributes
+├── assets/
+│   └── icon.png
 ├── .mcp.json
 ├── LICENSE
 ├── PROVENANCE.json
@@ -60,6 +62,10 @@ The server is one file. esbuild bundles the WalletWall MCP engine (`packages/mcp
 - `dist/esm/validation/ajv-provider.js` in the vendored SDK is replaced by a stub that throws, so Ajv, which compiles schemas with `new Function`, is neither shipped nor loaded.
 - `zod` and `zod-to-json-schema`: `package.json`, `LICENSE` and their `.js` files (and the `.mjs` files of `zod-to-json-schema`). Zod is not stubbed: it builds functions at runtime through an aliased `Function` in `v4/core/util.js`, `v4/core/doc.js` and `v4/core/compile.js` (`SECURITY.md`, "Dynamic code generation"). The server works unchanged where that is blocked.
 
+`assets/icon.png` is the Claude Directory listing icon. The generator adds `"icon": "./assets/icon.png"` to the generated `.claude-plugin/plugin.json`; the shared `plugin/.claude-plugin/plugin.json` does not declare it, because `plugin/` does not ship the file and `claude --plugin-dir ./plugin` must not see a reference to a missing file. It is copied from `docs/claude-directory/icon.png` only if that file's size and SHA-512 (the current integrity algorithm, `security/integrity-policy.json`) equal `docs/claude-directory/icon-provenance.json`, which also records the public source mark (repository, commit, path, size and SHA-512) and the exact transform. The directory reads the icon once, when a plugin is first saved or submitted in its developer portal, so the icon must be in the tracked branch before that.
+
+The skills are the shared `plugin/skills/` files with every section between `<!-- copilot-only:start -->` and `<!-- copilot-only:end -->` removed (today: the Copilot canvas guidance, which Claude hosts do not have). The multi-host `plugin/` package keeps those sections.
+
 `PROVENANCE.json` records the source repository, the source commit and the size and SHA-512 digest of every other file. Entries are sorted by the UTF-16 code units of their paths, so the manifest does not depend on the build machine's locale. The source commit is `WALLETWALL_SOURCE_SHA` when that is set, else `GITHUB_SHA`, else `working-tree`. `.gitattributes` (`* -text`) turns off line-ending conversion, so a clone of the distribution keeps the recorded bytes even where Git is configured with `core.autocrlf=true`.
 
 The builder fails closed if:
@@ -70,7 +76,10 @@ The builder fails closed if:
 - the artifact exceeds 512 files;
 - any non-image/font file exceeds 256 KiB;
 - the generated server does not start over stdio or does not list exactly the six WalletWall tools;
-- the build itself cannot resolve the approved local MCP runtime dependencies.
+- the build itself cannot resolve the approved local MCP runtime dependencies;
+- the listing icon is not the recorded file or is not a square PNG of 512 to 2048 px a side under 2 MB, or the shared manifest already declares `icon`;
+- `.claude-plugin/plugin.json` or `.mcp.json` in the generated package references a file the package does not contain;
+- a skill has an unbalanced or nested copilot-only marker, or still refers to the Copilot canvas after those sections are removed.
 
 `dist/` is generated output and is not committed to this source repository. The dedicated Claude distribution repository should contain only a reviewed generated artifact, not a hand-maintained fork.
 
@@ -102,11 +111,11 @@ The optional local Streamable HTTP adapter (`docs/CLAUDE_MANAGED_AGENT.md`) is a
 
 A Claude distribution change is not publish-ready until:
 
-1. `.claude-plugin/plugin.json` is valid, minimal, and explicitly versioned.
+1. `.claude-plugin/plugin.json` is valid, holds identity, version and Directory listing metadata only (no component keys), and is explicitly versioned.
 2. `.mcp.json` exposes exactly one local `walletwall` server.
 3. Claude and Copilot local development configs resolve to the same WalletWall MCP implementation.
 4. No Claude config injects credentials, shell commands, hosted inference, or a second runtime.
-5. All four WalletWall skills are packaged and pass repository structure checks.
+5. All four WalletWall skills are packaged and pass repository structure checks, and every file a manifest references resolves inside its package (`plugin/` and the generated package).
 6. `npm run verify:claude-directory` passes on Linux and Windows.
 7. The root-ready Directory artifact stays within the 512-file and 256-KiB non-media-file limits.
 8. SHA-512 plugin manifest/artifact records for the multi-host `plugin/` package are regenerated intentionally when that package changes.
@@ -155,7 +164,7 @@ The intended public submission repository is `Wallet-Wall/walletwall-claude`. It
 
 Its root should be replaced atomically from one reviewed `dist/claude-directory/` build. `PROVENANCE.json` records the WalletWall source repository and source commit used to produce the package. Changes to evidence semantics, readiness rules, registries, or MCP behavior must originate in `walletwall-copilot` and pass its conformance/security gates before being propagated.
 
-That repository's CI allows only a fixed set of root entries. A generator change that adds a root entry needs the same entry allowed there, in the pull request that moves the pin.
+That repository's CI allows only a fixed set of root entries and a fixed set of `plugin.json` keys. A generator change that adds a root entry or a manifest key needs the same entry or key allowed there, in the pull request that moves the pin. Moving the pin to a commit with the listing icon needs `assets/` allowed as a root entry and `icon`, `documentationUrl`, `supportUrl` and `privacyPolicyUrl` allowed as `plugin.json` keys.
 
 ## Future hosted Guardian
 

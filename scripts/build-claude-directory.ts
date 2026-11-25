@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createOwnedRun } from "../packages/mcp/test/support/owned-temp.ts";
 import { ALLOWED_SDK_MODULES, bundleOptions } from "./bundle-config.ts";
+import { checkDirectoryIcon, stripCopilotOnly, unresolvedManifestReferences, withDirectoryIcon } from "./claude-directory-content.ts";
 import { byPath, checkedOutCommit, sourceCommit } from "./claude-directory-provenance.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -34,6 +35,10 @@ const AJV_PROVIDER = "dist/esm/validation/ajv-provider.js";
 // rewrite every text file to CRLF on checkout and fail the size and SHA-512 checks.
 const GITATTRIBUTES = "* -text\n";
 const isLicense = (rel: string): boolean => /^LICENSE(?:\.|$)/i.test(rel);
+// The listing icon: one reviewed file, its digests pinned in a provenance record beside it.
+const ICON_SOURCE = join(root, "docs", "claude-directory", "icon.png");
+const ICON_RECORD = join(root, "docs", "claude-directory", "icon-provenance.json");
+const ICON_PATH = "assets/icon.png";
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -49,6 +54,43 @@ function copyStatic(): void {
   cpSync(join(root, "LICENSE"), join(outDir, "LICENSE"));
   cpSync(join(root, "docs", "CLAUDE_DIRECTORY_README.md"), join(outDir, "README.md"));
   writeFileSync(join(outDir, ".gitattributes"), GITATTRIBUTES);
+}
+
+/** Claude gets the shared skills without their Copilot-only sections (the canvas, which Claude hosts do not have). */
+function stripCopilotOnlySkillSections(): number {
+  let removed = 0;
+  for (const path of walk(join(outDir, "skills"))) {
+    if (!path.endsWith("SKILL.md")) continue;
+    const original = readFileSync(path, "utf8");
+    const stripped = stripCopilotOnly(original);
+    if (/open_canvas|walletwall-evidence-explorer/.test(stripped.text)) {
+      throw new Error(`${relative(outDir, path).replace(/\\/g, "/")} still refers to the Copilot canvas outside a copilot-only section`);
+    }
+    if (stripped.removed > 0) writeFileSync(path, stripped.text);
+    removed += stripped.removed;
+  }
+  return removed;
+}
+
+/**
+ * Copies the reviewed listing icon only if it is exactly the recorded file and meets the directory's icon rule, and adds
+ * the `icon` key to the generated manifest. The shared plugin/ manifest never declares it: only this package ships the file.
+ */
+function copyDirectoryIcon(): ReturnType<typeof checkDirectoryIcon> {
+  const bytes = readFileSync(ICON_SOURCE);
+  const record = JSON.parse(readFileSync(ICON_RECORD, "utf8")) as { bytes: number; sha512: string; packagedAs: string };
+  const icon = checkDirectoryIcon(bytes);
+  if (icon.problems.length > 0) throw new Error(`Claude Directory icon fails the listing-icon rule: ${icon.problems.join("; ")}`);
+  if (icon.bytes !== record.bytes || icon.digest !== record.sha512) {
+    throw new Error("docs/claude-directory/icon.png is not the file recorded in docs/claude-directory/icon-provenance.json");
+  }
+  if (record.packagedAs !== ICON_PATH) throw new Error(`icon-provenance.json packagedAs must be ${ICON_PATH}`);
+  const target = join(outDir, ...ICON_PATH.split("/"));
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, bytes);
+  const manifest = join(outDir, ".claude-plugin", "plugin.json");
+  writeFileSync(manifest, withDirectoryIcon(readFileSync(manifest, "utf8"), `./${ICON_PATH}`));
+  return icon;
 }
 
 function copyRuntimeTree(source: string, destination: string, include: (relativePath: string) => boolean): void {
@@ -119,6 +161,11 @@ function validatePackage(): { files: number; largest: string; largestBytes: numb
     .filter((rel) => rel !== "package.json" && !isLicense(rel) && rel !== AJV_PROVIDER && !allowedSdkModules.has(rel));
   if (strays.length > 0) throw new Error(`vendored MCP SDK holds files outside the stdio allowlist:\n${strays.join("\n")}`);
 
+  const unresolved = unresolvedManifestReferences(outDir);
+  if (unresolved.length > 0) throw new Error(`Claude Directory manifests reference files the package does not contain:\n${unresolved.join("\n")}`);
+  const generatedManifest = JSON.parse(readFileSync(join(outDir, ".claude-plugin", "plugin.json"), "utf8")) as { icon?: unknown };
+  if (generatedManifest.icon !== `./${ICON_PATH}`) throw new Error(`the generated .claude-plugin/plugin.json must name the listing icon as ./${ICON_PATH}`);
+
   return { files: files.length, largest, largestBytes };
 }
 
@@ -156,6 +203,8 @@ try {
   }
 
   copyStatic();
+  const copilotOnlySections = stripCopilotOnlySkillSections();
+  const icon = copyDirectoryIcon();
   const sdkModules = await reachableSdkModules();
   vendorRuntimeDependencies(sdkModules);
 
@@ -191,6 +240,8 @@ try {
   await smokeArtifact();
   console.log(`Claude Directory package: ${summary.files} files; largest ${summary.largest} ${summary.largestBytes} bytes`);
   console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; vendored MCP SDK modules: ${sdkModules.size} + Ajv stub; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
+  console.log(`listing icon: ${ICON_PATH} ${icon.width}x${icon.height} PNG ${icon.bytes} bytes sha512 ${icon.digest}; copilot-only skill sections removed: ${copilotOnlySections}`);
+  console.log("manifest references: every file named by .claude-plugin/plugin.json and .mcp.json is in the package");
 } finally {
   ownedRun?.dispose();
 }
