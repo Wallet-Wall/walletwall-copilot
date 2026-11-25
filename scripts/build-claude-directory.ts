@@ -75,10 +75,10 @@ function stripCopilotOnlySkillSections(): number {
 /** Copies the reviewed listing icon only if it is exactly the recorded file and meets the directory's icon rule. */
 function copyDirectoryIcon(): ReturnType<typeof checkDirectoryIcon> {
   const bytes = readFileSync(ICON_SOURCE);
-  const record = JSON.parse(readFileSync(ICON_RECORD, "utf8")) as { bytes: number; sha256: string; sha512: string; packagedAs: string };
+  const record = JSON.parse(readFileSync(ICON_RECORD, "utf8")) as { bytes: number; sha512: string; packagedAs: string };
   const icon = checkDirectoryIcon(bytes);
   if (icon.problems.length > 0) throw new Error(`Claude Directory icon fails the listing-icon rule: ${icon.problems.join("; ")}`);
-  if (icon.bytes !== record.bytes || icon.sha256 !== record.sha256 || icon.sha512 !== record.sha512) {
+  if (icon.bytes !== record.bytes || icon.digest !== record.sha512) {
     throw new Error("docs/claude-directory/icon.png is not the file recorded in docs/claude-directory/icon-provenance.json");
   }
   if (record.packagedAs !== ICON_PATH) throw new Error(`icon-provenance.json packagedAs must be ${ICON_PATH}`);
@@ -232,7 +232,7 @@ try {
   await smokeArtifact();
   console.log(`Claude Directory package: ${summary.files} files; largest ${summary.largest} ${summary.largestBytes} bytes`);
   console.log(`esbuild outputs: ${Object.keys(result.metafile.outputs).length}; vendored MCP SDK modules: ${sdkModules.size} + Ajv stub; generated server smoke: ${EXPECTED_TOOLS.length} tools`);
-  console.log(`listing icon: ${ICON_PATH} ${icon.width}x${icon.height} PNG ${icon.bytes} bytes sha256 ${icon.sha256}; copilot-only skill sections removed: ${copilotOnlySections}`);
+  console.log(`listing icon: ${ICON_PATH} ${icon.width}x${icon.height} PNG ${icon.bytes} bytes sha512 ${icon.digest}; copilot-only skill sections removed: ${copilotOnlySections}`);
 } finally {
   ownedRun?.dispose();
 }

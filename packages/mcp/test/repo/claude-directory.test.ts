@@ -105,7 +105,7 @@ describe("Claude Directory provenance", () => {
     const r = generator(repositoryHead ?? "");
     assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
     assert.match(r.stdout, /Claude Directory package: \d+ files/);
-    assert.match(r.stdout, /listing icon: assets\/icon\.png 1024x1024 PNG 605502 bytes sha256 d4aee903403960465e4705c09899d623ac5dca61cfe528573ad6cd5415c6e49c/);
+    assert.match(r.stdout, /listing icon: assets\/icon\.png 1024x1024 PNG 605502 bytes sha512 15302974ac45f9e51f272d4e5241813e895423ccab9e0d71b8259d29b077873fb43047cd494d59856de2f2cac008d3c50969d110973498f43675f3b515a1f037/);
     assert.match(r.stdout, /copilot-only skill sections removed: 1\b/);
   });
 });
@@ -114,10 +114,9 @@ describe("Claude Directory listing content", () => {
   const read = (relative: string): Buffer => readFileSync(join(ROOT, relative));
   const record = JSON.parse(read("docs/claude-directory/icon-provenance.json").toString("utf8")) as {
     bytes: number;
-    sha256: string;
     sha512: string;
     packagedAs: string;
-    source: { repository: string; path: string; sha256: string };
+    source: { repository: string; commit: string; path: string; bytes: number; sha512: string };
   };
   const png = (width: number, height: number, padding = 0): Buffer => {
     const b = Buffer.alloc(33 + padding);
@@ -134,14 +133,20 @@ describe("Claude Directory listing content", () => {
     assert.deepEqual(icon.problems, []);
     assert.deepEqual([icon.width, icon.height], [1024, 1024]);
     assert.equal(icon.bytes, record.bytes);
-    assert.equal(icon.sha256, record.sha256);
-    assert.equal(icon.sha512, record.sha512);
-    assert.equal(record.sha256, "d4aee903403960465e4705c09899d623ac5dca61cfe528573ad6cd5415c6e49c", "the approved bytes");
+    assert.equal(icon.digest, record.sha512);
+    assert.equal(record.sha512, "15302974ac45f9e51f272d4e5241813e895423ccab9e0d71b8259d29b077873fb43047cd494d59856de2f2cac008d3c50969d110973498f43675f3b515a1f037", "the approved bytes");
     assert.equal(record.packagedAs, "assets/icon.png");
+    assert.doesNotMatch(JSON.stringify(record), /sha256/i, "SHA-512 is the only integrity authority for this record");
     assert.deepEqual(
-      [record.source.repository, record.source.path, record.source.sha256],
-      ["Wallet-Wall/walletwall-audio-visual-docs", "assets/brand/walletwall-brick-wallet.png", "91926a2eebc1777194ecf491049b8a7af3cf0892b09b363c5b2a17cd17d5dbad"],
-      "the same public source mark that canvas/brand derives from",
+      [record.source.repository, record.source.commit, record.source.path, record.source.bytes, record.source.sha512],
+      [
+        "Wallet-Wall/walletwall-audio-visual-docs",
+        "d013c06baf43fee8046d0eb93b03c0648c735209",
+        "assets/brand/walletwall-brick-wallet.png",
+        322058,
+        "0191b6d11caaeb61dacb6dfd474fcebbcf48aee7520fe517c4e4d4deceaa9a70dae5ec25f7b8d49145c278ff6a42433ce4de7fe2c3374fc1b8e0c9650f51191a",
+      ],
+      "the same public source mark and commit that canvas/brand derives from",
     );
   });
 

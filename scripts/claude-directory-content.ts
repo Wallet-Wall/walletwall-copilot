@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { INTEGRITY_POLICY } from "./integrity-policy.ts";
 
 /**
  * Skill text that only applies to another host (today: the Copilot canvas) sits between these markers in the shared
@@ -41,8 +42,8 @@ export interface DirectoryIconCheck {
   width: number;
   height: number;
   bytes: number;
-  sha256: string;
-  sha512: string;
+  /** Digest under the current integrity algorithm (security/integrity-policy.json), compared with the record's `sha512`. */
+  digest: string;
   problems: string[];
 }
 
@@ -57,12 +58,5 @@ export function checkDirectoryIcon(png: Buffer): DirectoryIconCheck {
     if (width < ICON_MIN_SIDE || width > ICON_MAX_SIDE) problems.push(`side of ${width} px is outside ${ICON_MIN_SIDE}..${ICON_MAX_SIDE}`);
   }
   if (png.length >= ICON_MAX_BYTES) problems.push(`${png.length} bytes is not under ${ICON_MAX_BYTES}`);
-  return {
-    width,
-    height,
-    bytes: png.length,
-    sha256: createHash("sha256").update(png).digest("hex"),
-    sha512: createHash("sha512").update(png).digest("hex"),
-    problems,
-  };
+  return { width, height, bytes: png.length, digest: createHash(INTEGRITY_POLICY.currentAlgorithm).update(png).digest("hex"), problems };
 }
