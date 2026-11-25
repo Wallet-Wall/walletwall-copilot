@@ -4,7 +4,7 @@ This directory **is** the Copilot plugin. It is self-contained.
 
 ```text
 plugin/
-  plugin.json                                   manifest (name: walletwall, version 0.3.2)
+  plugin.json                                   manifest (name: walletwall, version 0.3.3)
   mcp.json                                      one local stdio server
   skills/walletwall-evidence/                   skill: how to use the tools without over-claiming
   server/walletwall-mcp.mjs                     GENERATED bundle of packages/mcp: WalletWall MCP (do not edit)
