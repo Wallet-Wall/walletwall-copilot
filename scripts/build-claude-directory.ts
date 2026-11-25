@@ -9,6 +9,7 @@ import { createOwnedRun } from "../packages/mcp/test/support/owned-temp.ts";
 import { ALLOWED_SDK_MODULES, bundleOptions } from "./bundle-config.ts";
 import {
   checkDirectoryIcon,
+  dynamicImportLines,
   stripCopilotOnly,
   unresolvedManifestReferences,
   VENDORED_PACKAGES,
@@ -163,6 +164,11 @@ function checkVendoredClosure(modules: RuntimeModules): void {
     if (extra.length > 0) throw new Error(`vendored ${name} holds files outside the server's module graph:\n${extra.join("\n")}`);
     if (missing.length > 0) throw new Error(`vendored ${name} lacks modules the server's module graph reaches:\n${missing.join("\n")}`);
     if (!shipped.includes("package.json") || !shipped.some(isLicense)) throw new Error(`vendored ${name} lacks its package.json or license file`);
+    // The selection is the static module graph: a dynamic import() or require() could load a file outside it at run time.
+    const dynamic = shipped
+      .filter((rel) => /\.(?:m|c)?js$/.test(rel))
+      .flatMap((rel) => dynamicImportLines(readFileSync(join(dir, ...rel.split("/")), "utf8")).map((hit) => `${rel}:${hit}`));
+    if (dynamic.length > 0) throw new Error(`vendored ${name} calls import() or require() outside a comment:\n${dynamic.join("\n")}`);
   }
 }
 

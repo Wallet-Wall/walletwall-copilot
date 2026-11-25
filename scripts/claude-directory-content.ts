@@ -122,6 +122,23 @@ export function vendoredModuleSelection(graphInputs: readonly string[]): Record<
   return selection;
 }
 
+/**
+ * The lines of a module that call `import()` or `require()` outside a comment line, as "line: code". The vendored selection
+ * is the server's static module graph, so a dynamic import could load a file the package does not ship; the builder
+ * refuses one. A line whose code starts with a comment marker is not a call, and neither `import.meta` nor `createRequire`
+ * matches.
+ */
+export function dynamicImportLines(source: string): string[] {
+  const found: string[] = [];
+  source.split("\n").forEach((line, index) => {
+    if (!/\bimport\s*\(|\brequire\s*\(/.test(line)) return;
+    const code = line.trim();
+    if (code.startsWith("//") || code.startsWith("/*") || code.startsWith("*")) return;
+    found.push(`${index + 1}: ${code.slice(0, 120)}`);
+  });
+  return found;
+}
+
 /** The directory's listing-icon rule, as `claude plugin validate` states it: a square PNG, 512 to 2048 px a side, under 2 MB. */
 export const ICON_MIN_SIDE = 512;
 export const ICON_MAX_SIDE = 2048;
