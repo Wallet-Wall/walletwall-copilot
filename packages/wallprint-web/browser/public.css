@@ -1,0 +1,227 @@
+/*
+ * The public WallPrint page in the WalletWall Living Record language.
+ *
+ * scripts/build-wallprint-public.ts appends this file, comments removed, after the canvas stylesheet and the WallPrint
+ * document stylesheet; only the public resolver serves it, and the canvas never loads it. It changes presentation only:
+ * the markup, its order, every word, the outcome taxonomy and every exact value are the renderer's. Nothing is hidden,
+ * reordered or added, and no animation is added.
+ *
+ * Mortar paper, charcoal ink, terracotta rules and accents; Sora for the outcome and the headings, Manrope for the text,
+ * IBM Plex Mono for every exact value and code (the faces the artifact already serves). Sharp corners, hairline rules,
+ * no gradient, shadow, card, pill or letter-spaced capital. State is never carried by colour alone: a solid edge is a
+ * result, a dotted edge is an absence, a dashed brick edge is an integrity finding or input the resolver does not read.
+ * A resolved record gets no fill, no mark and no seal.
+ */
+
+/* Tokens: the Living Record palette, and the canvas tokens re-pointed at it for this page only. */
+:root{
+--wpp-paper:#F5EAD4;--wpp-band:#F0E0C3;
+--wpp-ink:rgba(30,26,20,.88);--wpp-ink-2:rgba(30,26,20,.66);--wpp-ink-3:rgba(30,26,20,.5);
+--wpp-rule:rgba(139,49,32,.3);--wpp-hair:rgba(139,49,32,.16);
+--wpp-terra:#BF4E32;--wpp-terra-ink:#A8402A;--wpp-terra-dark:#8B3120;--wpp-brick:#B94A31;--wpp-char:#2B2B2E;
+--ww-page:var(--wpp-paper);--ww-rail:var(--wpp-paper);--ww-node:var(--wpp-band);--ww-label:var(--wpp-paper);
+--ww-ink:var(--wpp-ink);--ww-muted-text:var(--wpp-ink-2);
+--ww-cut:var(--wpp-hair);--ww-cut-strong:var(--wpp-rule);--ww-seam:var(--wpp-rule);
+--ww-umber:var(--wpp-ink-3);--ww-umber-deep:var(--wpp-ink-2);--ww-brick-low:var(--wpp-terra-dark)
+}
+
+/* The page: one reading column on the paper. */
+html{background:var(--wpp-paper)}
+body{background:var(--wpp-paper);color:var(--wpp-ink);font:400 15px/1.6 var(--font-ui)}
+body:has(#app){padding:0}
+#app{max-width:1120px;margin:0 auto;padding:32px 48px 88px}
+#app>p.muted{margin:8px 0 0;font-size:15px}
+code{font-size:13px;color:inherit}
+.muted{color:var(--wpp-ink-2)}
+.small{font-size:13px}
+
+/* Masthead: the WalletWall mark and wordmark lead, WallPrint is the module, the descriptor follows. It wraps rather
+   than overflows (the canvas header is a wrapping column whose line took the full width of the rail). */
+.ww-summary{display:block;margin:0;padding:0 0 18px;background:none;color:var(--wpp-ink);border:0;border-bottom:1px solid var(--wpp-rule);border-radius:0}
+.ww-rail{flex-wrap:wrap;gap:8px 16px;min-height:0}
+.ww-mark{width:30px;height:30px}
+.ww-rail-name{flex-wrap:wrap;gap:6px 12px}
+.ww-rail-name h1{color:var(--wpp-ink);font:600 18px/1.2 var(--font-display);letter-spacing:-0.012em}
+.ww-lens-badge{display:inline-block;flex:0 0 auto;padding:3px 7px 2px;border:1px solid var(--wpp-char);border-radius:0;color:var(--wpp-char);font:600 12.5px/1.25 var(--font-ui);letter-spacing:0;text-transform:none;white-space:nowrap}
+.ww-rail-asset{flex:0 1 auto;margin:0 0 0 auto;min-width:0;overflow:visible;white-space:normal;color:var(--wpp-ink-2)}
+.ww-rail-symbol{font:600 14px/1.3 var(--font-ui);letter-spacing:0;color:var(--wpp-ink)}
+.ww-rail-sep,.ww-rail-chain{color:var(--wpp-ink-2)}
+.ww-rail-chain{font-size:14px}
+
+/* The document sits on the paper: no plate box, no drafting grid, no crop marks. */
+.wp{margin-top:0}
+.wp-plate{padding:0;background:none;border:0;border-radius:0}
+.wp-plate::before,.wp-plate::after{content:none}
+
+/* Labels in sentence case, as the markup writes them. */
+.wp-eyebrow,.wp-eyebrow-inline,.wp-stage-title,.wp-step-title,.wp-qr-caption{font:600 12.5px/1.4 var(--font-ui);letter-spacing:0;text-transform:none;color:var(--wpp-ink-2)}
+.wp h3{margin:48px 0 0;padding:18px 0 8px;border-top:1px solid var(--wpp-rule);font:600 24px/1.2 var(--font-display);letter-spacing:-0.02em;color:var(--wpp-ink);text-transform:none}
+.wp h4{margin:28px 0 8px;font:700 14.5px/1.35 var(--font-ui);letter-spacing:0;text-transform:none;color:var(--wpp-ink)}
+
+/* Exact values: complete, monospaced, copyable. A value moves to its own line before it is broken, and then breaks
+   anywhere, so an id, a policy path or an instant is not split while it fits. The copy control is a text control, as on
+   the wallet page. */
+.wp code{word-break:normal;overflow-wrap:anywhere}
+.wp .wp-exact{font-size:13.5px;color:var(--wpp-ink)}
+.wp .wp-copyable{gap:2px 12px}
+.wp button.copy{display:inline-flex;align-items:center;min-height:32px;min-width:0;padding:0 2px;border:0;border-radius:0;background:none;color:var(--wpp-ink);font:600 12.5px/1 var(--font-ui);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;text-decoration-color:var(--wpp-terra);opacity:1;cursor:pointer}
+.wp button.copy:hover,.wp button.copy[data-copied="true"]{color:var(--wpp-terra-ink)}
+
+/* State codes: the engine's word in mono inside a hairline frame; an attention code takes the dashed brick frame. */
+.chip{padding:2px 6px 1px;border:1px solid var(--wpp-ink-3);border-radius:0;background:none;color:var(--wpp-ink);font:400 11.5px/16px var(--font-mono);letter-spacing:0.01em;text-transform:none}
+.chip[data-attention="true"]{border:1px dashed var(--wpp-brick);color:var(--wpp-terra-dark)}
+
+/* Ruled rows. */
+.states>div{gap:3px 24px;padding:12px 0}
+.states dt{font:500 13px/1.45 var(--font-ui);color:var(--wpp-ink-2)}
+.states dd{font-size:14.5px;line-height:1.55}
+.wp .states{border-top:1px solid var(--wpp-hair)}
+.kv dt{font-size:13px}
+th,td{padding:10px 14px 10px 0;border-bottom:1px solid var(--wpp-hair)}
+thead th{font:600 12.5px/1.35 var(--font-ui);color:var(--wpp-ink-2);border-bottom-color:var(--wpp-rule);vertical-align:bottom}
+.wp .wp-table{font-size:13px}
+.wp .limits li{margin:4px 0}
+
+/* Notes and boundary statements: a band with a terracotta edge (dashed brick when it asks for attention), and a
+   hairline edge for what a result does not establish. */
+#app .note{margin:16px 0;padding:12px 16px;border:0;border-left:2px solid var(--wpp-rule);background:var(--wpp-band);font-size:14px;line-height:1.55;color:var(--wpp-ink)}
+#app .note[data-attention="true"]{border-left:2px dashed var(--wpp-brick)}
+.wp .wp-boundary{margin:16px 0;padding:2px 0 2px 16px;border:0;border-left:1px solid var(--wpp-rule);background:none;font-size:14px;line-height:1.6;color:var(--wpp-ink);max-width:78ch}
+
+/* The publication line, then the principle and the statement as the page's boundary strap. */
+.wp-fixture{margin:20px 0 0;padding:0 0 16px;border-bottom:1px solid var(--wpp-hair);font:400 13.5px/1.7 var(--font-ui);color:var(--wpp-ink-2)}
+.wp-fixture code{color:var(--wpp-ink)}
+.wp .wp-publication-statement{margin:22px 0 0;padding:2px 0 2px 16px;font:400 15px/1.6 var(--font-ui);color:var(--wpp-ink-2);max-width:74ch}
+.wp .wp-publication-statement strong{display:block;margin:0 0 4px;font:600 20px/1.3 var(--font-display);letter-spacing:-0.015em;color:var(--wpp-ink)}
+#app .wp-mirror{margin:18px 0 0;font-size:13.5px;max-width:78ch}
+
+/* The outcome: the one display statement on the page. A solid edge for a resolved record, a dotted edge when the store
+   holds nothing to show or nothing was compared, a dashed brick edge for a digest mismatch or a URL the resolver does
+   not read. The landing is the empty tool and carries no edge. */
+.wp .wp-reference-result{margin:40px 0 0;padding:2px 0 6px 22px;border:0;border-left:2px solid var(--wpp-ink-3);border-radius:0}
+.wp .wp-reference-result[data-outcome="UNAVAILABLE"],.wp .wp-reference-result[data-outcome="UNREACHABLE"],.wp .wp-reference-result[data-outcome="NOT_COMPARED"]{border-left-style:dotted}
+.wp .wp-reference-result[data-outcome="DIGEST_MISMATCH"],.wp .wp-reference-result[data-outcome="MALFORMED_REFERENCE"],.wp .wp-reference-result[data-outcome="UNSUPPORTED_VERSION"],.wp .wp-reference-result[data-outcome="UNRECOGNISED"]{border-left:2px dashed var(--wpp-brick)}
+.wp[data-wp-landing="true"] .wp-reference-result{border-left:0;padding-left:0}
+.wp .wp-reference-result .wp-eyebrow{margin:0 0 10px}
+.wp .wp-reference-result .wp-title,.wp .wp-reference-result[data-outcome="RESOLVED"]>.wp-eyebrow{margin:0;font:600 56px/1.02 var(--font-display);letter-spacing:-0.035em;color:var(--wpp-ink)}
+.wp .wp-reference-result[data-outcome="DIGEST_MISMATCH"] .wp-title,.wp .wp-reference-result[data-outcome="MALFORMED_REFERENCE"] .wp-title,.wp .wp-reference-result[data-outcome="UNSUPPORTED_VERSION"] .wp-title,.wp .wp-reference-result[data-outcome="UNRECOGNISED"] .wp-title{color:var(--wpp-terra-dark)}
+.wp[data-wp-landing="true"] .wp-reference-result .wp-title{color:var(--wpp-ink)}
+.wp .wp-reference-result .wp-reference-line{margin:18px 0 0;gap:6px 10px;font:400 18px/1.55 var(--font-ui);color:var(--wpp-ink)}
+.wp .wp-reference-result .wp-check-meaning{max-width:60ch}
+.wp .wp-reference-result>p.muted{margin:14px 0 0;max-width:78ch;font-size:13.5px}
+.wp .wp-reference-result>.wp-carried{padding:2px 0 2px 14px;border-left:1px solid var(--wpp-rule)}
+.wp .wp-reference-result>.states{margin:24px 0 0}
+.wp .wp-reference-fields>div{grid-template-columns:220px minmax(0,1fr)}
+.wp[data-wp-landing="true"] .wp-reference-line code{padding:1px 6px;background:var(--wpp-band);color:var(--wpp-ink);font-size:15px;word-break:normal;overflow-wrap:anywhere;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.wp .wp-published-link{font-weight:600;color:var(--wpp-ink);text-decoration-color:var(--wpp-terra)}
+
+/* Standing in the public store. */
+.wp .wp-standing-now{margin:48px 0 0;padding:0;border:0;border-radius:0}
+.wp .wp-standing-title{margin:0 0 6px;padding:18px 0 0;border-top:1px solid var(--wpp-rule);font:600 22px/1.25 var(--font-display);letter-spacing:-0.015em;color:var(--wpp-ink)}
+
+/* The record: opened by a charcoal hairline; its title, then WalletWall's assessment as recorded. */
+.wp .wp-record{margin-top:64px;padding-top:22px;border-top:1px solid var(--wpp-char)}
+.wp .wp-reg{width:22px;height:22px;stroke:var(--wpp-terra)}
+.wp .wp-id{gap:4px 12px}
+.wp .wp-version-of{font-size:13px}
+.wp .wp-identity{margin-top:18px}
+.wp .wp-identity .wp-title{font:600 34px/1.12 var(--font-display);letter-spacing:-0.025em;color:var(--wpp-ink)}
+.wp .wp-subtitle{margin:8px 0 0;font-size:15px;color:var(--wpp-ink-2);max-width:80ch}
+.wp .wp-subject-record{margin-top:18px}
+.wp .wp-current{margin-top:28px;padding:20px 0;border-top:1px solid var(--wpp-rule);border-bottom:1px solid var(--wpp-hair)}
+.wp .wp-assessment{margin:8px 0 0}
+.wp .wp-assessment-word{font:600 32px/1.1 var(--font-display);letter-spacing:0.01em;color:var(--wpp-ink)}
+.wp .wp-assessment-word[data-attention="true"]{color:var(--wpp-terra-dark)}
+.wp .wp-assessment-hint{margin:8px 0 0;font-size:15.5px;color:var(--wpp-ink);max-width:64ch}
+.wp .wp-principle{margin:12px 0 0;font:600 14px/1.45 var(--font-ui);color:var(--wpp-ink-2)}
+.wp .wp-status-line{margin:14px 0 0;gap:6px 12px;font-size:14px}
+.wp .wp-jump{gap:2px 22px;margin:18px 0 0}
+.wp .wp-jump button{min-height:40px;padding:0;border:0;border-radius:0;background:none;color:var(--wpp-ink);font:600 14px/1 var(--font-ui);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;text-decoration-color:var(--wpp-rule);cursor:pointer}
+.wp .wp-jump button:hover{color:var(--wpp-terra-ink);text-decoration-color:var(--wpp-terra)}
+.wp .wp-columns{gap:0 56px}
+.wp .wp-ledger-row{padding:10px 0}
+.wp .wp-dot{color:var(--wpp-ink-2)}
+
+/* Provenance and derivation: the Living Record's 2:1 brick marks; an absent stage keeps its place, dashed. */
+.wp .wp-chain{margin:16px 0 0}
+.wp .wp-chain::before{background:var(--wpp-rule)}
+.wp .wp-stage-mark{top:1px;width:16px;height:8px;border:1px solid var(--wpp-brick);background:var(--wpp-paper)}
+.wp .wp-stage[data-present="true"] .wp-stage-mark{background:var(--wpp-brick)}
+.wp .wp-stage[data-present="false"] .wp-stage-mark{border:1px dashed var(--wpp-ink-3)}
+.wp .wp-stage-entries li{font-size:13px}
+.wp .wp-steps::before{background:var(--wpp-rule)}
+.wp .wp-step::before{border:1px solid var(--wpp-ink-3);background:var(--wpp-paper)}
+.wp .wp-step p{font-size:14px}
+
+/* Lineage. */
+.wp .wp-version{padding:8px 12px;border:1px solid var(--wpp-rule);border-radius:0;background:none}
+.wp .wp-version[aria-current="true"]{border-color:var(--wpp-ink-3);border-left:3px solid var(--wpp-terra);background:var(--wpp-band)}
+.wp .wp-version-label{font:600 14px/1.2 var(--font-display);color:var(--wpp-ink)}
+
+/* Verify: four questions as edged rows, not boxes. Solid edge: a result; dotted: an absent result; dashed brick: a
+   mismatch, an invalid record or a result the document does not recognise. */
+.wp .wp-checks{gap:32px 44px;margin:24px 0 0;align-items:start}
+.wp .wp-check{padding:2px 0 6px 18px;border:0;border-left:2px solid var(--wpp-ink-3);border-radius:0}
+.wp .wp-check[data-result="NOT_CARRIED"],.wp .wp-check[data-result="NO_DIGEST"],.wp .wp-check[data-receipt="UNAVAILABLE"],.wp .wp-check[data-receipt="UNCHECKED"],.wp .wp-check[data-replay="UNREPLAYABLE"],.wp .wp-check[data-replay="NOT_CARRIED"]{border-left-style:dotted}
+.wp .wp-check[data-result="INVALID"],.wp .wp-check[data-result="MISMATCH"],.wp .wp-check[data-result="NOT_COMPUTABLE"],.wp .wp-check[data-result="UNRECOGNISED"],.wp .wp-check[data-receipt="MISMATCH"],.wp .wp-check[data-receipt="UNRECOGNISED"],.wp .wp-check[data-replay="MISMATCH"],.wp .wp-check[data-replay="UNRECOGNISED"]{border-left:2px dashed var(--wpp-brick)}
+.wp .wp-check h4{margin:0;gap:10px;font:600 18px/1.3 var(--font-display);letter-spacing:-0.01em}
+.wp .wp-check-no{padding:0 5px;border:1px solid var(--wpp-ink-3);color:var(--wpp-ink-2);font:400 11px/16px var(--font-mono);letter-spacing:0}
+.wp .wp-check-q{margin:8px 0 0;font:600 14.5px/1.45 var(--font-ui);color:var(--wpp-ink)}
+.wp .wp-check-a{margin:8px 0 0;gap:6px 10px;font-size:14px}
+.wp .wp-independent{font-size:14px}
+
+/* Portable reference. */
+.wp .wp-portable-block{gap:16px 28px;margin-top:12px}
+.wp .wp-qr-code{border:1px solid var(--wpp-rule);border-radius:0}
+
+/* Folds, raw text, links, the close. */
+.wp .wp-more>summary{padding:10px 0;font:600 14px/1.4 var(--font-ui);color:var(--wpp-ink);cursor:pointer}
+.wp .wp-more>summary:hover,.wp .wp-more[open]>summary{color:var(--wpp-terra-ink)}
+.wp .wp-raw-text{padding:12px;background:var(--wpp-band);border:1px solid var(--wpp-hair);font-size:12px}
+.wp a{color:var(--wpp-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:var(--wpp-rule)}
+.wp a:hover{color:var(--wpp-terra-ink);text-decoration-color:var(--wpp-terra)}
+.wp a:focus-visible,.wp button:focus-visible,.wp summary:focus-visible{outline:2px solid var(--wpp-terra);outline-offset:3px}
+.wp [tabindex="-1"]:focus-visible{outline:2px solid var(--wpp-terra);outline-offset:4px}
+.wp .wp-invariants{margin-top:56px;border-top:1px solid var(--wpp-rule)}
+.wp .wp-foot{margin:48px 0 0;padding:20px max(0px,calc(100% - 78ch)) 0 0;border-top:1px solid var(--wpp-ink);font:400 14px/1.6 var(--font-ui);color:var(--wpp-ink-2);max-width:none}
+.copy-status{padding:6px 10px;border-radius:0;background:var(--wpp-char);color:var(--wpp-paper);font:600 13px/1.4 var(--font-ui)}
+
+/* Tablets and phones. */
+@media (max-width:1023px){
+#app{padding:24px 32px 72px}
+}
+@media (max-width:767px){
+#app{padding:16px 16px 64px}
+.ww-summary{padding-bottom:14px}
+.ww-rail{gap:6px 12px}
+.ww-rail-asset{flex:1 0 100%;margin:0}
+}
+/* A phone on its side: the canvas keeps a right-hand panel there; this page has none. */
+@media (max-width:767px) and (orientation:landscape) and (max-height:500px){
+.copy-status{right:auto}
+}
+@container wp (max-width:719px){
+.wp .wp-reference-result{margin-top:30px;padding-left:14px}
+.wp .wp-reference-result .wp-title,.wp .wp-reference-result[data-outcome="RESOLVED"]>.wp-eyebrow{font-size:36px;line-height:1.06;letter-spacing:-0.03em}
+.wp .wp-reference-result .wp-reference-line{font-size:16px}
+.wp .wp-reference-fields>div{grid-template-columns:1fr}
+.wp .wp-publication-statement strong{font-size:18px}
+.wp .wp-identity .wp-title{font-size:26px}
+.wp .wp-assessment-word{font-size:26px}
+.wp .wp-record{margin-top:48px}
+.wp h3{margin-top:44px;font-size:21px}
+.wp .wp-checks{gap:28px}
+.wp .wp-chain::before{left:7.5px}
+.wp .wp-stage-mark{left:-20px;top:5px}
+}
+@container wp (max-width:359px){
+.wp .wp-reference-result .wp-title,.wp .wp-reference-result[data-outcome="RESOLVED"]>.wp-eyebrow{font-size:31px}
+}
+
+/* Touch: every control at least 44 px tall. */
+@media (pointer:coarse){
+.wp button.copy,.wp .wp-jump button,.wp .wp-version{min-height:44px}
+.wp .wp-published-link{display:inline-flex;align-items:center;min-height:44px}
+.wp button.copy{padding:0 8px}
+.wp .wp-more>summary{min-height:44px;padding:12px 0}
+}

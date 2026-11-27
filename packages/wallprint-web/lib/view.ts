@@ -5,7 +5,8 @@ import type { Standing } from "./standing.ts";
 
 /**
  * From a resolution to the renderer's input. The public page renders with the canvas's WallPrint renderer (the same
- * instrument, not a second design); this module only arranges what the resolver proved into the shape that renderer
+ * instrument and markup, not a second renderer; the page's own stylesheet layer, browser/public.css, changes presentation
+ * only); this module only arranges what the resolver proved into the shape that renderer
  * reads, plus a `publication` block that switches it into public mode: the publication line instead of the fixture
  * line, the standing beside the record, same-origin links to a predecessor or successor, the HTTPS form in the QR code
  * when a resolver base is known, and the boundary statement. Nothing is decided here.

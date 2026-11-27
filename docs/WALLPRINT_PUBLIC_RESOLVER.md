@@ -118,7 +118,9 @@ codec's `resolveReference`. The standing is then checked against its own hash-ch
 rules (`lib/ledger.ts`) and against the proved record and digest. Only `RESOLVED` renders record content; the renderer is the canvas's `wallprint-render.mjs` in
 public mode (`canvas/README.md`, item 16), so Receipt, Replay, history, assessments, provenance, the portable reference
 and the QR code are the same instrument. Section deep links use the reference's closed `target` table and the client's
-allow-listed focus; an unknown target is refused by the parser before anything is fetched.
+allow-listed focus; an unknown target is refused by the parser before anything is fetched. The stylesheet is the
+canvas's, with the page's own layer appended last (`packages/wallprint-web/browser/public.css`): the same markup
+presented in the WalletWall Living Record language, presentation only, and never loaded by the canvas.
 
 Every resolved page says what the digest covers: the record's canonical bytes, and not the title, the registry names or
 the engine's receipt, replay and diff results carried beside it, which are only checked for consistency; the standing is
@@ -163,7 +165,7 @@ Preview deployments of the product repository exercise the real routing; product
 
 Static delivery only: no function, no database, no standing compute. One record is one artifact of roughly 5 to 11 KB
 plus a standing of about 1 KB; the committed store of 13 synthetic records is about 130 KB. A page view fetches the shell
-(short cache), the hashed script (about 167 KB, immutable) and stylesheet (about 68 KB, immutable), four fonts (about
+(short cache), the hashed script (about 176 KB, immutable) and stylesheet (about 82 KB, immutable), four fonts (about
 100 KB, immutable) and two small JSON files; a repeat view within five minutes is served from caches, after that the
 shell and the two JSON files are revalidated (a 304 each when unchanged) while the hashed assets stay cached. Marginal
 cost per record is storage and bandwidth in the product deployment's existing plan; no new service is introduced.
