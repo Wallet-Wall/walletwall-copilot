@@ -121,22 +121,21 @@ function copyBrand(): { fontFaces: string; mark: string } {
 // ─── stylesheet ──────────────────────────────────────────────────────────────
 
 /**
- * The public page is one document, not a panel beside a detail sheet: the room the canvas reserves for its phone sheet
- * (bottom peek, landscape right-hand panel) is given back, and the plate is centred with a reading width.
+ * The public page's own layer, appended last: packages/wallprint-web/browser/public.css, the page in the WalletWall Living
+ * Record language (paper, ink, terracotta rules, the outcome as the page's display statement), and the room the canvas
+ * reserves for its phone sheet given back. It changes presentation only; the canvas never loads it. Its comments are
+ * dropped here, so the served bytes are the rules alone.
  */
-const PUBLIC_CSS = `
-#app{max-width:1120px;margin:0 auto}
-.ww-lens-badge{white-space:nowrap;flex:0 0 auto}
-.wp-mirror{font-size:12.5px}
-@media (max-width:767px){body{padding-bottom:24px}}
-@media (max-width:767px) and (orientation:landscape) and (max-height:500px){body{padding-right:12px}.copy-status{right:12px}}
-`;
+const PUBLIC_CSS = read(join(root, "packages", "wallprint-web", "browser", "public.css"))
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/\n{2,}/g, "\n")
+  .trim();
 
 async function stylesheet(fontFaces: string, mark: string): Promise<string> {
   const { CSS } = (await import(pathToFileURL(join(ext, "styles.mjs")).href)) as { CSS: string };
   const { WALLPRINT_CSS } = (await import(pathToFileURL(join(ext, "wallprint-styles.mjs")).href)) as { WALLPRINT_CSS: string };
   const markCss = `.ww-mark{background-image:url("${RESOLVER_ROUTE}${mark}")}`;
-  return `${fontFaces}\n${markCss}\n${CSS}\n${WALLPRINT_CSS}\n${PUBLIC_CSS}`.replace(/\r\n/g, "\n");
+  return `${fontFaces}\n${markCss}\n${CSS}\n${WALLPRINT_CSS}\n${PUBLIC_CSS}\n`.replace(/\r\n/g, "\n");
 }
 
 // ─── script ──────────────────────────────────────────────────────────────────

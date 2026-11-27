@@ -8,6 +8,8 @@ into `dist/wallprint-public` and copied into the product deployment (`docs/WALLP
   through Web Crypto), `shape.ts`, `standing.ts` and `artifact.ts` (strict readers of the two published documents),
   `resolve.ts` (seven outcomes, two fixed fetches, no redirect), `view.ts` (the renderer's input in public mode).
 - `browser/page.ts` is the only DOM module: same-origin fetch without credentials, refusing redirects; one markup sink.
+- `browser/public.css` is the page's own stylesheet layer, appended after the canvas's: the same markup presented in the
+  WalletWall Living Record language. Presentation only (`test/public-style.test.ts`); the canvas never loads it.
 - `publication/` is the committed store: `records/<id>/<digest>.json` (immutable), `records/<id>/index.json` (standing),
   `index.json` (publication index). Written only by `npm run wallprint:publish`.
 - `test/` runs under `npm test`; `tsconfig.json` adds the DOM library for the page module.
